@@ -1,0 +1,16 @@
+.git
+node_modules
+db-data
+.vuepress
+.vscode
+docs
+.dockerignore
+npm-debug.log
+.env.*
+.cache
+coverage
+dist
+dist-with-tests
+test
+__tests__
+yarn-error.log

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "database/migrations/*.ts",
+    "jest.config.ts",
+    "jest.config.base.ts",
+    "typeorm.config.ts",
+    "ormconfig.ts",
+    "scripts/**/*.mts",
+    "types.d.ts"
+  ],
+  "exclude": ["node_modules", "dist", ".eslintrc.js"]
+}

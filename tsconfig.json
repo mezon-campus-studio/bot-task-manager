@@ -1,0 +1,43 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": false,
+    "noImplicitAny": false,
+    "removeComments": true,
+    "noLib": false,
+    "importHelpers": true,
+    "allowSyntheticDefaultImports": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "paths": {
+      "#src/*": ["src/*"],
+      "@src/*": ["src/*"],
+      "@nezon": ["src/libs/nezon"],
+      "#jest": ["test/jest/index.ts"]
+    },
+    "incremental": true,
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "noUnusedParameters": true,
+    "noUnusedLocals": true,
+    "strictPropertyInitialization": false,
+    "strict": false,
+    "types": ["node", "jest"]
+  },
+  "include": [
+    "src/**/*",
+    "database/**/*.ts",
+    "typeorm.config.ts",
+    "ormconfig.ts",
+    "test/**/*.ts",
+    "jest.config.ts",
+    "types.d.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}
