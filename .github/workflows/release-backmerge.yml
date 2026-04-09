@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 env:
@@ -31,9 +31,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.BOT_GH_TOKEN }}
 
       - name: Create or reuse backmerge PR
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
         run: bash .github/scripts/release/backmerge.sh
