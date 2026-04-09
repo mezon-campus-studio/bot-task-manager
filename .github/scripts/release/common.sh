@@ -23,8 +23,10 @@ release_date() {
 }
 
 require_gh_auth() {
-  : "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
-  export GH_TOKEN="${GITHUB_TOKEN}"
+  local gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  : "${gh_token:?GH_TOKEN or GITHUB_TOKEN is required}"
+  export GH_TOKEN="${gh_token}"
+  export GITHUB_TOKEN="${gh_token}"
 }
 
 configure_git() {
