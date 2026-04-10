@@ -1,0 +1,46 @@
+name: Delete Merged Branch
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: write
+
+jobs:
+  delete-head-branch:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Guard long-lived branches
+        id: guard
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          case "${HEAD_REF}" in
+            main|master|develop)
+              echo "skip=true" >> "${GITHUB_OUTPUT}"
+              ;;
+            *)
+              echo "skip=false" >> "${GITHUB_OUTPUT}"
+              ;;
+          esac
+
+      - name: Delete merged head branch
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          encoded_head_ref="${HEAD_REF//\//%2F}"
+
+          if gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_head_ref}"; then
+            echo "Deleted branch ${HEAD_REF}."
+            exit 0
+          fi
+
+          echo "Branch ${HEAD_REF} could not be deleted. It may already be deleted or protected."
