@@ -1,4 +1,4 @@
-name: Release Backmerge
+name: Release Acknowledge History
 
 on:
   workflow_dispatch:
@@ -14,7 +14,6 @@ concurrency:
 
 permissions:
   contents: write
-  pull-requests: write
 
 env:
   RELEASE_SOURCE_BRANCH: develop
@@ -23,7 +22,7 @@ env:
   RELEASE_TIMEZONE: Asia/Ho_Chi_Minh
 
 jobs:
-  backmerge:
+  acknowledge-history:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -33,7 +32,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.BOT_GH_TOKEN }}
 
-      - name: Create or reuse backmerge PR
+      - name: Acknowledge released history on develop
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
