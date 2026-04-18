@@ -1,5 +1,6 @@
+import { Type } from 'class-transformer';
 import {
-  IsDateString,
+  IsDate,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -36,14 +37,17 @@ export class CreateTaskDto {
   priority?: TaskPriority;
 
   @IsOptional()
-  @IsDateString()
-  dueDate?: string;
+  @Type(() => Date)
+  @IsDate()
+  dueDate?: Date;
 
   @IsOptional()
-  @IsDateString()
-  startedAt?: string;
+  @Type(() => Date)
+  @IsDate()
+  startedAt?: Date;
 
   @IsOptional()
-  @IsDateString()
-  completedAt?: string;
+  @Type(() => Date)
+  @IsDate()
+  completedAt?: Date;
 }

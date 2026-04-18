@@ -1,6 +1,8 @@
+import { Type } from 'class-transformer';
 import {
-  IsDateString,
+  IsDate,
   IsEnum,
+  IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
@@ -10,6 +12,7 @@ import { TaskPriority, TaskStatus, TaskType } from '../task.enum';
 export class UpdateTaskDto {
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(30)
   code?: string;
 
@@ -19,6 +22,7 @@ export class UpdateTaskDto {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   title?: string;
 
@@ -35,14 +39,17 @@ export class UpdateTaskDto {
   priority?: TaskPriority;
 
   @IsOptional()
-  @IsDateString()
-  dueDate?: string;
+  @Type(() => Date)
+  @IsDate()
+  dueDate?: Date;
 
   @IsOptional()
-  @IsDateString()
-  startedAt?: string;
+  @Type(() => Date)
+  @IsDate()
+  startedAt?: Date;
 
   @IsOptional()
-  @IsDateString()
-  completedAt?: string;
+  @Type(() => Date)
+  @IsDate()
+  completedAt?: Date;
 }
