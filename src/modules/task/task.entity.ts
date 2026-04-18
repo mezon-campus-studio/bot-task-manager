@@ -1,4 +1,9 @@
-import { Column, DeleteDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  DeleteDateColumn,
+  Entity,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { AbstractAuditEntity } from '@src/common/database/abstract.entity';
 import { TaskPriority, TaskStatus, TaskType } from './task.enum';
 
@@ -10,7 +15,12 @@ export default class TaskEntity extends AbstractAuditEntity {
   @Column({ type: 'varchar', length: 30, unique: true })
   code: string;
 
-  @Column({ type: 'enum', enum: TaskType, enumName: 'task_type_enum', default: TaskType.TASK })
+  @Column({
+    type: 'enum',
+    enum: TaskType,
+    enumName: 'task_type_enum',
+    default: TaskType.TASK,
+  })
   type: TaskType;
 
   @Column({ type: 'varchar', length: 200 })
@@ -19,10 +29,20 @@ export default class TaskEntity extends AbstractAuditEntity {
   @Column({ type: 'text', nullable: true })
   description?: string;
 
-  @Column({ type: 'enum', enum: TaskStatus, enumName: 'task_status_enum', default: TaskStatus.TODO })
+  @Column({
+    type: 'enum',
+    enum: TaskStatus,
+    enumName: 'task_status_enum',
+    default: TaskStatus.TODO,
+  })
   status: TaskStatus;
 
-  @Column({ type: 'enum', enum: TaskPriority, enumName: 'task_priority_enum', default: TaskPriority.MEDIUM })
+  @Column({
+    type: 'enum',
+    enum: TaskPriority,
+    enumName: 'task_priority_enum',
+    default: TaskPriority.MEDIUM,
+  })
   priority: TaskPriority;
 
   @Column({ type: 'timestamptz', nullable: true })
