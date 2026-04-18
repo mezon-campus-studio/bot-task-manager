@@ -7,6 +7,7 @@ import { AppConfigService } from '@src/common/shared/services/app-config.service
 import { SharedModule } from '@src/common/shared/shared.module';
 import { NezonModule } from '@src/libs/nezon';
 import { AuthModule } from './modules/auth/auth.module';
+import { TaskModule } from './modules/task/task.module';
 import { UserModule } from './modules/user/user.module';
 
 @Module({
@@ -19,6 +20,7 @@ import { UserModule } from './modules/user/user.module';
     }),
     EventEmitterModule.forRoot(),
     NestScheduleModule.forRoot(),
+    TaskModule,
     UserModule,
     AuthModule,
   ],
