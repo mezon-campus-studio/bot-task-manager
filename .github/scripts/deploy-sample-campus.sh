@@ -55,7 +55,6 @@ done
 set_env_vars="$(
   join_by "," \
     "NODE_ENV=production" \
-    "PORT=4000" \
     "DB_HOST=${DB_SOCKET_PATH}" \
     "DB_PORT=5432" \
     "DB_DATABASE=$(sql_database_name)" \
