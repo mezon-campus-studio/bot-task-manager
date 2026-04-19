@@ -9,7 +9,9 @@ source "${SCRIPT_DIR}/common.sh"
 require_gh_auth
 configure_git
 ensure_release_labels
+assert_no_legacy_release_pr
 
+bash "${SCRIPT_DIR}/enqueue.sh"
 active_pr="$(get_active_release_pr)"
 
 if [ -z "${active_pr}" ]; then
@@ -19,8 +21,6 @@ fi
 
 release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
 release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
-
-sync_release_pr_body "${release_number}" "${release_branch}"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "release_pr_number=${release_number}" >> "${GITHUB_OUTPUT}"
