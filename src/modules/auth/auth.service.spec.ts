@@ -143,7 +143,7 @@ describe(AuthService.name, () => {
     );
   });
 
-  it('validates a persisted user by mezon id', async () => {
+  it('validates a persisted user by internal id', async () => {
     const authService = testingModule!.get(AuthService);
     const user = await factory.user({
       email: 'auth-validate@example.com',
@@ -151,7 +151,7 @@ describe(AuthService.name, () => {
       name: 'Auth Validate User',
     });
 
-    const validatedUser = await authService.validateUser(user.mezonId);
+    const validatedUser = await authService.validateUser(user.id);
 
     expect(validatedUser).toMatchObject({
       email: 'auth-validate@example.com',
