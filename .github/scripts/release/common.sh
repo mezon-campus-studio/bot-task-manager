@@ -57,20 +57,41 @@ ensure_release_labels() {
 }
 
 get_active_release_pr() {
+  local repo owner name
+  repo="$(repo_name_with_owner)"
+  owner="${repo%%/*}"
+  name="${repo#*/}"
+
   gh pr list \
     --base "${RELEASE_TARGET_BRANCH}" \
     --head "${RELEASE_SOURCE_BRANCH}" \
     --state open \
-    --json number,title,url,headRefName,baseRefName \
-    | jq -c 'first // empty'
+    --json number,title,url,headRefName,baseRefName,headRepository,headRepositoryOwner \
+    | jq -c --arg owner "${owner}" --arg name "${name}" '
+        map(select(
+          .headRepositoryOwner.login? == $owner
+          and .headRepository.name? == $name
+        )) | first // empty
+      '
 }
 
 get_legacy_release_pr() {
+  local repo owner name
+  repo="$(repo_name_with_owner)"
+  owner="${repo%%/*}"
+  name="${repo#*/}"
+
   gh pr list \
     --base "${RELEASE_TARGET_BRANCH}" \
     --state open \
-    --json number,title,url,headRefName,baseRefName \
-    | jq -c --arg prefix "${RELEASE_BRANCH_PREFIX}/" 'map(select(.headRefName | startswith($prefix))) | first // empty'
+    --json number,title,url,headRefName,baseRefName,headRepository,headRepositoryOwner \
+    | jq -c --arg owner "${owner}" --arg name "${name}" --arg prefix "${RELEASE_BRANCH_PREFIX}/" '
+        map(select(
+          (.headRepositoryOwner.login? == $owner)
+          and (.headRepository.name? == $name)
+          and (.headRefName | startswith($prefix))
+        )) | first // empty
+      '
 }
 
 assert_no_legacy_release_pr() {
@@ -510,14 +531,22 @@ list_pr_commit_shas() {
 }
 
 ensure_backmerge_pr() {
-  local existing_pr title body_file pr_url
+  local existing_pr title body_file pr_url repo owner name
+  repo="$(repo_name_with_owner)"
+  owner="${repo%%/*}"
+  name="${repo#*/}"
 
   existing_pr="$(gh pr list \
     --base "${RELEASE_SOURCE_BRANCH}" \
     --head "${RELEASE_TARGET_BRANCH}" \
     --state open \
-    --json number,title,url,headRefName,baseRefName \
-    | jq -c 'first // empty')"
+    --json number,title,url,headRefName,baseRefName,headRepository,headRepositoryOwner \
+    | jq -c --arg owner "${owner}" --arg name "${name}" '
+        map(select(
+          .headRepositoryOwner.login? == $owner
+          and .headRepository.name? == $name
+        )) | first // empty
+      ')"
 
   if [ -n "${existing_pr}" ]; then
     printf '%s\n' "${existing_pr}"
