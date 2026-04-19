@@ -85,3 +85,101 @@ Use this style for:
 - enum value changes
 - bulk backfills
 - data cleanup / patch migrations
+
+## Git Workflow
+
+To avoid conflicts and make mentor reviews faster, follow the Git workflow below:
+
+### 1. Create a branch from the ticket
+
+Before starting any work, always checkout from `develop` and create a new branch that matches the ticket you are working on.
+
+Branch format:
+
+```bash
+MEZON-[number]
+```
+
+Example:
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b MEZON-123
+```
+
+Do not work directly on `develop`.
+
+### 2. Work on your ticket branch
+
+After creating the correct branch, complete the task on that branch only.
+
+During implementation:
+
+- write clear and easy-to-understand commit messages
+- review your logic, formatting, and related affected areas before pushing
+- if the branch is outdated, pull the latest `develop` and resolve conflicts before pushing
+
+### 3. Push the branch to remote
+
+Once the task is complete, push your branch to remote:
+
+```bash
+git push origin MEZON-123
+```
+
+### 4. Create a Pull Request to `develop`
+
+After pushing, create a PR with:
+
+- base branch: `develop`
+- compare branch: your ticket branch
+
+The PR title must clearly include the ticket:
+
+```text
+[MEZON-number] feature/fix: short and clear description of the task
+```
+
+Example:
+
+```text
+[MEZON-123] feature: add student profile API
+```
+
+### 5. Write a clear PR description
+
+The PR description should be clear, complete, and easy to review:
+
+- what ticket you worked on
+- what you completed
+- whether there are changes to logic, API, database, or migrations
+- any notes the reviewer should pay attention to
+
+You can use this template:
+
+```md
+## Ticket
+MEZON-123
+
+## Summary
+- Brief summary of the completed work
+
+## Changes
+- Add API ...
+- Update service ...
+- Update migration ... (if any)
+
+## Notes
+- Points the reviewer should pay attention to
+```
+
+### 6. Send the PR to your mentor for review
+
+After creating the PR, send it to your mentor for review.
+
+Only merge after:
+
+- the PR has been reviewed
+- important comments have been addressed
+- the branch is ready to merge into `develop`

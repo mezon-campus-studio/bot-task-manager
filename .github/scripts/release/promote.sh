@@ -19,12 +19,17 @@ fi
 
 release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
 release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
+delete_branch_args=()
+queued_pr_numbers=""
 
-git fetch origin "${release_branch}" --prune
-queued_pr_numbers="$(list_current_release_branch_pr_numbers "${release_branch}" || true)"
+if ! release_pr_tracks_source_branch "${active_pr}"; then
+  git fetch origin "${release_branch}" --prune
+  queued_pr_numbers="$(list_current_release_branch_pr_numbers "${release_branch}" || true)"
+  sync_release_pr_body "${release_number}" "${release_branch}"
+  delete_branch_args=(--delete-branch)
+fi
 
-sync_release_pr_body "${release_number}" "${release_branch}"
-gh pr merge "${release_number}" --merge --delete-branch
+gh pr merge "${release_number}" --merge "${delete_branch_args[@]}"
 
 if [ -n "${queued_pr_numbers}" ]; then
   while IFS= read -r pr_number; do

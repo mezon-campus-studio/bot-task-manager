@@ -61,7 +61,11 @@ get_active_release_pr() {
     --base "${RELEASE_TARGET_BRANCH}" \
     --state open \
     --json number,title,url,headRefName,baseRefName \
-    | jq -c --arg prefix "${RELEASE_BRANCH_PREFIX}/" 'map(select(.headRefName | startswith($prefix))) | first // empty'
+    | jq -c --arg prefix "${RELEASE_BRANCH_PREFIX}/" --arg source "${RELEASE_SOURCE_BRANCH}" '
+        (map(select(.headRefName | startswith($prefix))) | first)
+        // (map(select(.headRefName == $source)) | first)
+        // empty
+      '
 }
 
 get_release_sequence() {
@@ -320,6 +324,12 @@ sync_release_pr_body() {
   rm -f "${body_file}"
 }
 
+release_pr_tracks_source_branch() {
+  local pr_json="$1"
+
+  [ "$(printf '%s' "${pr_json}" | jq -r '.headRefName')" = "${RELEASE_SOURCE_BRANCH}" ]
+}
+
 ensure_active_release_pr_for_branch() {
   local branch_name="$1"
   local active_pr
@@ -423,6 +433,17 @@ dequeue_pr_from_active_release() {
 
   release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
   release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
+
+  if [ "${release_branch}" = "${RELEASE_SOURCE_BRANCH}" ]; then
+    exclude_pr_from_release "${pr_number}"
+
+    if [ -n "${comment_body}" ]; then
+      gh pr comment "${pr_number}" --body "${comment_body}"
+    fi
+
+    echo "Active release PR tracks ${RELEASE_SOURCE_BRANCH} directly; no per-PR dequeue operation was applied."
+    return 0
+  fi
 
   git fetch origin "${release_branch}" --prune
   queued_commit="$(get_release_branch_commit_for_pr "${release_branch}" "${pr_number}")"

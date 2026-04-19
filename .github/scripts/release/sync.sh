@@ -20,7 +20,11 @@ fi
 release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
 release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
 
-sync_release_pr_body "${release_number}" "${release_branch}"
+if release_pr_tracks_source_branch "${active_pr}"; then
+  echo "Active release PR tracks ${RELEASE_SOURCE_BRANCH} directly. Skipping queue body sync."
+else
+  sync_release_pr_body "${release_number}" "${release_branch}"
+fi
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   echo "release_pr_number=${release_number}" >> "${GITHUB_OUTPUT}"
