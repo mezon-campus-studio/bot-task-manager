@@ -59,13 +59,34 @@ ensure_release_labels() {
 get_active_release_pr() {
   gh pr list \
     --base "${RELEASE_TARGET_BRANCH}" \
+    --head "${RELEASE_SOURCE_BRANCH}" \
     --state open \
     --json number,title,url,headRefName,baseRefName \
-    | jq -c --arg prefix "${RELEASE_BRANCH_PREFIX}/" --arg source "${RELEASE_SOURCE_BRANCH}" '
-        (map(select(.headRefName | startswith($prefix))) | first)
-        // (map(select(.headRefName == $source)) | first)
-        // empty
-      '
+    | jq -c 'first // empty'
+}
+
+get_legacy_release_pr() {
+  gh pr list \
+    --base "${RELEASE_TARGET_BRANCH}" \
+    --state open \
+    --json number,title,url,headRefName,baseRefName \
+    | jq -c --arg prefix "${RELEASE_BRANCH_PREFIX}/" 'map(select(.headRefName | startswith($prefix))) | first // empty'
+}
+
+assert_no_legacy_release_pr() {
+  local legacy_pr legacy_number legacy_branch
+  legacy_pr="$(get_legacy_release_pr)"
+
+  if [ -z "${legacy_pr}" ]; then
+    return 0
+  fi
+
+  legacy_number="$(printf '%s' "${legacy_pr}" | jq -r '.number')"
+  legacy_branch="$(printf '%s' "${legacy_pr}" | jq -r '.headRefName')"
+
+  echo "Legacy release PR #${legacy_number} (${legacy_branch} -> ${RELEASE_TARGET_BRANCH}) is still open." >&2
+  echo "Close or promote that PR before using the direct ${RELEASE_SOURCE_BRANCH} -> ${RELEASE_TARGET_BRANCH} release flow." >&2
+  return 1
 }
 
 get_release_sequence() {

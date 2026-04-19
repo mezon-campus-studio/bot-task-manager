@@ -69,6 +69,7 @@ build_release_body() {
 }
 
 require_gh_auth
+assert_no_legacy_release_pr
 
 merged_pr_json="$(resolve_merged_pr_json || true)"
 merged_entry=""
@@ -111,17 +112,13 @@ if [ -n "${existing_pr_number}" ]; then
   current_title="$(gh pr view "${existing_pr_number}" --json title --jq '.title')"
   current_date="$(printf '%s' "${current_title}" | sed -n 's/^Release-\([0-9]\{8\}\)_.*/\1/p')"
 
-  if release_pr_tracks_source_branch "${active_pr}" && [ "${current_date}" != "${date}" ]; then
+  if [ "${current_date}" != "${date}" ]; then
     new_title="$(next_release_title "${date}")"
     gh pr edit "${existing_pr_number}" --title "${new_title}"
     echo "Updated title: ${current_title} -> ${new_title}"
   fi
 
-  if ! release_pr_tracks_source_branch "${active_pr}"; then
-    release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
-    echo "Active release PR tracks ${release_branch}, not ${RELEASE_SOURCE_BRANCH}. Syncing that PR instead of creating a second release PR."
-    sync_release_pr_body "${existing_pr_number}" "${release_branch}"
-  elif [ -n "${merged_entry}" ]; then
+  if [ -n "${merged_entry}" ]; then
     current_body="$(gh pr view "${existing_pr_number}" --json body --jq '.body // ""')"
 
     if ! printf '%s' "${current_body}" | grep -qF "#${pr_number} "; then

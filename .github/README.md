@@ -15,17 +15,17 @@ This repo keeps GitHub automation split by responsibility so `sample-campus` can
 - `workflows/sample-campus-rollback.yml`
   Manually rolls an environment back to a previous image or deployment version through a rollback adapter.
 - `workflows/release-create.yml`
-  Opens the active release branch and release PR.
+  Ensures the active direct release PR from `develop` to `main` exists.
 - `workflows/release-enqueue.yml`
-  Queues a merged PR from `develop` into the active release branch.
+  Creates or updates the active direct release PR after merges into `develop`.
 - `workflows/release-dequeue.yml`
-  Removes a PR from the active release branch without rewriting `develop`.
+  Reserved manual entrypoint. Direct release mode does not support per-PR dequeue.
 - `workflows/release-revert-develop.yml`
-  Creates a revert PR against `develop` and removes the change from the active release branch if needed.
+  Creates a revert PR against `develop` so the next direct release can exclude the reverted change once that revert merges.
 - `workflows/release-promote.yml`
-  Promotes the active release PR into the target branch and marks queued PRs as released.
+  Promotes the active direct release PR into the target branch.
 - `workflows/release-sync.yml`
-  Rebuilds the release PR body from queue labels.
+  Refreshes the active direct release PR metadata.
 - `workflows/release-backmerge.yml`
   Opens or refreshes a backmerge PR from the shipped branch into `develop`.
 
@@ -56,5 +56,5 @@ This repo keeps GitHub automation split by responsibility so `sample-campus` can
 - Keep CI workflow structure stable and evolve only the composite actions when build or test commands change.
 - Keep deploy workflow structure stable and replace `.github/scripts/deploy-sample-campus.sh` when infrastructure changes.
 - Keep rollback workflow structure stable and replace `.github/scripts/rollback-sample-campus.sh` when infrastructure changes.
-- Release queue logic lives in `.github/scripts/release/`. Keep GitHub API and git mutation logic there, not in workflow YAML.
+- Release automation logic lives in `.github/scripts/release/`. Keep GitHub API and git mutation logic there, not in workflow YAML.
 - If more apps are added later, follow the same pattern instead of extending `sample-campus` workflows into a monolith.

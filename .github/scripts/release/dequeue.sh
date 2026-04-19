@@ -12,12 +12,6 @@ require_gh_auth
 configure_git
 ensure_release_labels
 
-active_pr="$(get_active_release_pr || true)"
-
-if [ -n "${active_pr}" ] && release_pr_tracks_source_branch "${active_pr}"; then
-  echo "Cannot dequeue PR #${PR_NUMBER} while the active release PR tracks ${RELEASE_SOURCE_BRANCH} directly." >&2
-  echo "Either close/promote the current ${RELEASE_SOURCE_BRANCH} -> ${RELEASE_TARGET_BRANCH} release PR, or switch back to a queued release branch flow before using dequeue." >&2
-  exit 1
-fi
-
-dequeue_pr_from_active_release "${PR_NUMBER}" "Removed from the active release queue."
+echo "Release Dequeue is not supported in the direct ${RELEASE_SOURCE_BRANCH} -> ${RELEASE_TARGET_BRANCH} release flow." >&2
+echo "Use a revert PR on ${RELEASE_SOURCE_BRANCH} instead if a merged change must be kept out of the next release." >&2
+exit 1

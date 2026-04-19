@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/common.sh"
 require_gh_auth
 configure_git
 ensure_release_labels
+assert_no_legacy_release_pr
 
 active_pr="$(get_active_release_pr)"
 
@@ -19,24 +20,7 @@ fi
 
 release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
 release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
-delete_branch_args=()
-queued_pr_numbers=""
 
-if ! release_pr_tracks_source_branch "${active_pr}"; then
-  git fetch origin "${release_branch}" --prune
-  queued_pr_numbers="$(list_current_release_branch_pr_numbers "${release_branch}" || true)"
-  sync_release_pr_body "${release_number}" "${release_branch}"
-  delete_branch_args=(--delete-branch)
-fi
-
-gh pr merge "${release_number}" --merge "${delete_branch_args[@]}"
-
-if [ -n "${queued_pr_numbers}" ]; then
-  while IFS= read -r pr_number; do
-    [ -n "${pr_number}" ] || continue
-    mark_pr_released "${pr_number}"
-    gh pr comment "${pr_number}" --body "Released via release PR #${release_number}."
-  done <<< "${queued_pr_numbers}"
-fi
+gh pr merge "${release_number}" --merge
 
 echo "Promoted release PR #${release_number} from ${release_branch} into ${RELEASE_TARGET_BRANCH}."
