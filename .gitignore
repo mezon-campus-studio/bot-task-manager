@@ -58,6 +58,8 @@ typings/
 
 # dotenv environment variables file
 .env
+ci/gcp/*.env
+!ci/gcp/*.env.template
 
 # next.js build output
 .next
