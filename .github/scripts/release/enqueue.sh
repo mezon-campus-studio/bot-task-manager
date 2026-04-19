@@ -40,7 +40,7 @@ resolve_merged_pr_json() {
   gh api \
     -H "Accept: application/vnd.github+json" \
     "repos/${repo}/commits/${GITHUB_SHA}/pulls" \
-    --jq --arg base "${RELEASE_SOURCE_BRANCH}" '
+    | jq --arg base "${RELEASE_SOURCE_BRANCH}" '
       map(select(.base.ref == $base and .merged_at != null))
       | first
       | if . == null then
