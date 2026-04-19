@@ -1,17 +1,22 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
-import { AbstractAuditEntity } from '@src/common/database/abstract.entity';
+import { Column, Entity, Index } from 'typeorm';
+import { AbstractUuidEntity } from '@src/common/database/abstract.entity';
 
 @Entity('users')
-export default class UserEntity extends AbstractAuditEntity {
-  @PrimaryColumn('varchar')
-  mezonId: string;
+@Index('UQ_users_mezon_id', ['mezonId'], { unique: true })
+@Index('IDX_users_current_project_id', ['currentProjectId'])
+export default class UserEntity extends AbstractUuidEntity {
+  @Column({ type: 'varchar' })
+  mezonId!: string;
 
   @Column({ type: 'varchar', nullable: true })
-  name?: string;
+  name!: string | null;
 
   @Column({ type: 'varchar', unique: true, nullable: true })
-  email?: string;
+  email!: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  avatar?: string;
+  avatar!: string | null;
+
+  @Column({ type: 'int', nullable: true })
+  currentProjectId!: number | null;
 }
