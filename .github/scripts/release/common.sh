@@ -435,14 +435,9 @@ dequeue_pr_from_active_release() {
   release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
 
   if [ "${release_branch}" = "${RELEASE_SOURCE_BRANCH}" ]; then
-    exclude_pr_from_release "${pr_number}"
-
-    if [ -n "${comment_body}" ]; then
-      gh pr comment "${pr_number}" --body "${comment_body}"
-    fi
-
-    echo "Active release PR tracks ${RELEASE_SOURCE_BRANCH} directly; no per-PR dequeue operation was applied."
-    return 0
+    echo "Cannot dequeue PR #${pr_number} while the active release PR tracks ${RELEASE_SOURCE_BRANCH} directly." >&2
+    echo "Either close/promote the current ${RELEASE_SOURCE_BRANCH} -> ${RELEASE_TARGET_BRANCH} release PR, or switch back to a queued release branch flow before using dequeue." >&2
+    return 1
   fi
 
   git fetch origin "${release_branch}" --prune

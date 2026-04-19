@@ -93,12 +93,12 @@ else
 fi
 
 date="$(release_date)"
-existing_pr_number="$(gh pr list \
-  --base "${RELEASE_TARGET_BRANCH}" \
-  --head "${RELEASE_SOURCE_BRANCH}" \
-  --state open \
-  --json number \
-  --jq '.[0].number // empty')"
+active_pr="$(get_active_release_pr || true)"
+existing_pr_number=""
+
+if [ -n "${active_pr}" ]; then
+  existing_pr_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
+fi
 
 if [ -z "${existing_pr_number}" ] && [ -z "${merged_entry}" ] && [ "${GITHUB_EVENT_NAME:-}" != "workflow_dispatch" ]; then
   echo "No merged ${RELEASE_SOURCE_BRANCH} PR was associated with this push. Skipping release PR update."
@@ -111,13 +111,17 @@ if [ -n "${existing_pr_number}" ]; then
   current_title="$(gh pr view "${existing_pr_number}" --json title --jq '.title')"
   current_date="$(printf '%s' "${current_title}" | sed -n 's/^Release-\([0-9]\{8\}\)_.*/\1/p')"
 
-  if [ "${current_date}" != "${date}" ]; then
+  if release_pr_tracks_source_branch "${active_pr}" && [ "${current_date}" != "${date}" ]; then
     new_title="$(next_release_title "${date}")"
     gh pr edit "${existing_pr_number}" --title "${new_title}"
     echo "Updated title: ${current_title} -> ${new_title}"
   fi
 
-  if [ -n "${merged_entry}" ]; then
+  if ! release_pr_tracks_source_branch "${active_pr}"; then
+    release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
+    echo "Active release PR tracks ${release_branch}, not ${RELEASE_SOURCE_BRANCH}. Syncing that PR instead of creating a second release PR."
+    sync_release_pr_body "${existing_pr_number}" "${release_branch}"
+  elif [ -n "${merged_entry}" ]; then
     current_body="$(gh pr view "${existing_pr_number}" --json body --jq '.body // ""')"
 
     if ! printf '%s' "${current_body}" | grep -qF "#${pr_number} "; then
