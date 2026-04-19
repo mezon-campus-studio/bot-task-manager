@@ -9,13 +9,14 @@ source "${SCRIPT_DIR}/common.sh"
 require_gh_auth
 configure_git
 ensure_release_labels
+assert_no_legacy_release_pr
 
-release_branch="$(ensure_active_release_branch)"
-active_pr="$(ensure_active_release_pr_for_branch "${release_branch}" || true)"
+bash "${SCRIPT_DIR}/enqueue.sh"
+active_pr="$(get_active_release_pr || true)"
+release_branch="${RELEASE_SOURCE_BRANCH}"
 
 if [ -n "${active_pr}" ]; then
   release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
-  sync_release_pr_body "${release_number}" "${release_branch}"
 else
   release_number=""
 fi
