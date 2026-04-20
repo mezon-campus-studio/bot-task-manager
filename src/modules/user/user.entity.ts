@@ -1,5 +1,6 @@
 import { Column, Entity, Index } from 'typeorm';
 import { AbstractUuidEntity } from '@src/common/database/abstract.entity';
+import { UserStatus } from './enum/user-status.enum';
 
 @Entity('users')
 @Index('UQ_users_mezon_id', ['mezonId'], { unique: true })
@@ -15,8 +16,22 @@ export default class UserEntity extends AbstractUuidEntity {
   email!: string | null;
 
   @Column({ type: 'varchar', nullable: true })
-  avatar!: string | null;
+  avatar?: string | null;
 
-  @Column({ type: 'int', nullable: true })
-  currentProjectId!: number | null;
+  @Column({
+    type: 'enum',
+    enum: UserStatus,
+    nullable: true,
+    default: UserStatus.ACTIVE,
+  })
+  status: UserStatus | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  currentProjectId!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  lastActiveAt!: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt!: Date | null;
 }
