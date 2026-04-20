@@ -1,136 +1,295 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class UpdateUserColumns1776691157661 implements MigrationInterface {
-    name = 'UpdateUserColumns1776691157661'
+  name = 'UpdateUserColumns1776691157661';
 
-    public async up(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`CREATE TYPE "public"."user_role_assignments_scope_type_enum" AS ENUM('SYSTEM', 'PROJECT', 'TEAM')`);
-        await queryRunner.query(`CREATE TABLE "user_role_assignments" ("id" SERIAL NOT NULL, "user_id" uuid NOT NULL, "role_id" integer NOT NULL, "scope_type" "public"."user_role_assignments_scope_type_enum" NOT NULL, "project_id" integer, "team_id" integer, "assigned_by_user_id" uuid, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "user_role_assignments_scope_type_ck" CHECK (("scope_type" = 'SYSTEM' AND "project_id" IS NULL AND "team_id" IS NULL) OR ("scope_type" = 'PROJECT' AND "project_id" IS NOT NULL AND "team_id" IS NULL) OR ("scope_type" = 'TEAM' AND "team_id" IS NOT NULL)), CONSTRAINT "PK_ac634a3aa59d70bf0fb7b423b47" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "user_role_assignments_team_scope_key" ON "user_role_assignments" ("user_id", "role_id", "team_id") WHERE "scope_type" = 'TEAM' AND "team_id" IS NOT NULL`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "user_role_assignments_project_scope_key" ON "user_role_assignments" ("user_id", "role_id", "project_id") WHERE "scope_type" = 'PROJECT' AND "project_id" IS NOT NULL AND "team_id" IS NULL`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "user_role_assignments_system_scope_key" ON "user_role_assignments" ("user_id", "role_id") WHERE "scope_type" = 'SYSTEM'`);
-        await queryRunner.query(`CREATE TYPE "public"."tickets_status_enum" AS ENUM('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')`);
-        await queryRunner.query(`CREATE TYPE "public"."tickets_severity_enum" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`);
-        await queryRunner.query(`CREATE TABLE "tickets" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "assignee_user_id" uuid, "reporter_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."tickets_status_enum" NOT NULL DEFAULT 'OPEN', "severity" "public"."tickets_severity_enum" NOT NULL DEFAULT 'MEDIUM', "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_tickets_reporter" ON "tickets" ("reporter_user_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_tickets_assignee_status" ON "tickets" ("assignee_user_id", "status") `);
-        await queryRunner.query(`CREATE INDEX "IDX_tickets_project_team" ON "tickets" ("project_id", "team_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_tickets_project_status" ON "tickets" ("project_id", "status") `);
-        await queryRunner.query(`CREATE TYPE "public"."team_members_status_enum" AS ENUM('INVITED', 'ACTIVE', 'DECLINED', 'REMOVED')`);
-        await queryRunner.query(`CREATE TABLE "team_members" ("id" SERIAL NOT NULL, "team_id" integer NOT NULL, "user_id" uuid NOT NULL, "status" "public"."team_members_status_enum" NOT NULL, "invited_by_user_id" uuid, "joined_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_ca3eae89dcf20c9fd95bf7460aa" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "team_members_team_id_user_id_key" ON "team_members" ("team_id", "user_id") `);
-        await queryRunner.query(`CREATE TYPE "public"."users_role_enum" AS ENUM('0', '1', '2', '3')`);
-        await queryRunner.query(`CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'deleted')`);
-        await queryRunner.query(`CREATE TABLE "users" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" uuid NOT NULL DEFAULT uuid_generate_v4(), "mezon_id" character varying NOT NULL, "name" character varying, "email" character varying, "avatar" character varying, "role" "public"."users_role_enum" DEFAULT '3', "status" "public"."users_status_enum" DEFAULT 'active', "current_project_id" character varying, "last_active_at" TIMESTAMP, "deleted_at" TIMESTAMP, CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_users_current_project_id" ON "users" ("current_project_id") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "UQ_users_mezon_id" ON "users" ("mezon_id") `);
-        await queryRunner.query(`CREATE TABLE "teams" ("id" SERIAL NOT NULL, "project_id" integer NOT NULL, "name" character varying NOT NULL, "slug" character varying NOT NULL, "description" text, "is_default" boolean NOT NULL DEFAULT false, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_7e5523774a38b08a6236d322403" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "teams_project_id_name_key" ON "teams" ("project_id", "name") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "teams_project_id_slug_key" ON "teams" ("project_id", "slug") `);
-        await queryRunner.query(`CREATE TYPE "public"."tasks_status_enum" AS ENUM('TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED')`);
-        await queryRunner.query(`CREATE TYPE "public"."tasks_priority_enum" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'URGENT')`);
-        await queryRunner.query(`CREATE TABLE "tasks" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "assignee_user_id" uuid, "reporter_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."tasks_status_enum" NOT NULL DEFAULT 'TODO', "priority" "public"."tasks_priority_enum" NOT NULL DEFAULT 'MEDIUM', "due_at" TIMESTAMP WITH TIME ZONE, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_8d12ff38fcc62aaba2cab748772" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_tasks_reporter" ON "tasks" ("reporter_user_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_tasks_assignee_status" ON "tasks" ("assignee_user_id", "status") `);
-        await queryRunner.query(`CREATE INDEX "IDX_tasks_project_team" ON "tasks" ("project_id", "team_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_tasks_project_status" ON "tasks" ("project_id", "status") `);
-        await queryRunner.query(`CREATE TYPE "public"."roles_scope_type_enum" AS ENUM('SYSTEM', 'PROJECT', 'TEAM')`);
-        await queryRunner.query(`CREATE TABLE "roles" ("id" SERIAL NOT NULL, "key" character varying NOT NULL, "name" character varying NOT NULL, "description" text, "scope_type" "public"."roles_scope_type_enum" NOT NULL, "is_system" boolean NOT NULL DEFAULT false, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_c1433d71a4838793a49dcad46ab" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "roles_key_key" ON "roles" ("key") `);
-        await queryRunner.query(`CREATE TABLE "role_permissions" ("role_id" integer NOT NULL, "permission_id" integer NOT NULL, CONSTRAINT "PK_25d24010f53bb80b78e412c9656" PRIMARY KEY ("role_id", "permission_id"))`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "role_permissions_role_id_permission_id_key" ON "role_permissions" ("role_id", "permission_id") `);
-        await queryRunner.query(`CREATE TYPE "public"."projects_onboarding_status_enum" AS ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED')`);
-        await queryRunner.query(`CREATE TABLE "projects" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "name" character varying NOT NULL, "slug" character varying NOT NULL, "description" character varying, "owner_user_id" uuid NOT NULL, "onboarding_status" "public"."projects_onboarding_status_enum" NOT NULL DEFAULT 'PENDING', "onboarding_completed_at" TIMESTAMP WITH TIME ZONE, "deleted_at" TIMESTAMP WITH TIME ZONE, "ownerUserId" uuid NOT NULL, CONSTRAINT "PK_6271df0a7aed1d6c0691ce6ac50" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_projects_owner_user_id" ON "projects" ("owner_user_id") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "UQ_projects_slug" ON "projects" ("slug") `);
-        await queryRunner.query(`CREATE TYPE "public"."project_members_status_enum" AS ENUM('INVITED', 'ACTIVE', 'DECLINED', 'REMOVED')`);
-        await queryRunner.query(`CREATE TABLE "project_members" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "user_id" uuid NOT NULL, "status" "public"."project_members_status_enum" NOT NULL DEFAULT 'INVITED', "invited_by_user_id" uuid, "joined_at" TIMESTAMP WITH TIME ZONE, "projectId" integer NOT NULL, "userId" uuid NOT NULL, "invitedByUserId" uuid, CONSTRAINT "PK_0b2f46f804be4aea9234c78bcc9" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_project_members_invited_by_user_id" ON "project_members" ("invited_by_user_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_project_members_user_id" ON "project_members" ("user_id") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "UQ_project_members_project_id_user_id" ON "project_members" ("project_id", "user_id") `);
-        await queryRunner.query(`CREATE TABLE "permissions" ("id" SERIAL NOT NULL, "key" character varying NOT NULL, "resource" character varying NOT NULL, "action" character varying NOT NULL, "description" text, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_920331560282b8bd21bb02290df" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE UNIQUE INDEX "permissions_resource_action_key" ON "permissions" ("resource", "action") `);
-        await queryRunner.query(`CREATE UNIQUE INDEX "permissions_key_key" ON "permissions" ("key") `);
-        await queryRunner.query(`CREATE TYPE "public"."notes_resource_type_enum" AS ENUM('USER', 'PROJECT', 'TEAM', 'TASK', 'TICKET', 'EVENT')`);
-        await queryRunner.query(`CREATE TABLE "notes" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "author_user_id" uuid NOT NULL, "resource_type" "public"."notes_resource_type_enum" NOT NULL, "resource_id" character varying NOT NULL, "content" text NOT NULL, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_af6206538ea96c4e77e9f400c3d" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_notes_resource" ON "notes" ("resource_type", "resource_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_notes_project_resource" ON "notes" ("project_id", "resource_type", "resource_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_notes_project_author" ON "notes" ("project_id", "author_user_id") `);
-        await queryRunner.query(`CREATE TYPE "public"."events_status_enum" AS ENUM('DRAFT', 'SCHEDULED', 'CANCELLED', 'COMPLETED')`);
-        await queryRunner.query(`CREATE TABLE "events" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "owner_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."events_status_enum" NOT NULL DEFAULT 'DRAFT', "starts_at" TIMESTAMP WITH TIME ZONE NOT NULL, "ends_at" TIMESTAMP WITH TIME ZONE, "location" character varying, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_40731c7151fe4be3116e45ddf73" PRIMARY KEY ("id"))`);
-        await queryRunner.query(`CREATE INDEX "IDX_events_owner_status" ON "events" ("owner_user_id", "status") `);
-        await queryRunner.query(`CREATE INDEX "IDX_events_project_team" ON "events" ("project_id", "team_id") `);
-        await queryRunner.query(`CREATE INDEX "IDX_events_project_status_starts_at" ON "events" ("project_id", "status", "starts_at") `);
-        await queryRunner.query(`CREATE TABLE "messages" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "message_id" character varying NOT NULL, "type" character varying NOT NULL DEFAULT 'reply', "owner_id" character varying NOT NULL, "channel_id" character varying NOT NULL, "bill_id" integer, CONSTRAINT "PK_6187089f850b8deeca0232cfeba" PRIMARY KEY ("message_id"))`);
-        await queryRunner.query(`ALTER TABLE "projects" ADD CONSTRAINT "FK_30f70ec4c2d480f78aa55925777" FOREIGN KEY ("ownerUserId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "project_members" ADD CONSTRAINT "FK_d19892d8f03928e5bfc7313780c" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "project_members" ADD CONSTRAINT "FK_08d1346ff91abba68e5a637cfdb" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`);
-        await queryRunner.query(`ALTER TABLE "project_members" ADD CONSTRAINT "FK_d09906b15f07e2998b3eafa0615" FOREIGN KEY ("invitedByUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`);
-    }
+  public async up(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `CREATE TYPE "public"."user_role_assignments_scope_type_enum" AS ENUM('SYSTEM', 'PROJECT', 'TEAM')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "user_role_assignments" ("id" SERIAL NOT NULL, "user_id" uuid NOT NULL, "role_id" integer NOT NULL, "scope_type" "public"."user_role_assignments_scope_type_enum" NOT NULL, "project_id" integer, "team_id" integer, "assigned_by_user_id" uuid, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "user_role_assignments_scope_type_ck" CHECK (("scope_type" = 'SYSTEM' AND "project_id" IS NULL AND "team_id" IS NULL) OR ("scope_type" = 'PROJECT' AND "project_id" IS NOT NULL AND "team_id" IS NULL) OR ("scope_type" = 'TEAM' AND "team_id" IS NOT NULL)), CONSTRAINT "PK_ac634a3aa59d70bf0fb7b423b47" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "user_role_assignments_team_scope_key" ON "user_role_assignments" ("user_id", "role_id", "team_id") WHERE "scope_type" = 'TEAM' AND "team_id" IS NOT NULL`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "user_role_assignments_project_scope_key" ON "user_role_assignments" ("user_id", "role_id", "project_id") WHERE "scope_type" = 'PROJECT' AND "project_id" IS NOT NULL AND "team_id" IS NULL`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "user_role_assignments_system_scope_key" ON "user_role_assignments" ("user_id", "role_id") WHERE "scope_type" = 'SYSTEM'`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."tickets_status_enum" AS ENUM('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."tickets_severity_enum" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "tickets" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "assignee_user_id" uuid, "reporter_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."tickets_status_enum" NOT NULL DEFAULT 'OPEN', "severity" "public"."tickets_severity_enum" NOT NULL DEFAULT 'MEDIUM', "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_reporter" ON "tickets" ("reporter_user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_assignee_status" ON "tickets" ("assignee_user_id", "status") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_project_team" ON "tickets" ("project_id", "team_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_project_status" ON "tickets" ("project_id", "status") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."team_members_status_enum" AS ENUM('INVITED', 'ACTIVE', 'DECLINED', 'REMOVED')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "team_members" ("id" SERIAL NOT NULL, "team_id" integer NOT NULL, "user_id" uuid NOT NULL, "status" "public"."team_members_status_enum" NOT NULL, "invited_by_user_id" uuid, "joined_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_ca3eae89dcf20c9fd95bf7460aa" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "team_members_team_id_user_id_key" ON "team_members" ("team_id", "user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."users_role_enum" AS ENUM('0', '1', '2', '3')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'deleted')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "users" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" uuid NOT NULL DEFAULT uuid_generate_v4(), "mezon_id" character varying NOT NULL, "name" character varying, "email" character varying, "avatar" character varying, "role" "public"."users_role_enum" DEFAULT '3', "status" "public"."users_status_enum" DEFAULT 'active', "current_project_id" character varying, "last_active_at" TIMESTAMP, "deleted_at" TIMESTAMP, CONSTRAINT "UQ_97672ac88f789774dd47f7c8be3" UNIQUE ("email"), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_users_current_project_id" ON "users" ("current_project_id") `,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "UQ_users_mezon_id" ON "users" ("mezon_id") `,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "teams" ("id" SERIAL NOT NULL, "project_id" integer NOT NULL, "name" character varying NOT NULL, "slug" character varying NOT NULL, "description" text, "is_default" boolean NOT NULL DEFAULT false, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_7e5523774a38b08a6236d322403" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "teams_project_id_name_key" ON "teams" ("project_id", "name") `,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "teams_project_id_slug_key" ON "teams" ("project_id", "slug") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."tasks_status_enum" AS ENUM('TODO', 'IN_PROGRESS', 'DONE', 'CANCELLED')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."tasks_priority_enum" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'URGENT')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "tasks" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "assignee_user_id" uuid, "reporter_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."tasks_status_enum" NOT NULL DEFAULT 'TODO', "priority" "public"."tasks_priority_enum" NOT NULL DEFAULT 'MEDIUM', "due_at" TIMESTAMP WITH TIME ZONE, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_8d12ff38fcc62aaba2cab748772" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tasks_reporter" ON "tasks" ("reporter_user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tasks_assignee_status" ON "tasks" ("assignee_user_id", "status") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tasks_project_team" ON "tasks" ("project_id", "team_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tasks_project_status" ON "tasks" ("project_id", "status") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."roles_scope_type_enum" AS ENUM('SYSTEM', 'PROJECT', 'TEAM')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "roles" ("id" SERIAL NOT NULL, "key" character varying NOT NULL, "name" character varying NOT NULL, "description" text, "scope_type" "public"."roles_scope_type_enum" NOT NULL, "is_system" boolean NOT NULL DEFAULT false, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_c1433d71a4838793a49dcad46ab" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "roles_key_key" ON "roles" ("key") `,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "role_permissions" ("role_id" integer NOT NULL, "permission_id" integer NOT NULL, CONSTRAINT "PK_25d24010f53bb80b78e412c9656" PRIMARY KEY ("role_id", "permission_id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "role_permissions_role_id_permission_id_key" ON "role_permissions" ("role_id", "permission_id") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."projects_onboarding_status_enum" AS ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "projects" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "name" character varying NOT NULL, "slug" character varying NOT NULL, "description" character varying, "owner_user_id" uuid NOT NULL, "onboarding_status" "public"."projects_onboarding_status_enum" NOT NULL DEFAULT 'PENDING', "onboarding_completed_at" TIMESTAMP WITH TIME ZONE, "deleted_at" TIMESTAMP WITH TIME ZONE, "ownerUserId" uuid NOT NULL, CONSTRAINT "PK_6271df0a7aed1d6c0691ce6ac50" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_projects_owner_user_id" ON "projects" ("owner_user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "UQ_projects_slug" ON "projects" ("slug") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."project_members_status_enum" AS ENUM('INVITED', 'ACTIVE', 'DECLINED', 'REMOVED')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "project_members" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "user_id" uuid NOT NULL, "status" "public"."project_members_status_enum" NOT NULL DEFAULT 'INVITED', "invited_by_user_id" uuid, "joined_at" TIMESTAMP WITH TIME ZONE, "projectId" integer NOT NULL, "userId" uuid NOT NULL, "invitedByUserId" uuid, CONSTRAINT "PK_0b2f46f804be4aea9234c78bcc9" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_project_members_invited_by_user_id" ON "project_members" ("invited_by_user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_project_members_user_id" ON "project_members" ("user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "UQ_project_members_project_id_user_id" ON "project_members" ("project_id", "user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "permissions" ("id" SERIAL NOT NULL, "key" character varying NOT NULL, "resource" character varying NOT NULL, "action" character varying NOT NULL, "description" text, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_920331560282b8bd21bb02290df" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "permissions_resource_action_key" ON "permissions" ("resource", "action") `,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "permissions_key_key" ON "permissions" ("key") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."notes_resource_type_enum" AS ENUM('USER', 'PROJECT', 'TEAM', 'TASK', 'TICKET', 'EVENT')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "notes" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "author_user_id" uuid NOT NULL, "resource_type" "public"."notes_resource_type_enum" NOT NULL, "resource_id" character varying NOT NULL, "content" text NOT NULL, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_af6206538ea96c4e77e9f400c3d" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_notes_resource" ON "notes" ("resource_type", "resource_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_notes_project_resource" ON "notes" ("project_id", "resource_type", "resource_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_notes_project_author" ON "notes" ("project_id", "author_user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."events_status_enum" AS ENUM('DRAFT', 'SCHEDULED', 'CANCELLED', 'COMPLETED')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "events" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "owner_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."events_status_enum" NOT NULL DEFAULT 'DRAFT', "starts_at" TIMESTAMP WITH TIME ZONE NOT NULL, "ends_at" TIMESTAMP WITH TIME ZONE, "location" character varying, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_40731c7151fe4be3116e45ddf73" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_events_owner_status" ON "events" ("owner_user_id", "status") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_events_project_team" ON "events" ("project_id", "team_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_events_project_status_starts_at" ON "events" ("project_id", "status", "starts_at") `,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "messages" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "message_id" character varying NOT NULL, "type" character varying NOT NULL DEFAULT 'reply', "owner_id" character varying NOT NULL, "channel_id" character varying NOT NULL, "bill_id" integer, CONSTRAINT "PK_6187089f850b8deeca0232cfeba" PRIMARY KEY ("message_id"))`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "projects" ADD CONSTRAINT "FK_30f70ec4c2d480f78aa55925777" FOREIGN KEY ("ownerUserId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "project_members" ADD CONSTRAINT "FK_d19892d8f03928e5bfc7313780c" FOREIGN KEY ("projectId") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "project_members" ADD CONSTRAINT "FK_08d1346ff91abba68e5a637cfdb" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "project_members" ADD CONSTRAINT "FK_d09906b15f07e2998b3eafa0615" FOREIGN KEY ("invitedByUserId") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`,
+    );
+  }
 
-    public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(`ALTER TABLE "project_members" DROP CONSTRAINT "FK_d09906b15f07e2998b3eafa0615"`);
-        await queryRunner.query(`ALTER TABLE "project_members" DROP CONSTRAINT "FK_08d1346ff91abba68e5a637cfdb"`);
-        await queryRunner.query(`ALTER TABLE "project_members" DROP CONSTRAINT "FK_d19892d8f03928e5bfc7313780c"`);
-        await queryRunner.query(`ALTER TABLE "projects" DROP CONSTRAINT "FK_30f70ec4c2d480f78aa55925777"`);
-        await queryRunner.query(`DROP TABLE "messages"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_events_project_status_starts_at"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_events_project_team"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_events_owner_status"`);
-        await queryRunner.query(`DROP TABLE "events"`);
-        await queryRunner.query(`DROP TYPE "public"."events_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_author"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_resource"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_notes_resource"`);
-        await queryRunner.query(`DROP TABLE "notes"`);
-        await queryRunner.query(`DROP TYPE "public"."notes_resource_type_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."permissions_key_key"`);
-        await queryRunner.query(`DROP INDEX "public"."permissions_resource_action_key"`);
-        await queryRunner.query(`DROP TABLE "permissions"`);
-        await queryRunner.query(`DROP INDEX "public"."UQ_project_members_project_id_user_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_project_members_user_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_project_members_invited_by_user_id"`);
-        await queryRunner.query(`DROP TABLE "project_members"`);
-        await queryRunner.query(`DROP TYPE "public"."project_members_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."UQ_projects_slug"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_projects_owner_user_id"`);
-        await queryRunner.query(`DROP TABLE "projects"`);
-        await queryRunner.query(`DROP TYPE "public"."projects_onboarding_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."role_permissions_role_id_permission_id_key"`);
-        await queryRunner.query(`DROP TABLE "role_permissions"`);
-        await queryRunner.query(`DROP INDEX "public"."roles_key_key"`);
-        await queryRunner.query(`DROP TABLE "roles"`);
-        await queryRunner.query(`DROP TYPE "public"."roles_scope_type_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tasks_project_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tasks_project_team"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tasks_assignee_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tasks_reporter"`);
-        await queryRunner.query(`DROP TABLE "tasks"`);
-        await queryRunner.query(`DROP TYPE "public"."tasks_priority_enum"`);
-        await queryRunner.query(`DROP TYPE "public"."tasks_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."teams_project_id_slug_key"`);
-        await queryRunner.query(`DROP INDEX "public"."teams_project_id_name_key"`);
-        await queryRunner.query(`DROP TABLE "teams"`);
-        await queryRunner.query(`DROP INDEX "public"."UQ_users_mezon_id"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_users_current_project_id"`);
-        await queryRunner.query(`DROP TABLE "users"`);
-        await queryRunner.query(`DROP TYPE "public"."users_status_enum"`);
-        await queryRunner.query(`DROP TYPE "public"."users_role_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."team_members_team_id_user_id_key"`);
-        await queryRunner.query(`DROP TABLE "team_members"`);
-        await queryRunner.query(`DROP TYPE "public"."team_members_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_team"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tickets_assignee_status"`);
-        await queryRunner.query(`DROP INDEX "public"."IDX_tickets_reporter"`);
-        await queryRunner.query(`DROP TABLE "tickets"`);
-        await queryRunner.query(`DROP TYPE "public"."tickets_severity_enum"`);
-        await queryRunner.query(`DROP TYPE "public"."tickets_status_enum"`);
-        await queryRunner.query(`DROP INDEX "public"."user_role_assignments_system_scope_key"`);
-        await queryRunner.query(`DROP INDEX "public"."user_role_assignments_project_scope_key"`);
-        await queryRunner.query(`DROP INDEX "public"."user_role_assignments_team_scope_key"`);
-        await queryRunner.query(`DROP TABLE "user_role_assignments"`);
-        await queryRunner.query(`DROP TYPE "public"."user_role_assignments_scope_type_enum"`);
-    }
-
+  public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(
+      `ALTER TABLE "project_members" DROP CONSTRAINT "FK_d09906b15f07e2998b3eafa0615"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "project_members" DROP CONSTRAINT "FK_08d1346ff91abba68e5a637cfdb"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "project_members" DROP CONSTRAINT "FK_d19892d8f03928e5bfc7313780c"`,
+    );
+    await queryRunner.query(
+      `ALTER TABLE "projects" DROP CONSTRAINT "FK_30f70ec4c2d480f78aa55925777"`,
+    );
+    await queryRunner.query(`DROP TABLE "messages"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_events_project_status_starts_at"`,
+    );
+    await queryRunner.query(`DROP INDEX "public"."IDX_events_project_team"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_events_owner_status"`);
+    await queryRunner.query(`DROP TABLE "events"`);
+    await queryRunner.query(`DROP TYPE "public"."events_status_enum"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_author"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_resource"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_notes_resource"`);
+    await queryRunner.query(`DROP TABLE "notes"`);
+    await queryRunner.query(`DROP TYPE "public"."notes_resource_type_enum"`);
+    await queryRunner.query(`DROP INDEX "public"."permissions_key_key"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."permissions_resource_action_key"`,
+    );
+    await queryRunner.query(`DROP TABLE "permissions"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."UQ_project_members_project_id_user_id"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_project_members_user_id"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_project_members_invited_by_user_id"`,
+    );
+    await queryRunner.query(`DROP TABLE "project_members"`);
+    await queryRunner.query(`DROP TYPE "public"."project_members_status_enum"`);
+    await queryRunner.query(`DROP INDEX "public"."UQ_projects_slug"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_projects_owner_user_id"`);
+    await queryRunner.query(`DROP TABLE "projects"`);
+    await queryRunner.query(
+      `DROP TYPE "public"."projects_onboarding_status_enum"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."role_permissions_role_id_permission_id_key"`,
+    );
+    await queryRunner.query(`DROP TABLE "role_permissions"`);
+    await queryRunner.query(`DROP INDEX "public"."roles_key_key"`);
+    await queryRunner.query(`DROP TABLE "roles"`);
+    await queryRunner.query(`DROP TYPE "public"."roles_scope_type_enum"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tasks_project_status"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tasks_project_team"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tasks_assignee_status"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tasks_reporter"`);
+    await queryRunner.query(`DROP TABLE "tasks"`);
+    await queryRunner.query(`DROP TYPE "public"."tasks_priority_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."tasks_status_enum"`);
+    await queryRunner.query(`DROP INDEX "public"."teams_project_id_slug_key"`);
+    await queryRunner.query(`DROP INDEX "public"."teams_project_id_name_key"`);
+    await queryRunner.query(`DROP TABLE "teams"`);
+    await queryRunner.query(`DROP INDEX "public"."UQ_users_mezon_id"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_users_current_project_id"`,
+    );
+    await queryRunner.query(`DROP TABLE "users"`);
+    await queryRunner.query(`DROP TYPE "public"."users_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."users_role_enum"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."team_members_team_id_user_id_key"`,
+    );
+    await queryRunner.query(`DROP TABLE "team_members"`);
+    await queryRunner.query(`DROP TYPE "public"."team_members_status_enum"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_status"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_team"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_tickets_assignee_status"`,
+    );
+    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_reporter"`);
+    await queryRunner.query(`DROP TABLE "tickets"`);
+    await queryRunner.query(`DROP TYPE "public"."tickets_severity_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."tickets_status_enum"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."user_role_assignments_system_scope_key"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."user_role_assignments_project_scope_key"`,
+    );
+    await queryRunner.query(
+      `DROP INDEX "public"."user_role_assignments_team_scope_key"`,
+    );
+    await queryRunner.query(`DROP TABLE "user_role_assignments"`);
+    await queryRunner.query(
+      `DROP TYPE "public"."user_role_assignments_scope_type_enum"`,
+    );
+  }
 }
