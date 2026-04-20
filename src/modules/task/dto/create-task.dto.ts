@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   IsDate,
+  IsDefined,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -12,6 +13,7 @@ import {
 import { TaskPriority, TaskStatus } from '../enums';
 
 export class CreateTaskDto {
+  @IsDefined()
   @IsInt()
   projectId!: number;
 
@@ -23,9 +25,11 @@ export class CreateTaskDto {
   @IsUUID()
   assigneeUserId?: string | null;
 
+  @IsDefined()
   @IsUUID()
   reporterUserId!: string;
 
+  @IsDefined()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
