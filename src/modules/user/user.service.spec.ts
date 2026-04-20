@@ -1,4 +1,5 @@
 import { createTestingModule, factory, testingModule } from '#jest';
+import { UserStatus } from './enum/user-status.enum';
 import { UserService } from './user.service';
 import type UserEntity from './user.entity';
 
@@ -158,5 +159,154 @@ describe(UserService.name, () => {
       mezonId: 'crud-entry-user',
       name: 'Entry After',
     } satisfies Partial<UserEntity>);
+  });
+
+  describe('findByIdentifier', () => {
+    it('Find user with mezonId', async () => {
+      const user = await factory.user({ mezonId: 'mezon-unique-01' });
+
+      const result = await userService.findByIdentifier('mezon-unique-01');
+
+      expect(result).toMatchObject({ id: user.id, mezonId: 'mezon-unique-01' });
+    });
+
+    it('Find user with email', async () => {
+      const user = await factory.user({
+        email: 'identifier-email@example.com',
+      });
+
+      const result = await userService.findByIdentifier(
+        'identifier-email@example.com',
+      );
+
+      expect(result).toMatchObject({
+        id: user.id,
+        email: 'identifier-email@example.com',
+      });
+    });
+
+    it('Find user with name', async () => {
+      const user = await factory.user({ name: 'Username' });
+
+      const result = await userService.findByIdentifier('Username');
+
+      expect(result).toMatchObject({ id: user.id, name: 'Username' });
+    });
+  });
+
+  it('return do nothing when no account uses to soft delete', async () => {
+    await expect(
+      userService.softDeleteUser('identifier-email@example.com'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('return do nothing when account status is deleted', async () => {
+    const user = await factory.user({
+      name: 'User Deleted',
+      mezonId: 'Mezon-123',
+      status: UserStatus.DELETED,
+      deletedAt: new Date(),
+    });
+
+    await expect(
+      userService.softDeleteUser('User Deleted'),
+    ).resolves.toBeUndefined();
+
+    const checkUser = await userService.findByIdentifier('User Deleted', true);
+    expect(checkUser?.status).toBe(UserStatus.DELETED);
+  });
+
+  it('soft delete run success', async () => {
+    const user = await factory.user({
+      mezonId: 'Mezon-123',
+      name: 'Identifier name',
+      email: 'identifier-email@example.com',
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+    });
+
+    await expect(
+      userService.softDeleteUser('Identifier name'),
+    ).resolves.toBeUndefined();
+
+    const updateUser = await userService.findByIdentifier('Mezon-123', true);
+    expect(updateUser).toMatchObject({
+      id: user.id,
+      status: UserStatus.DELETED,
+    });
+
+    expect(updateUser?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('return do nothing when no account uses to restore', async () => {
+    await expect(
+      userService.restoreUser('Restore username'),
+    ).resolves.toBeUndefined();
+  });
+
+  it('return do nothing when account want to restore have status is active or inactive', async () => {
+    const user = await factory.user({
+      mezonId: 'Mezon-123',
+      name: 'Identifier name',
+      email: 'identifier-email@example.com',
+      status: UserStatus.ACTIVE,
+    });
+
+    await expect(userService.restoreUser('Mezon-123')).resolves.toBeUndefined();
+    const checkUser = await userService.findByIdentifier('Mezon-123');
+    expect(checkUser?.status).toBe(UserStatus.ACTIVE);
+  });
+
+  it('restore user succes, from DELETED to ACTIVE', async () => {
+    const user = await factory.user({
+      mezonId: 'Mezon-123',
+      name: 'Identifier name',
+      email: 'identifier-email@example.com',
+      status: UserStatus.DELETED,
+      deletedAt: new Date(),
+    });
+
+    await expect(userService.restoreUser('Mezon-123')).resolves.toBeUndefined();
+
+    const restoreUser = await userService.findByIdentifier('Mezon-123');
+    expect(restoreUser).toMatchObject({
+      id: user.id,
+      status: UserStatus.ACTIVE,
+      deletedAt: null,
+    });
+  });
+
+  it('return do nothing when no account update status', async () => {
+    await expect(
+      userService.updateStatusUser('Mezon-123', UserStatus.ACTIVE),
+    ).resolves.toBeUndefined();
+  });
+
+  it('return do nothing when account update to deleted', async () => {
+    const user = await factory.user({
+      mezonId: 'Mezon-123',
+      status: UserStatus.ACTIVE,
+    });
+
+    await expect(
+      userService.updateStatusUser('Mezon-123', UserStatus.DELETED),
+    ).resolves.toBeUndefined();
+
+    const checkUser = await userService.findByIdentifier('Mezon-123');
+    expect(checkUser?.status).toBe(UserStatus.ACTIVE);
+  });
+
+  it('update user status run success', async () => {
+    const user = await factory.user({
+      mezonId: 'Mezon-123',
+      status: UserStatus.INACTIVE,
+    });
+
+    await expect(
+      userService.updateStatusUser('Mezon-123', UserStatus.ACTIVE),
+    ).resolves.toBeUndefined();
+
+    const checkUser = await userService.findByIdentifier('Mezon-123');
+    expect(checkUser?.status).toBe(UserStatus.ACTIVE);
   });
 });
