@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import TaskEntity from '@src/modules/task/task.entity';
 import UserEntity from '@src/modules/user/user.entity';
 import {
   channelMessage as channelMessageFactory,
   messageButtonClicked as messageButtonClickedFactory,
+  task as taskFactory,
   user as userFactory,
 } from '@src/repl-modules/factories';
 import type { ChannelMessage } from 'mezon-sdk';
@@ -16,22 +18,33 @@ export class DatabaseSeeder {
   constructor(private readonly dataSource: DataSource) {}
 
   async seed(options: SeedOptions = {}): Promise<SeedResult> {
-    const { users = 5, user = {} } = options;
+    const { users = 5, user = {}, tasks = 5, task = {} } = options;
 
     this.logger.log('Starting database seeding...');
 
     await this.resetDatabase();
     const seededUsers = await this.createUsers(users, user);
+    const seededTasks = await this.createTasks(tasks, task);
 
     this.logger.log(`Seeded ${seededUsers.length} users`);
+    this.logger.log(`Seeded ${seededTasks.length} tasks`);
 
     return {
+      tasks: seededTasks,
       users: seededUsers,
     };
   }
 
   async createUsers(count = 1, input: Partial<UserEntity> = {}) {
     return userFactory(
+      Array.from({ length: count }, () => ({
+        ...input,
+      })),
+    );
+  }
+
+  async createTasks(count = 1, input: Partial<TaskEntity> = {}) {
+    return taskFactory(
       Array.from({ length: count }, () => ({
         ...input,
       })),
@@ -77,10 +90,13 @@ export class DatabaseSeeder {
 }
 
 type SeedOptions = {
+  task?: Partial<TaskEntity>;
+  tasks?: number;
   users?: number;
   user?: Partial<UserEntity>;
 };
 
 type SeedResult = {
+  tasks: TaskEntity[];
   users: UserEntity[];
 };
