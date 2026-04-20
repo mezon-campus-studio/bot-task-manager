@@ -201,7 +201,7 @@ describe(UserService.name, () => {
   });
 
   it('return do nothing when account status is deleted', async () => {
-    const user = await factory.user({
+    await factory.user({
       name: 'User Deleted',
       mezonId: 'Mezon-123',
       status: UserStatus.DELETED,
@@ -245,7 +245,7 @@ describe(UserService.name, () => {
   });
 
   it('return do nothing when account want to restore have status is active or inactive', async () => {
-    const user = await factory.user({
+    await factory.user({
       mezonId: 'Mezon-123',
       name: 'Identifier name',
       email: 'identifier-email@example.com',
@@ -283,7 +283,7 @@ describe(UserService.name, () => {
   });
 
   it('return do nothing when account update to deleted', async () => {
-    const user = await factory.user({
+    await factory.user({
       mezonId: 'Mezon-123',
       status: UserStatus.ACTIVE,
     });
@@ -297,7 +297,7 @@ describe(UserService.name, () => {
   });
 
   it('update user status run success', async () => {
-    const user = await factory.user({
+    await factory.user({
       mezonId: 'Mezon-123',
       status: UserStatus.INACTIVE,
     });
