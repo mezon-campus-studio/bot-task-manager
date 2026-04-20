@@ -57,11 +57,11 @@ SERVICE_URL="$(
 [[ -n "$SERVICE_URL" ]] || die "Unable to resolve Cloud Run service URL after rollback"
 
 for _ in $(seq 1 20); do
-  if curl --fail --silent --show-error "${SERVICE_URL}/healthz" >/dev/null; then
+  if curl --fail --silent --show-error "${SERVICE_URL}/health" >/dev/null; then
     log "INFO" "Rollback successful. ${SERVICE_NAME} now serves ${REVISION_NAME}"
     exit 0
   fi
   sleep 5
 done
 
-die "Rolled back traffic to ${REVISION_NAME}, but ${SERVICE_URL}/healthz never became healthy"
+die "Rolled back traffic to ${REVISION_NAME}, but ${SERVICE_URL}/health never became healthy"

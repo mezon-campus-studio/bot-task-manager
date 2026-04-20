@@ -4,7 +4,7 @@ import { ApiExcludeController } from '@nestjs/swagger';
 @ApiExcludeController()
 @Controller()
 export class HealthController {
-  @Get('healthz')
+  @Get('health')
   @Version(VERSION_NEUTRAL)
   getHealth() {
     return { status: 'ok' };

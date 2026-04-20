@@ -155,13 +155,13 @@ SERVICE_URL="$(
 
 [[ -n "$SERVICE_URL" ]] || die "Unable to resolve Cloud Run service URL after deploy"
 
-log "INFO" "Waiting for ${SERVICE_URL}/healthz"
+log "INFO" "Waiting for ${SERVICE_URL}/health"
 for _ in $(seq 1 20); do
-  if curl --fail --silent --show-error "${SERVICE_URL}/healthz" >/dev/null; then
+  if curl --fail --silent --show-error "${SERVICE_URL}/health" >/dev/null; then
     log "INFO" "Deploy successful: ${SERVICE_URL}"
     exit 0
   fi
   sleep 5
 done
 
-die "Cloud Run service never became healthy at ${SERVICE_URL}/healthz"
+die "Cloud Run service never became healthy at ${SERVICE_URL}/health"
