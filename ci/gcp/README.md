@@ -9,7 +9,7 @@ This directory keeps the GCP bootstrap and operational scripts for the `sample-c
 - `sync_secrets.sh`
   Upserts runtime secrets into Secret Manager and syncs the Cloud SQL app password with `DB_PASSWORD`.
 - `setup_monitoring.sh`
-  Creates the `/healthz` uptime check plus three alert policies: service down, migration job failure, and HTTP 5xx traffic.
+  Creates the `/health` uptime check plus three alert policies: service down, migration job failure, and HTTP 5xx traffic.
 - `templates/secrets.dev.env.template`
   Copy target for dev secret values.
 - `templates/secrets.prod.env.template`

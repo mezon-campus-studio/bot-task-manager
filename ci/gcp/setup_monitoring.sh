@@ -32,8 +32,9 @@ require_command python3
 REGION="$(gcp_region)"
 SERVICE_NAME="$(cloud_run_service_name)"
 JOB_NAME="$(cloud_run_job_name)"
-UPTIME_DISPLAY_NAME="sample-campus ${ENVIRONMENT} healthz"
-UPTIME_PATH="/healthz"
+UPTIME_DISPLAY_NAME="sample-campus ${ENVIRONMENT} health"
+LEGACY_UPTIME_DISPLAY_NAME="sample-campus ${ENVIRONMENT} healthz"
+UPTIME_PATH="/health"
 SERVICE_URL="$(
   gcloud run services describe "$SERVICE_NAME" \
     --project="$PROJECT_ID" \
@@ -51,19 +52,23 @@ PY
 )"
 
 cleanup_existing_uptime_check() {
+  local display_name
   local existing_name
-  existing_name="$(
-    gcloud monitoring uptime list \
-      --project="$PROJECT_ID" \
-      --format='value(name)' \
-      --filter="displayName=\"${UPTIME_DISPLAY_NAME}\"" \
-      2>/dev/null || true
-  )"
 
-  if [[ -n "$existing_name" ]]; then
-    log "INFO" "Deleting existing uptime check ${UPTIME_DISPLAY_NAME}"
-    gcloud monitoring uptime delete "$existing_name" --project="$PROJECT_ID" --quiet >/dev/null
-  fi
+  for display_name in "$UPTIME_DISPLAY_NAME" "$LEGACY_UPTIME_DISPLAY_NAME"; do
+    existing_name="$(
+      gcloud monitoring uptime list \
+        --project="$PROJECT_ID" \
+        --format='value(name)' \
+        --filter="displayName=\"${display_name}\"" \
+        2>/dev/null || true
+    )"
+
+    if [[ -n "$existing_name" ]]; then
+      log "INFO" "Deleting existing uptime check ${display_name}"
+      gcloud monitoring uptime delete "$existing_name" --project="$PROJECT_ID" --quiet >/dev/null
+    fi
+  done
 }
 
 delete_alert_policy_if_exists() {
@@ -113,7 +118,7 @@ cat >"${TMP_DIR}/uptime-policy.json" <<EOF
   "displayName": "sample-campus ${ENVIRONMENT} service down",
   "combiner": "OR",
   "documentation": {
-    "content": "Cloud Run service \`${SERVICE_NAME}\` failed the public /healthz uptime check in ${ENVIRONMENT}.",
+    "content": "Cloud Run service \`${SERVICE_NAME}\` failed the public /health uptime check in ${ENVIRONMENT}.",
     "mimeType": "text/markdown"
   },
   "conditions": [

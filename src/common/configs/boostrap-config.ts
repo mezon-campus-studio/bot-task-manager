@@ -19,13 +19,6 @@ import { swaggerConfig } from './swagger.config';
 
 export default async function bootstrapConfig(app: INestApplication) {
   const configService = app.select(SharedModule).get(AppConfigService);
-  const httpAdapter = app.getHttpAdapter();
-  const httpServer = httpAdapter.getInstance();
-
-  // Keep health checks outside Nest versioning so Cloud Run can probe /healthz directly.
-  httpServer.get('/healthz', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
-  });
 
   app.use(cookieParser());
   app.enableCors({
