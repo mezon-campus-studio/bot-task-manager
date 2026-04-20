@@ -6,16 +6,19 @@ import TaskEntity from './task.entity';
 
 export type CreateTaskInput = Pick<
   TaskEntity,
-  | 'projectId'
-  | 'teamId'
-  | 'assigneeUserId'
-  | 'reporterUserId'
-  | 'title'
-  | 'description'
-  | 'status'
-  | 'priority'
-  | 'dueAt'
->;
+  'projectId' | 'reporterUserId' | 'title'
+> &
+  Partial<
+    Pick<
+      TaskEntity,
+      | 'teamId'
+      | 'assigneeUserId'
+      | 'description'
+      | 'status'
+      | 'priority'
+      | 'dueAt'
+    >
+  >;
 
 export type UpdateTaskInput = Partial<CreateTaskInput>;
 
