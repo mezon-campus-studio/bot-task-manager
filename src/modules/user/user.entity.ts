@@ -1,4 +1,5 @@
 import { Column, Entity, Index } from 'typeorm';
+import { UserRole } from '#src/common/enums/user.enum.js';
 import { AbstractUuidEntity } from '@src/common/database/abstract.entity';
 import { UserStatus } from './enum/user-status.enum';
 
@@ -20,18 +21,26 @@ export default class UserEntity extends AbstractUuidEntity {
 
   @Column({
     type: 'enum',
+    enum: UserRole,
+    nullable: true,
+    default: UserRole.UK,
+  })
+  role!: UserRole | null;
+
+  @Column({
+    type: 'enum',
     enum: UserStatus,
     nullable: true,
     default: UserStatus.ACTIVE,
   })
-  status: UserStatus | null;
+  status!: UserStatus | null;
 
   @Column({ type: 'varchar', nullable: true })
-  currentProjectId!: string | null;
+  currentProjectId?: string | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  lastActiveAt!: Date | null;
+  lastActiveAt?: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
-  deletedAt!: Date | null;
+  deletedAt?: Date | null;
 }
