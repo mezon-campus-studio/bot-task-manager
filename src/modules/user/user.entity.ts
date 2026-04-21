@@ -1,4 +1,4 @@
-import { Column, Entity, Index } from 'typeorm';
+import { Column, DeleteDateColumn, Entity, Index } from 'typeorm';
 import { UserRole } from '#src/common/enums/user.enum.js';
 import { AbstractUuidEntity } from '@src/common/database/abstract.entity';
 import { UserStatus } from './enum/user-status.enum';
@@ -41,6 +41,6 @@ export default class UserEntity extends AbstractUuidEntity {
   @Column({ type: 'timestamp', nullable: true })
   lastActiveAt?: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @DeleteDateColumn({ type: 'timestamp', nullable: true })
   deletedAt?: Date | null;
 }

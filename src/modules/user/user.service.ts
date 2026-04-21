@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { UserStatus } from './enum/user-status.enum';
 import UserEntity from './user.entity';
@@ -263,11 +263,14 @@ export class UserService extends CRUDService<UserEntity> {
     identifier: string,
     includeDeleted = false,
   ): Promise<UserEntity | null> {
+    const statusFilter = includeDeleted
+      ? {}
+      : { status: Not(UserStatus.DELETED) };
     return await this.userRepository.findOne({
       where: [
-        { mezonId: identifier },
-        { name: identifier },
-        { email: identifier },
+        { mezonId: identifier, ...statusFilter },
+        { name: identifier, ...statusFilter },
+        { email: identifier, ...statusFilter },
       ],
       withDeleted: includeDeleted,
     });
@@ -298,8 +301,8 @@ export class UserService extends CRUDService<UserEntity> {
     }
 
     existingUser.status = UserStatus.DELETED;
-    existingUser.deletedAt = new Date();
     const result = await this.userRepository.save(existingUser);
+    await this.userRepository.softRemove(existingUser);
 
     this.logger.log({
       log: 'Soft delete user result',
@@ -338,8 +341,8 @@ export class UserService extends CRUDService<UserEntity> {
     }
 
     existingUser.status = UserStatus.ACTIVE;
-    existingUser.deletedAt = null;
     const result = await this.userRepository.save(existingUser);
+    await this.userRepository.recover(existingUser);
 
     this.logger.log({
       log: 'Restore user result',
@@ -374,7 +377,7 @@ export class UserService extends CRUDService<UserEntity> {
 
     if (status === UserStatus.DELETED) {
       this.logger.log({
-        log: 'Fallback to no-op because you can change status to deleted',
+        log: 'Fallback to no-op because you cant change status to deleted',
       });
       return;
     }
