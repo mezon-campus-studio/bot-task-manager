@@ -31,6 +31,17 @@ export class PermissionService extends CRUDService<PermissionEntity> {
       resource: input.resource,
     });
 
+    const existed = await this.permissionRepository.findOne({
+      where: { key: input.key },
+    });
+    if (existed) {
+      this.logger.warn({
+        key: input.key,
+        log: 'Permission with the same key already exists',
+      });
+      throw new Error(`Permission with key ${input.key} already exists`);
+    }
+
     const permission = this.permissionRepository.create({
       ...input,
       description: input.description ?? null,
@@ -56,4 +67,11 @@ export class PermissionService extends CRUDService<PermissionEntity> {
 
     return this.permissionRepository.findOne({ where: { key } });
   }
+  async findAll(): Promise<PermissionEntity[]> {
+    this.logger.log({
+      log: 'Attempting to find all permissions',
+    });
+    return this.permissionRepository.find();
+  }
+
 }
