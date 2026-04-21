@@ -26,9 +26,11 @@ export class RoleService extends CRUDService<RoleEntity> {
       key: input.key,
       scopeType: input.scopeType,
     });
-    
-      const normalizedKey = input.key.toUpperCase();
-      const existed = await this.roleRepository.findOne({ where: { key: normalizedKey } });
+
+    const normalizedKey = input.key.toUpperCase();
+    const existed = await this.roleRepository.findOne({
+      where: { key: normalizedKey },
+    });
     if (existed) {
       this.logger.warn({
         log: 'Role with the same key already exists',
@@ -100,31 +102,38 @@ export class RoleService extends CRUDService<RoleEntity> {
     await this.roleRepository.delete(id);
   }
   async findAll(): Promise<RoleEntity[]> {
-  this.logger.log({
-    log: 'Attempting to list all roles',
-  });
+    this.logger.log({
+      log: 'Attempting to list all roles',
+    });
 
-  return this.roleRepository.find({
-    order: { id: 'ASC' },
-  });
-}
-  async updateRole(id: number, updates: Partial<CreateRoleInput>): Promise<RoleEntity> {
+    return this.roleRepository.find({
+      order: { id: 'ASC' },
+    });
+  }
+  async updateRole(
+    id: number,
+    updates: Partial<CreateRoleInput>,
+  ): Promise<RoleEntity> {
     this.logger.log({
       log: 'Attempting to update role',
       roleId: id,
       updates,
     });
-    return this.roleRepository.manager.transaction(async (transactionalEntityManager) => {
-      const role = await transactionalEntityManager.findOne(RoleEntity, { where: { id } });
-      if (!role) {
-        this.logger.warn({
-          log: 'Role not found for update',
-          roleId: id,
+    return this.roleRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const role = await transactionalEntityManager.findOne(RoleEntity, {
+          where: { id },
         });
-        throw new Error(`Role with id ${id} not found`);
-      }
-      Object.assign(role, updates);
-      return transactionalEntityManager.save(role);
-    });
+        if (!role) {
+          this.logger.warn({
+            log: 'Role not found for update',
+            roleId: id,
+          });
+          throw new Error(`Role with id ${id} not found`);
+        }
+        Object.assign(role, updates);
+        return transactionalEntityManager.save(role);
+      },
+    );
   }
 }

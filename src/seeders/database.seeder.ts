@@ -9,9 +9,9 @@ import {
   task as taskFactory,
   user as userFactory,
 } from '@src/repl-modules/factories';
+import { RoleEntity } from '../modules/role';
 import type { ChannelMessage } from 'mezon-sdk';
 import type { MessageButtonClicked } from 'mezon-sdk/dist/cjs/rtapi/realtime';
-import { RoleEntity } from '../modules/role';
 
 @Injectable()
 export class DatabaseSeeder {
@@ -29,7 +29,6 @@ export class DatabaseSeeder {
     const seededUsers = await this.createUsers(users, user);
     const seededTasks = await this.createTasks(tasks, task);
 
-    
     this.logger.log(`Seeded ${seededUsers.length} users`);
     this.logger.log(`Seeded ${seededTasks.length} tasks`);
 
@@ -92,13 +91,13 @@ export class DatabaseSeeder {
       `TRUNCATE ${tables.join(', ')} RESTART IDENTITY CASCADE;`,
     );
   }
-  async createRoles(count = 3 , input: Partial<RoleEntity> = {}) {
+  async createRoles(count = 3, input: Partial<RoleEntity> = {}) {
     return roleFactory(
       Array.from({ length: count }, () => ({
         ...input,
       })),
     );
-}
+  }
 }
 
 type SeedOptions = {

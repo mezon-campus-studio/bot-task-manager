@@ -42,7 +42,7 @@ export class RolePermissionService extends CRUDService<RolePermissionEntity> {
       });
       throw new Error('Role permission link already exists');
     }
-    
+
     const rolePermission = this.rolePermissionRepository.create(input);
 
     return this.rolePermissionRepository.save(rolePermission);

@@ -73,5 +73,4 @@ export class PermissionService extends CRUDService<PermissionEntity> {
     });
     return this.permissionRepository.find();
   }
-
 }

@@ -22,7 +22,6 @@ import { TicketModule } from './modules/ticket/ticket.module';
 import { UserModule } from './modules/user/user.module';
 import { UserRoleAssignmentModule } from './modules/user-role-assignment/user-role-assignment.module';
 
-
 @Module({
   imports: [
     SharedModule,
