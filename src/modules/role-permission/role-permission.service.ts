@@ -35,12 +35,7 @@ export class RolePermissionService extends CRUDService<RolePermissionEntity> {
       },
     });
     if (exist) {
-      this.logger.warn({
-        log: 'Role permission link already exists',
-        permissionId: input.permissionId,
-        roleId: input.roleId,
-      });
-      throw new Error('Role permission link already exists');
+      return exist;
     }
 
     const rolePermission = this.rolePermissionRepository.create(input);
