@@ -6,16 +6,21 @@ import TaskEntity from './task.entity';
 
 export type CreateTaskInput = Pick<
   TaskEntity,
-  | 'projectId'
-  | 'teamId'
-  | 'assigneeUserId'
-  | 'reporterUserId'
-  | 'title'
-  | 'description'
-  | 'status'
-  | 'priority'
-  | 'dueAt'
->;
+  'projectId' | 'reporterUserId' | 'title'
+> &
+  Partial<
+    Pick<
+      TaskEntity,
+      | 'teamId'
+      | 'assigneeUserId'
+      | 'description'
+      | 'status'
+      | 'priority'
+      | 'dueAt'
+    >
+  >;
+
+export type UpdateTaskInput = Partial<CreateTaskInput>;
 
 @Injectable()
 export class TaskService extends CRUDService<TaskEntity> {
@@ -58,6 +63,67 @@ export class TaskService extends CRUDService<TaskEntity> {
     });
 
     return result;
+  }
+
+  async findById(id: number): Promise<TaskEntity | null> {
+    this.logger.log({ log: 'Attempting to find task by id', taskId: id });
+
+    const result = await this.taskRepository.findOne({
+      where: { id },
+    });
+
+    this.logger.log({ log: 'Got task by id result', taskId: id, result });
+
+    return result;
+  }
+
+  async updateTask(
+    taskId: number,
+    input: UpdateTaskInput,
+  ): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to update task',
+      taskId,
+      input,
+    });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({ log: 'Got task for update', taskId, task });
+
+    if (!task) {
+      this.logger.log({ log: 'Task not found for update', taskId });
+      return null;
+    }
+
+    Object.assign(task, input);
+
+    const result = await this.taskRepository.save(task);
+    this.logger.log({ log: 'Task update result', taskId, result });
+
+    return result;
+  }
+
+  async deleteTask(taskId: number): Promise<boolean> {
+    this.logger.log({ log: 'Attempting to delete task', taskId });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({ log: 'Got task for delete', taskId, task });
+
+    if (!task) {
+      this.logger.log({ log: 'Task not found for delete', taskId });
+      return false;
+    }
+
+    await this.taskRepository.softRemove(task);
+    this.logger.log({ log: 'Task delete result', taskId });
+
+    return true;
   }
 
   async assignTask(
