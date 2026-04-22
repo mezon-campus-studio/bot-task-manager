@@ -2,9 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { UpdateRoleDto } from './dto/modify-role.dto';
 import { RoleScopeType } from './enums/role-scope-type.enum';
 import RoleEntity from './role.entity';
-import { UpdateRoleDto } from './dto/modify-role.dto';
 
 type CreateRoleInput = Pick<RoleEntity, 'key' | 'name' | 'scopeType'> &
   Partial<Pick<RoleEntity, 'description' | 'isSystem'>>;
