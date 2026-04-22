@@ -1,7 +1,7 @@
-import { Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -13,6 +13,7 @@ import { TicketSeverity, TicketStatus } from '../enums';
 export class UpdateTicketDto {
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(255)
   title?: string;
 
@@ -29,7 +30,6 @@ export class UpdateTicketDto {
   severity?: TicketSeverity;
 
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
   teamId?: number | null;
 

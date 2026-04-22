@@ -1,5 +1,5 @@
-import { Type } from 'class-transformer';
 import {
+  IsDefined,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -12,22 +12,21 @@ import {
 import { TicketSeverity, TicketStatus } from '../enums';
 
 export class CreateTicketDto {
-  @Type(() => Number)
+  @IsDefined()
   @IsInt()
-  @IsNotEmpty()
-  projectId: number;
+  projectId!: number;
 
+  @IsDefined()
   @IsUUID()
-  @IsNotEmpty()
-  reporterUserId: string;
+  reporterUserId!: string;
 
+  @IsDefined()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  title: string;
+  title!: string;
 
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
   teamId?: number | null;
 
