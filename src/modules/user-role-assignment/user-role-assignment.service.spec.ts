@@ -5,7 +5,6 @@ import { ProjectOnboardingStatus } from '@src/modules/project/project.enums';
 import { RoleScopeType } from '@src/modules/role/enums/role-scope-type.enum';
 import UserRoleAssignmentEntity from './user-role-assignment.entity';
 import { UserRoleAssignmentService } from './user-role-assignment.service';
-import { use } from 'passport';
 
 describe(UserRoleAssignmentService.name, () => {
   let projectRepository: Repository<ProjectEntity>;

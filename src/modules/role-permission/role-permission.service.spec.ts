@@ -158,7 +158,7 @@ describe(RolePermissionService.name, () => {
       ]);
     });
   });
-  
+
   describe('deleteByRoleId', () => {
     it('should delete all role-permission links for the requested role', async () => {
       const role = await factory.role({
@@ -209,7 +209,7 @@ describe(RolePermissionService.name, () => {
     });
   });
 
-    describe('removeRolePermission', () => {
+  describe('removeRolePermission', () => {
     it('should delete the role-permission link for the requested role and permission', async () => {
       const role = await factory.role({
         key: 'role-permission-remove-role',

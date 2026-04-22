@@ -132,7 +132,9 @@ describe(RoleService.name, () => {
       });
 
       await expect(roleService.deleteRole(role.id)).resolves.toBeUndefined();
-      await expect(roleRepository.findOneBy({ id: role.id })).resolves.toBeNull();
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toBeNull();
     });
 
     it('should reject deleting a system role', async () => {
@@ -143,7 +145,9 @@ describe(RoleService.name, () => {
       });
 
       await expect(roleService.deleteRole(role.id)).rejects.toThrow();
-      await expect(roleRepository.findOneBy({ id: role.id })).resolves.toMatchObject({
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toMatchObject({
         id: role.id,
         key: 'system-role',
         scopeType: RoleScopeType.SYSTEM,
@@ -178,7 +182,9 @@ describe(RoleService.name, () => {
         description: 'New description',
       });
 
-      await expect(roleRepository.findOneBy({ id: role.id })).resolves.toMatchObject({
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toMatchObject({
         id: role.id,
         key: 'updatable-role',
         scopeType: RoleScopeType.TEAM,
@@ -207,7 +213,9 @@ describe(RoleService.name, () => {
         description: 'Only description updated',
       });
 
-      await expect(roleRepository.findOneBy({ id: role.id })).resolves.toMatchObject({
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toMatchObject({
         id: role.id,
         key: 'partially-updatable-role',
         scopeType: RoleScopeType.TEAM,
@@ -231,29 +239,32 @@ describe(RoleService.name, () => {
         roleService.updateRole(999_999, { name: 'Non-existent Role' }),
       ).rejects.toThrow();
 
-      await expect(roleRepository.findOneBy({ id: fristRole.id })).resolves.toMatchObject({
+      await expect(
+        roleRepository.findOneBy({ id: fristRole.id }),
+      ).resolves.toMatchObject({
         id: fristRole.id,
         key: 'existing-role',
         scopeType: RoleScopeType.TEAM,
       });
     });
-  
 
     it('should reject updating a role to have a duplicate key', async () => {
       const firstRole = await factory.role({
         key: 'original-role',
         scopeType: RoleScopeType.TEAM,
       });
-      
+
       await factory.role({
-        key: 'existing-role'
+        key: 'existing-role',
       });
 
       await expect(
         roleService.updateRole(firstRole.id, { key: 'existing-role' }),
       ).rejects.toThrow();
 
-      await expect(roleRepository.findOneBy({ id: firstRole.id })).resolves.toMatchObject({
+      await expect(
+        roleRepository.findOneBy({ id: firstRole.id }),
+      ).resolves.toMatchObject({
         id: firstRole.id,
         key: 'original-role',
         scopeType: RoleScopeType.TEAM,
@@ -261,7 +272,7 @@ describe(RoleService.name, () => {
     });
   });
 
-    describe('findAll', () => {
+  describe('findAll', () => {
     it('should list all roles in ascending id order', async () => {
       const firstRole = await factory.role({
         key: 'list-all-role-alpha',
@@ -275,7 +286,8 @@ describe(RoleService.name, () => {
       const roles = await roleService.findAll();
 
       expect(roles.map((role) => role.id)).toEqual(
-        expect.arrayContaining([firstRole.id,secondRole.id]));
+        expect.arrayContaining([firstRole.id, secondRole.id]),
+      );
     });
   });
 });

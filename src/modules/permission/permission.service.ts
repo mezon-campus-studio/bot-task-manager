@@ -86,7 +86,10 @@ export class PermissionService extends CRUDService<PermissionEntity> {
     await this.permissionRepository.delete({ id });
   }
 
-  async updatePermission(id: number , input: Partial<CreatePermissionInput>): Promise<PermissionEntity> {
+  async updatePermission(
+    id: number,
+    input: Partial<CreatePermissionInput>,
+  ): Promise<PermissionEntity> {
     const permission = await this.findById(id);
     if (!permission) {
       this.logger.warn({
@@ -109,6 +112,6 @@ export class PermissionService extends CRUDService<PermissionEntity> {
       }
     }
     Object.assign(permission, input);
-    return this.permissionRepository.save(permission); 
+    return this.permissionRepository.save(permission);
   }
 }

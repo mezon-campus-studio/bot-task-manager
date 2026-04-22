@@ -106,7 +106,9 @@ describe(PermissionService.name, () => {
         key: 'projects.update',
       });
 
-      await permissionService.updatePermission(permission.id, { description: 'Updated description' });
+      await permissionService.updatePermission(permission.id, {
+        description: 'Updated description',
+      });
 
       await expect(
         permissionRepository.findOneByOrFail({ id: permission.id }),
@@ -119,7 +121,9 @@ describe(PermissionService.name, () => {
 
     it('should reject updating a non-existent permission', async () => {
       await expect(
-        permissionService.updatePermission(999_999, { description: 'Updated description' }),
+        permissionService.updatePermission(999_999, {
+          description: 'Updated description',
+        }),
       ).rejects.toThrow();
     });
   });
@@ -138,9 +142,7 @@ describe(PermissionService.name, () => {
     });
 
     it('should resolve successfully when the permission id does not exist', async () => {
-      await expect(
-        permissionService.deleteById(999_999),
-      ).rejects.toThrow();
+      await expect(permissionService.deleteById(999_999)).rejects.toThrow();
     });
   });
 

@@ -1,3 +1,4 @@
+import { PartialType } from '@nestjs/mapped-types';
 import {
   IsEnum,
   IsNotEmpty,
@@ -6,7 +7,6 @@ import {
   IsString,
 } from 'class-validator';
 import { RoleScopeType } from '../enums/role-scope-type.enum';
-import { PartialType } from '@nestjs/mapped-types';
 export class CreateRoleDto {
   @IsString()
   @IsNotEmpty()
