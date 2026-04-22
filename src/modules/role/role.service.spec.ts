@@ -123,4 +123,171 @@ describe(RoleService.name, () => {
       ]);
     });
   });
+
+  describe('deleteRole', () => {
+    it('should delete the role when the id exists and is not a system role', async () => {
+      const role = await factory.role({
+        key: 'deletable-role',
+        scopeType: RoleScopeType.TEAM,
+      });
+
+      await expect(roleService.deleteRole(role.id)).resolves.toBeUndefined();
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toBeNull();
+    });
+
+    it('should reject deleting a system role', async () => {
+      const role = await factory.role({
+        key: 'system-role',
+        scopeType: RoleScopeType.SYSTEM,
+        isSystem: true,
+      });
+
+      await expect(roleService.deleteRole(role.id)).rejects.toThrow();
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toMatchObject({
+        id: role.id,
+        key: 'system-role',
+        scopeType: RoleScopeType.SYSTEM,
+        isSystem: true,
+      });
+    });
+
+    it('should reject deleting a non-existent role', async () => {
+      await expect(roleService.deleteRole(999_999)).rejects.toThrow();
+    });
+  });
+
+  describe('updateRole', () => {
+    it('should update the role name and description', async () => {
+      const role = await factory.role({
+        key: 'updatable-role',
+        scopeType: RoleScopeType.TEAM,
+        name: 'Updatable Role',
+        description: 'Old description',
+      });
+
+      const updatedRole = await roleService.updateRole(role.id, {
+        name: 'Updated Role',
+        description: 'New description',
+      });
+
+      expect(updatedRole).toMatchObject({
+        id: role.id,
+        key: 'updatable-role',
+        scopeType: RoleScopeType.TEAM,
+        name: 'Updated Role',
+        description: 'New description',
+      });
+
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toMatchObject({
+        id: role.id,
+        key: 'updatable-role',
+        scopeType: RoleScopeType.TEAM,
+        name: 'Updated Role',
+        description: 'New description',
+      });
+    });
+
+    it('should update only the fields provided in the updates object', async () => {
+      const role = await factory.role({
+        key: 'partially-updatable-role',
+        scopeType: RoleScopeType.TEAM,
+        name: 'Partially Updatable Role',
+        description: 'Initial description',
+      });
+
+      const updatedRole = await roleService.updateRole(role.id, {
+        description: 'Only description updated',
+      });
+
+      expect(updatedRole).toMatchObject({
+        id: role.id,
+        key: 'partially-updatable-role',
+        scopeType: RoleScopeType.TEAM,
+        name: 'Partially Updatable Role',
+        description: 'Only description updated',
+      });
+
+      await expect(
+        roleRepository.findOneBy({ id: role.id }),
+      ).resolves.toMatchObject({
+        id: role.id,
+        key: 'partially-updatable-role',
+        scopeType: RoleScopeType.TEAM,
+        name: 'Partially Updatable Role',
+        description: 'Only description updated',
+      });
+    });
+
+    it('should reject updating a non-existent role', async () => {
+      const fristRole = await factory.role({
+        key: 'existing-role',
+        scopeType: RoleScopeType.TEAM,
+      });
+
+      await factory.role({
+        key: 'another-existing-role',
+        scopeType: RoleScopeType.TEAM,
+      });
+
+      await expect(
+        roleService.updateRole(999_999, { name: 'Non-existent Role' }),
+      ).rejects.toThrow();
+
+      await expect(
+        roleRepository.findOneBy({ id: fristRole.id }),
+      ).resolves.toMatchObject({
+        id: fristRole.id,
+        key: 'existing-role',
+        scopeType: RoleScopeType.TEAM,
+      });
+    });
+
+    it('should reject updating a role to have a duplicate key', async () => {
+      const firstRole = await factory.role({
+        key: 'original-role',
+        scopeType: RoleScopeType.TEAM,
+      });
+
+      await factory.role({
+        key: 'existing-role',
+      });
+
+      await expect(
+        roleService.updateRole(firstRole.id, { key: 'existing-role' }),
+      ).rejects.toThrow();
+
+      await expect(
+        roleRepository.findOneBy({ id: firstRole.id }),
+      ).resolves.toMatchObject({
+        id: firstRole.id,
+        key: 'original-role',
+        scopeType: RoleScopeType.TEAM,
+      });
+    });
+  });
+
+  describe('findAll', () => {
+    it('should list all roles in ascending id order', async () => {
+      const firstRole = await factory.role({
+        key: 'list-all-role-alpha',
+        scopeType: RoleScopeType.PROJECT,
+      });
+      const secondRole = await factory.role({
+        key: 'list-all-role-beta',
+        scopeType: RoleScopeType.SYSTEM,
+      });
+
+      const roles = await roleService.findAll();
+
+      expect(roles.map((role) => role.id)).toEqual(
+        expect.arrayContaining([firstRole.id, secondRole.id]),
+      );
+    });
+  });
 });

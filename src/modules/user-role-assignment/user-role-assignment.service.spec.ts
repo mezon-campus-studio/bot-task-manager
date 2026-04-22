@@ -89,6 +89,30 @@ describe(UserRoleAssignmentService.name, () => {
         }),
       ).rejects.toThrow();
     });
+
+    it('should reject duplicate assignment for the same user, role, and scope', async () => {
+      const user = await factory.user({
+        mezonId: 'user-role-assignment-invalid-team-user',
+      });
+      const role = await factory.role({
+        key: 'user-role-assignment-invalid-team-role',
+        scopeType: RoleScopeType.SYSTEM,
+      });
+
+      await userRoleAssignmentService.createAssignment({
+        roleId: role.id,
+        scopeType: RoleScopeType.SYSTEM,
+        userId: user.id,
+      });
+
+      await expect(
+        userRoleAssignmentService.createAssignment({
+          roleId: role.id,
+          scopeType: RoleScopeType.SYSTEM,
+          userId: user.id,
+        }),
+      ).rejects.toThrow();
+    });
   });
 
   describe('findAssignments', () => {
@@ -292,6 +316,35 @@ describe(UserRoleAssignmentService.name, () => {
         firstAssignment.id,
         secondAssignment.id,
       ]);
+    });
+  });
+
+  describe('removeAssignment', () => {
+    it('should remove an assignment by id', async () => {
+      const user = await factory.user({
+        mezonId: 'user-role-assignment-remove-user',
+      });
+      const role = await factory.role({
+        key: 'user-role-assignment-remove-role',
+        scopeType: RoleScopeType.SYSTEM,
+      });
+      const assignment = await factory.userRoleAssignment({
+        roleId: role.id,
+        scopeType: RoleScopeType.SYSTEM,
+        userId: user.id,
+      });
+
+      await userRoleAssignmentService.removeAssignment(assignment.id);
+
+      await expect(
+        userRoleAssignmentRepository.findOneByOrFail({ id: assignment.id }),
+      ).rejects.toThrow();
+    });
+
+    it('should throw when trying to remove a non-existent assignment', async () => {
+      await expect(
+        userRoleAssignmentService.removeAssignment(-1),
+      ).rejects.toThrow();
     });
   });
 });

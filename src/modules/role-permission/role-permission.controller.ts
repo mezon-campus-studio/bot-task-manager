@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { RolePermissionService } from './role-permission.service';
 
 @Controller('role-permissions')
@@ -18,5 +18,16 @@ export class RolePermissionController {
   @Get('permission/:permissionId')
   findByPermission(@Param('permissionId') permissionId: string) {
     return this.rolePermissionService.findByPermissionId(Number(permissionId));
+  }
+
+  @Delete(':RoleId/:permissionId')
+  remove(
+    @Param('RoleId') roleId: string,
+    @Param('permissionId') permissionId: string,
+  ) {
+    return this.rolePermissionService.removeRolePermission(
+      Number(roleId),
+      Number(permissionId),
+    );
   }
 }

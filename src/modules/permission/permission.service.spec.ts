@@ -51,7 +51,7 @@ describe(PermissionService.name, () => {
       await expect(
         permissionService.createPermission({
           action: 'manage',
-          key: 'projects.admin',
+          key: 'projects.manage',
           resource: 'projects',
         }),
       ).rejects.toThrow();
@@ -97,6 +97,80 @@ describe(PermissionService.name, () => {
       await expect(
         permissionService.findByKey('missing.permission'),
       ).resolves.toBeNull();
+    });
+  });
+
+  describe('updatePermission', () => {
+    it('should update the permission when the id exists', async () => {
+      const permission = await factory.permission({
+        key: 'projects.update',
+      });
+
+      await permissionService.updatePermission(permission.id, {
+        description: 'Updated description',
+      });
+
+      await expect(
+        permissionRepository.findOneByOrFail({ id: permission.id }),
+      ).resolves.toMatchObject({
+        id: permission.id,
+        key: 'projects.update',
+        description: 'Updated description',
+      });
+    });
+
+    it('should reject updating a non-existent permission', async () => {
+      await expect(
+        permissionService.updatePermission(999_999, {
+          description: 'Updated description',
+        }),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('deleteById', () => {
+    it('should delete the permission when the id exists', async () => {
+      const permission = await factory.permission({
+        key: 'notes.delete',
+      });
+
+      await permissionService.deleteById(permission.id);
+
+      await expect(
+        permissionRepository.findOneBy({ id: permission.id }),
+      ).resolves.toBeNull();
+    });
+
+    it('should resolve successfully when the permission id does not exist', async () => {
+      await expect(permissionService.deleteById(999_999)).rejects.toThrow();
+    });
+  });
+
+  describe('findAll', () => {
+    it('should return all permissions', async () => {
+      const firstPermission = await factory.permission({
+        key: 'permission.find-all-1',
+        action: 'read',
+        resource: 'permission.find-all',
+      });
+      const secondPermission = await factory.permission({
+        key: 'permission.find-all-2',
+        action: 'read',
+        resource: 'permission.find-all-1',
+      });
+
+      await expect(permissionService.findAll()).resolves.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: firstPermission.id,
+            key: 'permission.find-all-1',
+          }),
+          expect.objectContaining({
+            id: secondPermission.id,
+            key: 'permission.find-all-2',
+          }),
+        ]),
+      );
     });
   });
 });

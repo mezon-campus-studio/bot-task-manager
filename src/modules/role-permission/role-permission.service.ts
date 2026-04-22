@@ -68,4 +68,35 @@ export class RolePermissionService extends CRUDService<RolePermissionEntity> {
       order: { roleId: 'ASC' },
     });
   }
+
+  async deleteByRoleId(roleId: number): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to delete role permission links by role',
+      roleId,
+    });
+
+    await this.rolePermissionRepository.delete({ roleId });
+  }
+
+  async deleteByPermissionId(permissionId: number): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to delete role permission links by permission',
+      permissionId,
+    });
+
+    await this.rolePermissionRepository.delete({ permissionId });
+  }
+
+  async removeRolePermission(
+    roleId: number,
+    permissionId: number,
+  ): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to delete role permission link',
+      permissionId,
+      roleId,
+    });
+
+    await this.rolePermissionRepository.delete({ roleId, permissionId });
+  }
 }

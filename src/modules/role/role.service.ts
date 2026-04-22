@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { UpdateRoleDto } from './dto/modify-role.dto';
 import { RoleScopeType } from './enums/role-scope-type.enum';
 import RoleEntity from './role.entity';
 
@@ -110,10 +111,7 @@ export class RoleService extends CRUDService<RoleEntity> {
       order: { id: 'ASC' },
     });
   }
-  async updateRole(
-    id: number,
-    updates: Partial<CreateRoleInput>,
-  ): Promise<RoleEntity> {
+  async updateRole(id: number, updates: UpdateRoleDto): Promise<RoleEntity> {
     this.logger.log({
       log: 'Attempting to update role',
       roleId: id,

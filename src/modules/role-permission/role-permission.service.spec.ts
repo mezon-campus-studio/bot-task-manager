@@ -158,4 +158,79 @@ describe(RolePermissionService.name, () => {
       ]);
     });
   });
+
+  describe('deleteByRoleId', () => {
+    it('should delete all role-permission links for the requested role', async () => {
+      const role = await factory.role({
+        key: 'role-permission-delete-role',
+      });
+      const permission = await factory.permission({
+        key: 'role-permission-delete-permission',
+      });
+
+      await factory.rolePermission({
+        permissionId: permission.id,
+        roleId: role.id,
+      });
+
+      await rolePermissionService.deleteByRoleId(role.id);
+
+      await expect(
+        rolePermissionRepository.findOneBy({
+          permissionId: permission.id,
+          roleId: role.id,
+        }),
+      ).resolves.toBeNull();
+    });
+  });
+
+  describe('deleteByPermissionId', () => {
+    it('should delete all role-permission links for the requested permission', async () => {
+      const permission = await factory.permission({
+        key: 'role-permission-delete-permission-2',
+      });
+      const role = await factory.role({
+        key: 'role-permission-delete-role-2',
+      });
+
+      await factory.rolePermission({
+        permissionId: permission.id,
+        roleId: role.id,
+      });
+
+      await rolePermissionService.deleteByPermissionId(permission.id);
+
+      await expect(
+        rolePermissionRepository.findOneBy({
+          permissionId: permission.id,
+          roleId: role.id,
+        }),
+      ).resolves.toBeNull();
+    });
+  });
+
+  describe('removeRolePermission', () => {
+    it('should delete the role-permission link for the requested role and permission', async () => {
+      const role = await factory.role({
+        key: 'role-permission-remove-role',
+      });
+      const permission = await factory.permission({
+        key: 'role-permission-remove-permission',
+      });
+
+      await factory.rolePermission({
+        permissionId: permission.id,
+        roleId: role.id,
+      });
+
+      await rolePermissionService.removeRolePermission(role.id, permission.id);
+
+      await expect(
+        rolePermissionRepository.findOneBy({
+          permissionId: permission.id,
+          roleId: role.id,
+        }),
+      ).resolves.toBeNull();
+    });
+  });
 });
