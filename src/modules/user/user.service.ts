@@ -1,13 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { UserStatus } from './enum/user-status.enum';
 import UserEntity from './user.entity';
 
 type UpsertUserMeta = {
   name?: string;
   email?: string;
-  avatar?: string;
 };
 
 @Injectable()
@@ -27,6 +27,8 @@ export class UserService extends CRUDService<UserEntity> {
       mezonId: user.mezonId,
       email: user.email,
       name: user.name,
+      role: user.role,
+      status: user.status,
     });
 
     const newUser = this.userRepository.create(user);
@@ -38,6 +40,8 @@ export class UserService extends CRUDService<UserEntity> {
         id: result.id,
         mezonId: result.mezonId,
         email: result.email,
+        role: result.role,
+        status: result.status,
       },
     });
 
@@ -211,6 +215,8 @@ export class UserService extends CRUDService<UserEntity> {
           id: result.id,
           mezonId: result.mezonId,
           email: result.email,
+          role: result.role,
+          status: result.status,
         },
       });
 
@@ -244,9 +250,150 @@ export class UserService extends CRUDService<UserEntity> {
         id: result.id,
         mezonId: result.mezonId,
         email: result.email,
+        role: result.role,
+        status: result.status,
       },
     });
 
     return result;
+  }
+
+  async findByIdentifier(
+    identifier: string,
+    includeDeleted = false,
+  ): Promise<UserEntity | null> {
+    const statusFilter = includeDeleted
+      ? {}
+      : { status: Not(UserStatus.DELETED) };
+    return await this.userRepository.findOne({
+      where: [
+        { mezonId: identifier, ...statusFilter },
+        { name: identifier, ...statusFilter },
+        { email: identifier, ...statusFilter },
+      ],
+      withDeleted: includeDeleted,
+    });
+  }
+
+  async softDeleteUser(identifier: string): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to soft delete user by identifier (mezonId,name,email)',
+      identifier,
+    });
+
+    const existingUser = await this.findByIdentifier(identifier);
+
+    if (!existingUser) {
+      this.logger.log({
+        log: 'Fallback to no-op because user was not found by identifier for soft delete',
+      });
+      return;
+    }
+
+    if (existingUser.status === UserStatus.DELETED) {
+      this.logger.log({
+        log: 'Fallback to no-op because user was already marked as deleted',
+        mezonId: existingUser.mezonId,
+        status: existingUser.status,
+      });
+      return;
+    }
+
+    existingUser.status = UserStatus.DELETED;
+    const result = await this.userRepository.save(existingUser);
+    await this.userRepository.softRemove(existingUser);
+
+    this.logger.log({
+      log: 'Soft delete user result',
+      identifier,
+      result: {
+        id: result.id,
+        mezonId: result.mezonId,
+        status: result.status,
+        deletedAt: result.deletedAt,
+      },
+    });
+  }
+
+  async restoreUser(identifier: string): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to restore user by identifier (mezonId,name,email)',
+      identifier,
+    });
+
+    const existingUser = await this.findByIdentifier(identifier, true);
+
+    if (!existingUser) {
+      this.logger.log({
+        log: 'Fallback to no-op because user was not found by identifier for restore',
+      });
+      return;
+    }
+
+    if (existingUser.status !== UserStatus.DELETED) {
+      this.logger.log({
+        log: 'Fallback to no-op because user was not marked as deleted',
+        mezonId: existingUser.mezonId,
+        status: existingUser.status,
+      });
+      return;
+    }
+
+    existingUser.status = UserStatus.ACTIVE;
+    const result = await this.userRepository.save(existingUser);
+    await this.userRepository.recover(existingUser);
+
+    this.logger.log({
+      log: 'Restore user result',
+      identifier,
+      result: {
+        id: result.id,
+        mezonId: result.mezonId,
+        status: result.status,
+        deletedAt: result.deletedAt,
+      },
+    });
+  }
+
+  async updateStatusUser(
+    identifier: string,
+    status: UserStatus,
+  ): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to update user status by identifier (mezonId,name,email)',
+      identifier,
+      status,
+    });
+
+    const existingUser = await this.findByIdentifier(identifier);
+
+    if (!existingUser) {
+      this.logger.log({
+        log: 'Fallback to no-op because user was not found by identifier for status update',
+      });
+      return;
+    }
+
+    if (status === UserStatus.DELETED) {
+      this.logger.log({
+        log: 'Fallback to no-op because you cant change status to deleted',
+      });
+      return;
+    }
+
+    existingUser.status = status;
+    const result = await this.userRepository.save(existingUser);
+
+    this.logger.log({
+      log: 'Update user status result',
+      identifier,
+      status,
+      result: {
+        id: result.id,
+        mezonId: result.mezonId,
+        status: result.status,
+        updateAt: result.updatedAt,
+      },
+    });
   }
 }

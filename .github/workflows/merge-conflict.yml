@@ -16,5 +16,5 @@ jobs:
       - name: Label merge conflicts
         uses: eps1lon/actions-label-merge-conflict@releases/2.x
         with:
-          dirtyLabel: "PR: Conflict"
+          dirtyLabel: 'PR: Conflict'
           repoToken: ${{ secrets.GITHUB_TOKEN }}
