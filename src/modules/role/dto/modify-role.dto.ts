@@ -1,5 +1,12 @@
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { RoleScopeType } from '../enums/role-scope-type.enum';
+import { PartialType } from '@nestjs/mapped-types';
 export class CreateRoleDto {
   @IsString()
   @IsNotEmpty()
@@ -17,34 +24,8 @@ export class CreateRoleDto {
   description?: string;
 }
 export class DeleteRoleDto {
-  @IsString()
+  @IsNumber()
   @IsNotEmpty()
-  key: string;
-
-  @IsString()
-  @IsNotEmpty()
-  name: string;
-
-  @IsEnum(RoleScopeType)
-  scopeType: RoleScopeType;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
+  id: number;
 }
-export class UpdateRoleDto {
-  @IsString()
-  @IsNotEmpty()
-  key: string;
-
-  @IsString()
-  @IsNotEmpty()
-  name: string;
-
-  @IsEnum(RoleScopeType)
-  scopeType: RoleScopeType;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-}
+export class UpdateRoleDto extends PartialType(CreateRoleDto) {}
