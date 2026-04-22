@@ -19,7 +19,9 @@ export type CreateTicketInput = Pick<
 
 @Injectable()
 export class TicketService extends CRUDService<TicketEntity> {
-  private readonly logger = new Logger(TicketService.name);
+  private readonly logger = new Logger(
+    TicketService.name,
+  );
 
   constructor(
     @InjectRepository(TicketEntity)
@@ -28,59 +30,172 @@ export class TicketService extends CRUDService<TicketEntity> {
     super(ticketRepository);
   }
 
-  async createTicket(input: CreateTicketInput): Promise<TicketEntity> {
-    this.logger.log({ log: 'Attempting to create ticket', input });
-    const ticket = this.ticketRepository.create(input);
-    this.logger.log({ log: 'Got ticket draft for creation', ticket });
+  async createTicket(
+    input: CreateTicketInput,
+  ): Promise<TicketEntity> {
+    this.logger.log({
+      log: 'Attempting to create ticket',
+      input,
+    });
 
-    const result = await this.ticketRepository.save(ticket);
-    this.logger.log({ log: 'Ticket create result', result });
+    const ticket =
+      this.ticketRepository.create(input);
+
+    this.logger.log({
+      log: 'Got ticket draft for creation',
+      ticket,
+    });
+
+    const result =
+      await this.ticketRepository.save(
+        ticket,
+      );
+
+    this.logger.log({
+      log: 'Ticket create result',
+      result,
+    });
 
     return result;
   }
 
-  async listByProject(projectId: number): Promise<TicketEntity[]> {
+  async listByProject(
+    projectId: number,
+  ): Promise<TicketEntity[]> {
     this.logger.log({
       log: 'Attempting to list tickets by project',
       projectId,
     });
 
-    const result = await this.ticketRepository.find({
-      where: { projectId },
-      order: {
-        id: 'DESC',
-      },
-    });
+    const result =
+      await this.ticketRepository.find({
+        where: { projectId },
+        order: {
+          id: 'DESC',
+        },
+      });
 
     this.logger.log({
       log: 'Got tickets by project result',
       projectId,
       count: result.length,
-      ticketIds: result.map(({ id }) => id),
+      ticketIds: result.map(
+        ({ id }) => id,
+      ),
     });
 
     return result;
   }
 
-  async markResolved(ticketId: number): Promise<TicketEntity | null> {
-    this.logger.log({ log: 'Attempting to mark ticket as resolved', ticketId });
+  async getListTicket(
+    projectId: number,
+  ): Promise<TicketEntity[]> {
+    return await this.listByProject(
+      projectId,
+    );
+  }
 
-    const ticket = await this.ticketRepository.findOne({
-      where: { id: ticketId },
+  async getDetailTicket(
+    projectId: number,
+    ticketId: number,
+  ): Promise<TicketEntity | null> {
+    return await this.ticketRepository.findOne({
+      where: {
+        id: ticketId,
+        projectId,
+      },
     });
+  }
 
-    this.logger.log({ log: 'Got ticket for resolution', ticketId, ticket });
+  async updateTicket(
+    projectId: number,
+    ticketId: number,
+    input: Partial<CreateTicketInput>,
+  ): Promise<TicketEntity | null> {
+    const ticket =
+      await this.getDetailTicket(
+        projectId,
+        ticketId,
+      );
 
     if (!ticket) {
-      this.logger.log({ log: 'Ticket not found for resolution', ticketId });
       return null;
     }
 
-    ticket.status = TicketStatus.RESOLVED;
+    Object.assign(ticket, input);
 
-    const result = await this.ticketRepository.save(ticket);
-    this.logger.log({ log: 'Ticket resolution result', ticketId, result });
+    return await this.ticketRepository.save(
+      ticket,
+    );
+  }
+
+  async deleteTicket(
+    projectId: number,
+    ticketId: number,
+  ): Promise<boolean> {
+    const ticket =
+      await this.getDetailTicket(
+        projectId,
+        ticketId,
+      );
+
+    if (!ticket) {
+      return false;
+    }
+
+    await this.ticketRepository.softDelete(
+      ticketId,
+    );
+
+    return true;
+  }
+
+  
+
+  async markResolved(
+    ticketId: number,
+  ): Promise<TicketEntity | null> {
+    this.logger.log({
+      log: 'Attempting to mark ticket as resolved',
+      ticketId,
+    });
+
+    const ticket =
+      await this.ticketRepository.findOne({
+        where: { id: ticketId },
+      });
+
+    this.logger.log({
+      log: 'Got ticket for resolution',
+      ticketId,
+      ticket,
+    });
+
+    if (!ticket) {
+      this.logger.log({
+        log: 'Ticket not found for resolution',
+        ticketId,
+      });
+
+      return null;
+    }
+
+    ticket.status =
+      TicketStatus.RESOLVED;
+
+    const result =
+      await this.ticketRepository.save(
+        ticket,
+      );
+
+    this.logger.log({
+      log: 'Ticket resolution result',
+      ticketId,
+      result,
+    });
 
     return result;
   }
 }
+
+  
