@@ -28,6 +28,15 @@ export class RolePermissionService extends CRUDService<RolePermissionEntity> {
       permissionId: input.permissionId,
       roleId: input.roleId,
     });
+    const exist = await this.rolePermissionRepository.findOne({
+      where: {
+        roleId: input.roleId,
+        permissionId: input.permissionId,
+      },
+    });
+    if (exist) {
+      return exist;
+    }
 
     const rolePermission = this.rolePermissionRepository.create(input);
 

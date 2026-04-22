@@ -166,6 +166,106 @@ describe(TaskService.name, () => {
     await expect(taskRepository.count()).resolves.toBe(0);
   });
 
+  it('should find a task by id', async () => {
+    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const task = await factory.task({
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Review the support handoff notes',
+    });
+
+    await expect(taskService.findById(task.id)).resolves.toMatchObject({
+      id: task.id,
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Review the support handoff notes',
+    });
+  });
+
+  it('should return null when no task matches the requested id', async () => {
+    await expect(taskService.findById(999_999)).resolves.toBeNull();
+  });
+
+  it('should update an existing task with the provided workflow changes', async () => {
+    const { assigneeUserId, projectId, reporterUserId, teamId } =
+      createTaskContext();
+    const dueAt = new Date('2026-07-01T09:00:00.000Z');
+    const updatedDueAt = new Date('2026-07-10T09:00:00.000Z');
+    const task = await factory.task({
+      assigneeUserId,
+      dueAt,
+      projectId,
+      reporterUserId,
+      status: TaskStatus.TODO,
+      teamId,
+      title: 'Prepare the launch checklist',
+    });
+
+    const updatedTask = await taskService.updateTask(task.id, {
+      assigneeUserId: null,
+      dueAt: updatedDueAt,
+      priority: TaskPriority.URGENT,
+      status: TaskStatus.IN_PROGRESS,
+      title: 'Finalize the launch checklist',
+    });
+
+    expect(updatedTask).toMatchObject({
+      assigneeUserId: null,
+      id: task.id,
+      priority: TaskPriority.URGENT,
+      status: TaskStatus.IN_PROGRESS,
+      title: 'Finalize the launch checklist',
+    });
+    expect(updatedTask?.dueAt?.toISOString()).toBe(updatedDueAt.toISOString());
+
+    const storedTask = await taskRepository.findOneByOrFail({ id: task.id });
+
+    expect(storedTask).toMatchObject({
+      assigneeUserId: null,
+      id: task.id,
+      priority: TaskPriority.URGENT,
+      status: TaskStatus.IN_PROGRESS,
+      title: 'Finalize the launch checklist',
+    });
+    expect(storedTask.dueAt?.toISOString()).toBe(updatedDueAt.toISOString());
+  });
+
+  it('should return null when updating a missing task', async () => {
+    await expect(
+      taskService.updateTask(999_999, {
+        status: TaskStatus.CANCELLED,
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('should soft delete an existing task', async () => {
+    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const task = await factory.task({
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Archive the completed intake forms',
+    });
+
+    await expect(taskService.deleteTask(task.id)).resolves.toBe(true);
+    await expect(taskRepository.findOneBy({ id: task.id })).resolves.toBeNull();
+    await expect(
+      taskRepository.findOne({
+        where: { id: task.id },
+        withDeleted: true,
+      }),
+    ).resolves.toMatchObject({
+      deletedAt: expect.any(Date),
+      id: task.id,
+    });
+  });
+
+  it('should return false when deleting a missing task', async () => {
+    await expect(taskService.deleteTask(999_999)).resolves.toBe(false);
+  });
+
   it('should support updateSession from the CRUD base for task workflow changes', async () => {
     const { projectId, reporterUserId, teamId } = createTaskContext();
     const task = await factory.task({
