@@ -1,10 +1,9 @@
-import {
-  IsNotEmpty,
-  IsUUID,
-} from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsInt, IsNotEmpty } from 'class-validator';
 
 export class DeleteTicketDto {
-  @IsUUID()
+  @Type(() => Number)
+  @IsInt()
   @IsNotEmpty()
-  id: string;
+  id: number;
 }

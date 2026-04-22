@@ -1,15 +1,6 @@
-import {
-  IsEnum,
-  IsOptional,
-  IsString,
-  IsUUID,
-} from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 
-import {
-  TicketPriority,
-  TicketStatus,
-  TicketType,
-} from '../enums';  
+import { TicketPriority, TicketStatus, TicketType } from '../enums';
 
 export class GetListTicketDto {
   @IsOptional()

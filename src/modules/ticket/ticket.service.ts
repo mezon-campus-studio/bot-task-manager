@@ -2,26 +2,23 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
-import { TicketStatus } from './enums';
+import { TicketSeverity, TicketStatus } from './enums';
 import TicketEntity from './ticket.entity';
 
 export type CreateTicketInput = Pick<
   TicketEntity,
-  | 'projectId'
-  | 'teamId'
-  | 'assigneeUserId'
-  | 'reporterUserId'
-  | 'title'
-  | 'description'
-  | 'status'
-  | 'severity'
->;
+  'projectId' | 'reporterUserId' | 'title'
+> &
+  Partial<
+    Pick<
+      TicketEntity,
+      'teamId' | 'assigneeUserId' | 'description' | 'status' | 'severity'
+    >
+  >;
 
 @Injectable()
 export class TicketService extends CRUDService<TicketEntity> {
-  private readonly logger = new Logger(
-    TicketService.name,
-  );
+  private readonly logger = new Logger(TicketService.name);
 
   constructor(
     @InjectRepository(TicketEntity)
@@ -30,26 +27,20 @@ export class TicketService extends CRUDService<TicketEntity> {
     super(ticketRepository);
   }
 
-  async createTicket(
-    input: CreateTicketInput,
-  ): Promise<TicketEntity> {
+  async createTicket(input: CreateTicketInput): Promise<TicketEntity> {
     this.logger.log({
       log: 'Attempting to create ticket',
       input,
     });
 
-    const ticket =
-      this.ticketRepository.create(input);
+    const ticket = this.ticketRepository.create(input);
 
     this.logger.log({
       log: 'Got ticket draft for creation',
       ticket,
     });
 
-    const result =
-      await this.ticketRepository.save(
-        ticket,
-      );
+    const result = await this.ticketRepository.save(ticket);
 
     this.logger.log({
       log: 'Ticket create result',
@@ -59,40 +50,31 @@ export class TicketService extends CRUDService<TicketEntity> {
     return result;
   }
 
-  async listByProject(
-    projectId: number,
-  ): Promise<TicketEntity[]> {
+  async listByProject(projectId: number): Promise<TicketEntity[]> {
     this.logger.log({
       log: 'Attempting to list tickets by project',
       projectId,
     });
 
-    const result =
-      await this.ticketRepository.find({
-        where: { projectId },
-        order: {
-          id: 'DESC',
-        },
-      });
+    const result = await this.ticketRepository.find({
+      where: { projectId },
+      order: {
+        id: 'DESC',
+      },
+    });
 
     this.logger.log({
       log: 'Got tickets by project result',
       projectId,
       count: result.length,
-      ticketIds: result.map(
-        ({ id }) => id,
-      ),
+      ticketIds: result.map(({ id }) => id),
     });
 
     return result;
   }
 
-  async getListTicket(
-    projectId: number,
-  ): Promise<TicketEntity[]> {
-    return await this.listByProject(
-      projectId,
-    );
+  async getListTicket(projectId: number): Promise<TicketEntity[]> {
+    return await this.listByProject(projectId);
   }
 
   async getDetailTicket(
@@ -112,11 +94,7 @@ export class TicketService extends CRUDService<TicketEntity> {
     ticketId: number,
     input: Partial<CreateTicketInput>,
   ): Promise<TicketEntity | null> {
-    const ticket =
-      await this.getDetailTicket(
-        projectId,
-        ticketId,
-      );
+    const ticket = await this.getDetailTicket(projectId, ticketId);
 
     if (!ticket) {
       return null;
@@ -124,46 +102,63 @@ export class TicketService extends CRUDService<TicketEntity> {
 
     Object.assign(ticket, input);
 
-    return await this.ticketRepository.save(
-      ticket,
-    );
+    return await this.ticketRepository.save(ticket);
   }
 
-  async deleteTicket(
-    projectId: number,
-    ticketId: number,
-  ): Promise<boolean> {
-    const ticket =
-      await this.getDetailTicket(
-        projectId,
-        ticketId,
-      );
+  async deleteTicket(projectId: number, ticketId: number): Promise<boolean> {
+    const ticket = await this.getDetailTicket(projectId, ticketId);
 
     if (!ticket) {
       return false;
     }
 
-    await this.ticketRepository.softDelete(
-      ticketId,
-    );
+    await this.ticketRepository.softDelete(ticketId);
 
     return true;
   }
 
-  
+  async getByStatus(
+    projectId: number,
+    status: TicketStatus,
+  ): Promise<TicketEntity[]> {
+    return await this.ticketRepository.find({
+      where: { projectId, status },
+    });
+  }
 
-  async markResolved(
-    ticketId: number,
-  ): Promise<TicketEntity | null> {
+  async getByAssignee(
+    projectId: number,
+    assigneeUserId: string,
+  ): Promise<TicketEntity[]> {
+    return await this.ticketRepository.find({
+      where: {
+        projectId,
+        assigneeUserId,
+      },
+    });
+  }
+
+  async getBySeverity(
+    projectId: number,
+    severity: TicketSeverity,
+  ): Promise<TicketEntity[]> {
+    return await this.ticketRepository.find({
+      where: {
+        projectId,
+        severity,
+      },
+    });
+  }
+
+  async markResolved(ticketId: number): Promise<TicketEntity | null> {
     this.logger.log({
       log: 'Attempting to mark ticket as resolved',
       ticketId,
     });
 
-    const ticket =
-      await this.ticketRepository.findOne({
-        where: { id: ticketId },
-      });
+    const ticket = await this.ticketRepository.findOne({
+      where: { id: ticketId },
+    });
 
     this.logger.log({
       log: 'Got ticket for resolution',
@@ -180,13 +175,9 @@ export class TicketService extends CRUDService<TicketEntity> {
       return null;
     }
 
-    ticket.status =
-      TicketStatus.RESOLVED;
+    ticket.status = TicketStatus.RESOLVED;
 
-    const result =
-      await this.ticketRepository.save(
-        ticket,
-      );
+    const result = await this.ticketRepository.save(ticket);
 
     this.logger.log({
       log: 'Ticket resolution result',
@@ -197,5 +188,3 @@ export class TicketService extends CRUDService<TicketEntity> {
     return result;
   }
 }
-
-  

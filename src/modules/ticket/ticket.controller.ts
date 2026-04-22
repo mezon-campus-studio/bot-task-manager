@@ -8,38 +8,24 @@ import {
   Post,
 } from '@nestjs/common';
 
-import { TicketService } from './ticket.service';
-
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
-import {
-  TicketSeverity,
-  TicketStatus,
-} from './enums';
+import { TicketSeverity, TicketStatus } from './enums';
+import { TicketService } from './ticket.service';
 
-@Controller('tickets')/
+@Controller('tickets')
 export class TicketController {
-  constructor(
-    private readonly ticketService: TicketService,
-  ) {}
+  constructor(private readonly ticketService: TicketService) {}
 
   @Post()
-  async createTicket(
-    @Body() body: CreateTicketDto,
-  ) {
-    return await this.ticketService.createTicket(
-      body,
-    );
+  async createTicket(@Body() body: CreateTicketDto) {
+    return await this.ticketService.createTicket(body);
   }
 
   @Get('project/:projectId')
-  async getListTicket(
-    @Param('projectId') projectId: number,
-  ) {
-    return await this.ticketService.getListTicket(
-      Number(projectId),
-    );
+  async getListTicket(@Param('projectId') projectId: number) {
+    return await this.ticketService.getListTicket(Number(projectId));
   }
 
   @Get('project/:projectId/:id')
@@ -71,10 +57,7 @@ export class TicketController {
     @Param('projectId') projectId: number,
     @Param('id') id: number,
   ) {
-    return await this.ticketService.deleteTicket(
-      Number(projectId),
-      Number(id),
-    );
+    return await this.ticketService.deleteTicket(Number(projectId), Number(id));
   }
 
   @Get('project/:projectId/status/:status')
@@ -82,36 +65,23 @@ export class TicketController {
     @Param('projectId') projectId: number,
     @Param('status') status: TicketStatus,
   ) {
-    return await this.ticketService.getByStatus(
-      Number(projectId),
-      status,
-    );
+    return await this.ticketService.getByStatus(Number(projectId), status);
   }
 
-  @Get(
-    'project/:projectId/assignee/:userId',
-  )
+  @Get('project/:projectId/assignee/:userId')
   async getByAssignee(
     @Param('projectId') projectId: number,
     @Param('userId') userId: string,
   ) {
-    return await this.ticketService.getByAssignee(
-      Number(projectId),
-      userId,
-    );
+    return await this.ticketService.getByAssignee(Number(projectId), userId);
   }
 
-  @Get(
-    'project/:projectId/severity/:severity',
-  )
+  @Get('project/:projectId/severity/:severity')
   async getBySeverity(
     @Param('projectId') projectId: number,
     @Param('severity')
     severity: TicketSeverity,
   ) {
-    return await this.ticketService.getBySeverity(
-      Number(projectId),
-      severity,
-    );
+    return await this.ticketService.getBySeverity(Number(projectId), severity);
   }
 }

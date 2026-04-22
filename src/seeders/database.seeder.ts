@@ -6,6 +6,7 @@ import {
   messageButtonClicked as messageButtonClickedFactory,
   user as userFactory,
 } from '@src/repl-modules/factories';
+import { seedTickets } from './ticket.seed';
 import type { ChannelMessage } from 'mezon-sdk';
 import type { MessageButtonClicked } from 'mezon-sdk/dist/cjs/rtapi/realtime';
 
@@ -22,6 +23,7 @@ export class DatabaseSeeder {
 
     await this.resetDatabase();
     const seededUsers = await this.createUsers(users, user);
+    await seedTickets(this.dataSource);
 
     this.logger.log(`Seeded ${seededUsers.length} users`);
 
