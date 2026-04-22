@@ -58,7 +58,7 @@ jobs:
         uses: ./.github/actions/test-sample-campus
         with:
           db-host: 127.0.0.1
-          db-port: "5432"
+          db-port: '5432'
           db-username: postgres
           db-password: postgres
           db-database: ${{ env.SAMPLE_CAMPUS_BOOTSTRAP_DB }}
@@ -90,4 +90,4 @@ jobs:
         uses: ./.github/actions/build-sample-campus-image
         with:
           image: ${{ steps.image.outputs.value }}
-          push: "false"
+          push: 'false'
