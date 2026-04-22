@@ -9,6 +9,10 @@ import {
 export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
+  mezonId: string;
+
+  @IsString()
+  @IsNotEmpty()
   @MinLength(3)
   @MaxLength(50)
   name: string;

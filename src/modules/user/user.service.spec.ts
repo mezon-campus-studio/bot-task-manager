@@ -107,13 +107,11 @@ describe(UserService.name, () => {
     });
 
     const updatedUser = await userService.upsertByMezonId('user-update', {
-      avatar: 'https://avatar.example.test/after.png',
       name: 'After Update',
     });
 
     expect(updatedUser).toMatchObject({
       id: originalUser.id,
-      avatar: 'https://avatar.example.test/after.png',
       email: 'before@example.com',
       mezonId: 'user-update',
       name: 'After Update',
@@ -129,7 +127,6 @@ describe(UserService.name, () => {
 
     const updateSession = userService.updateSession(user);
     user.name = 'After Update';
-    user.avatar = 'https://avatar.example.test/updated.png';
 
     await updateSession.save();
 
@@ -138,7 +135,6 @@ describe(UserService.name, () => {
     ).resolves.toMatchObject({
       mezonId: 'crud-update-user',
       name: 'After Update',
-      avatar: 'https://avatar.example.test/updated.png',
     } satisfies Partial<UserEntity>);
   });
 

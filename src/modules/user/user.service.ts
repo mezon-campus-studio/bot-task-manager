@@ -8,7 +8,6 @@ import UserEntity from './user.entity';
 type UpsertUserMeta = {
   name?: string;
   email?: string;
-  avatar?: string;
 };
 
 @Injectable()
