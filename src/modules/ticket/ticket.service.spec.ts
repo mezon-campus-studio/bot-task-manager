@@ -147,6 +147,105 @@ describe(TicketService.name, () => {
     await expect(ticketRepository.count()).resolves.toBe(0);
   });
 
+  it('should return a ticket when getDetailTicket finds a match within the project', async () => {
+    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const ticket = await factory.ticket({
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Detail lookup ticket',
+    });
+
+    const found = await ticketService.getDetailTicket(projectId, ticket.id);
+
+    expect(found).toMatchObject({
+      id: ticket.id,
+      projectId,
+      title: 'Detail lookup ticket',
+    });
+  });
+
+  it('should return null from getDetailTicket when the ticket belongs to a different project', async () => {
+    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const otherProjectId = nextNumericId();
+    const ticket = await factory.ticket({
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Wrong project ticket',
+    });
+
+    await expect(
+      ticketService.getDetailTicket(otherProjectId, ticket.id),
+    ).resolves.toBeNull();
+  });
+
+  it('should update ticket fields and persist the changes', async () => {
+    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const ticket = await factory.ticket({
+      projectId,
+      reporterUserId,
+      severity: TicketSeverity.LOW,
+      status: TicketStatus.OPEN,
+      teamId,
+      title: 'Original title',
+    });
+
+    const updated = await ticketService.updateTicket(projectId, ticket.id, {
+      severity: TicketSeverity.CRITICAL,
+      status: TicketStatus.IN_PROGRESS,
+      title: 'Updated title',
+    });
+
+    expect(updated).toMatchObject({
+      id: ticket.id,
+      severity: TicketSeverity.CRITICAL,
+      status: TicketStatus.IN_PROGRESS,
+      title: 'Updated title',
+    });
+
+    await expect(
+      ticketRepository.findOneByOrFail({ id: ticket.id }),
+    ).resolves.toMatchObject({
+      severity: TicketSeverity.CRITICAL,
+      status: TicketStatus.IN_PROGRESS,
+      title: 'Updated title',
+    });
+  });
+
+  it('should return null from updateTicket when the ticket does not exist', async () => {
+    const { projectId } = createTicketContext();
+
+    await expect(
+      ticketService.updateTicket(projectId, 999_999, { title: 'Ghost' }),
+    ).resolves.toBeNull();
+  });
+
+  it('should soft-delete a ticket and return true', async () => {
+    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const ticket = await factory.ticket({
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Ticket to delete',
+    });
+
+    const result = await ticketService.deleteTicket(projectId, ticket.id);
+
+    expect(result).toBe(true);
+    await expect(
+      ticketRepository.findOneBy({ id: ticket.id }),
+    ).resolves.toBeNull();
+  });
+
+  it('should return false from deleteTicket when the ticket does not exist', async () => {
+    const { projectId } = createTicketContext();
+
+    await expect(ticketService.deleteTicket(projectId, 999_999)).resolves.toBe(
+      false,
+    );
+  });
+
   it('should support updateSession from the CRUD base for ticket escalation changes', async () => {
     const { projectId, reporterUserId, teamId } = createTicketContext();
     const nextAssigneeUserId = randomUUID();

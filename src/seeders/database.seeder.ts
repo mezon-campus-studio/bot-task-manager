@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import TaskEntity from '@src/modules/task/task.entity';
+import TicketEntity from '@src/modules/ticket/ticket.entity';
 import UserEntity from '@src/modules/user/user.entity';
 import {
   channelMessage as channelMessageFactory,
   messageButtonClicked as messageButtonClickedFactory,
   role as roleFactory,
   task as taskFactory,
+  ticket as ticketFactory,
   user as userFactory,
 } from '@src/repl-modules/factories';
 import { RoleEntity } from '../modules/role';
@@ -20,7 +22,15 @@ export class DatabaseSeeder {
   constructor(private readonly dataSource: DataSource) {}
 
   async seed(options: SeedOptions = {}): Promise<SeedResult> {
-    const { users = 5, user = {}, tasks = 5, task = {}, roles = 3 } = options;
+    const {
+      users = 5,
+      user = {},
+      tasks = 5,
+      task = {},
+      tickets = 5,
+      ticket = {},
+      roles = 3,
+    } = options;
 
     this.logger.log('Starting database seeding...');
 
@@ -28,13 +38,16 @@ export class DatabaseSeeder {
     const seededRoles = await this.createRoles(roles);
     const seededUsers = await this.createUsers(users, user);
     const seededTasks = await this.createTasks(tasks, task);
+    const seededTickets = await this.createTickets(tickets, ticket);
 
     this.logger.log(`Seeded ${seededUsers.length} users`);
     this.logger.log(`Seeded ${seededTasks.length} tasks`);
+    this.logger.log(`Seeded ${seededTickets.length} tickets`);
 
     return {
       roles: seededRoles,
       tasks: seededTasks,
+      tickets: seededTickets,
       users: seededUsers,
     };
   }
@@ -49,6 +62,14 @@ export class DatabaseSeeder {
 
   async createTasks(count = 1, input: Partial<TaskEntity> = {}) {
     return taskFactory(
+      Array.from({ length: count }, () => ({
+        ...input,
+      })),
+    );
+  }
+
+  async createTickets(count = 1, input: Partial<TicketEntity> = {}) {
+    return ticketFactory(
       Array.from({ length: count }, () => ({
         ...input,
       })),
@@ -103,6 +124,8 @@ export class DatabaseSeeder {
 type SeedOptions = {
   task?: Partial<TaskEntity>;
   tasks?: number;
+  ticket?: Partial<TicketEntity>;
+  tickets?: number;
   users?: number;
   user?: Partial<UserEntity>;
   roles?: number;
@@ -110,6 +133,7 @@ type SeedOptions = {
 
 type SeedResult = {
   tasks: TaskEntity[];
+  tickets: TicketEntity[];
   users: UserEntity[];
   roles: RoleEntity[];
 };
