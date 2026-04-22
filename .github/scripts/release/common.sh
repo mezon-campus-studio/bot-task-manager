@@ -57,57 +57,11 @@ ensure_release_labels() {
 }
 
 get_active_release_pr() {
-  local repo owner name
-  repo="$(repo_name_with_owner)"
-  owner="${repo%%/*}"
-  name="${repo#*/}"
-
-  gh pr list \
-    --base "${RELEASE_TARGET_BRANCH}" \
-    --head "${RELEASE_SOURCE_BRANCH}" \
-    --state open \
-    --json number,title,url,headRefName,baseRefName,headRepository,headRepositoryOwner \
-    | jq -c --arg owner "${owner}" --arg name "${name}" '
-        map(select(
-          .headRepositoryOwner.login? == $owner
-          and .headRepository.name? == $name
-        )) | first // empty
-      '
-}
-
-get_legacy_release_pr() {
-  local repo owner name
-  repo="$(repo_name_with_owner)"
-  owner="${repo%%/*}"
-  name="${repo#*/}"
-
   gh pr list \
     --base "${RELEASE_TARGET_BRANCH}" \
     --state open \
-    --json number,title,url,headRefName,baseRefName,headRepository,headRepositoryOwner \
-    | jq -c --arg owner "${owner}" --arg name "${name}" --arg prefix "${RELEASE_BRANCH_PREFIX}/" '
-        map(select(
-          (.headRepositoryOwner.login? == $owner)
-          and (.headRepository.name? == $name)
-          and (.headRefName | startswith($prefix))
-        )) | first // empty
-      '
-}
-
-assert_no_legacy_release_pr() {
-  local legacy_pr legacy_number legacy_branch
-  legacy_pr="$(get_legacy_release_pr)"
-
-  if [ -z "${legacy_pr}" ]; then
-    return 0
-  fi
-
-  legacy_number="$(printf '%s' "${legacy_pr}" | jq -r '.number')"
-  legacy_branch="$(printf '%s' "${legacy_pr}" | jq -r '.headRefName')"
-
-  echo "Legacy release PR #${legacy_number} (${legacy_branch} -> ${RELEASE_TARGET_BRANCH}) is still open." >&2
-  echo "Close or promote that PR before using the direct ${RELEASE_SOURCE_BRANCH} -> ${RELEASE_TARGET_BRANCH} release flow." >&2
-  return 1
+    --json number,title,url,headRefName,baseRefName \
+    | jq -c --arg prefix "${RELEASE_BRANCH_PREFIX}/" 'map(select(.headRefName | startswith($prefix))) | first // empty'
 }
 
 get_release_sequence() {
@@ -366,12 +320,6 @@ sync_release_pr_body() {
   rm -f "${body_file}"
 }
 
-release_pr_tracks_source_branch() {
-  local pr_json="$1"
-
-  [ "$(printf '%s' "${pr_json}" | jq -r '.headRefName')" = "${RELEASE_SOURCE_BRANCH}" ]
-}
-
 ensure_active_release_pr_for_branch() {
   local branch_name="$1"
   local active_pr
@@ -476,16 +424,6 @@ dequeue_pr_from_active_release() {
   release_number="$(printf '%s' "${active_pr}" | jq -r '.number')"
   release_branch="$(printf '%s' "${active_pr}" | jq -r '.headRefName')"
 
-  if [ "${release_branch}" = "${RELEASE_SOURCE_BRANCH}" ]; then
-    echo "Active release PR tracks ${RELEASE_SOURCE_BRANCH} directly; skipping per-PR dequeue." >&2
-
-    if [ -n "${comment_body}" ]; then
-      gh pr comment "${pr_number}" --body "A revert PR has been opened, but the active release PR tracks \`${RELEASE_SOURCE_BRANCH}\` directly. Merge the revert PR before promoting if you need to keep this PR out of the next release."
-    fi
-
-    return 0
-  fi
-
   git fetch origin "${release_branch}" --prune
   queued_commit="$(get_release_branch_commit_for_pr "${release_branch}" "${pr_number}")"
 
@@ -531,22 +469,14 @@ list_pr_commit_shas() {
 }
 
 ensure_backmerge_pr() {
-  local existing_pr title body_file pr_url repo owner name
-  repo="$(repo_name_with_owner)"
-  owner="${repo%%/*}"
-  name="${repo#*/}"
+  local existing_pr title body_file pr_url
 
   existing_pr="$(gh pr list \
     --base "${RELEASE_SOURCE_BRANCH}" \
     --head "${RELEASE_TARGET_BRANCH}" \
     --state open \
-    --json number,title,url,headRefName,baseRefName,headRepository,headRepositoryOwner \
-    | jq -c --arg owner "${owner}" --arg name "${name}" '
-        map(select(
-          .headRepositoryOwner.login? == $owner
-          and .headRepository.name? == $name
-        )) | first // empty
-      ')"
+    --json number,title,url,headRefName,baseRefName \
+    | jq -c 'first // empty')"
 
   if [ -n "${existing_pr}" ]; then
     printf '%s\n' "${existing_pr}"

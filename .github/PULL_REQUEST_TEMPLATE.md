@@ -19,7 +19,8 @@ Describe the user-facing and technical intent of this change.
 
 ## Release Impact
 
-- [ ] Safe for the normal direct release PR
+- [ ] Safe for normal release queue
+- [ ] Needs `release:hold`
 - [ ] Needs `release:hotfix`
 - [ ] Requires manual migration or operator action
 - [ ] Has rollback plan documented below

@@ -17,24 +17,19 @@ export abstract class AbstractAuditEntity {
   updatedAt!: Date;
 
   @Column({
-    type: 'uuid',
+    type: 'int',
     nullable: true,
   })
-  createdBy!: string | null;
+  createdBy!: number | null;
 
   @Column({
-    type: 'uuid',
+    type: 'int',
     nullable: true,
   })
-  updatedBy!: string | null;
+  updatedBy!: number | null;
 }
 
 export abstract class AbstractEntity extends AbstractAuditEntity {
   @PrimaryGeneratedColumn('increment')
   id!: number;
-}
-
-export abstract class AbstractUuidEntity extends AbstractAuditEntity {
-  @PrimaryGeneratedColumn('uuid')
-  id!: string;
 }

@@ -16,11 +16,11 @@ inputs:
   push:
     description: Whether to push the image.
     required: false
-    default: 'false'
+    default: "false"
   tags:
     description: Extra newline-separated tags.
     required: false
-    default: ''
+    default: ""
 
 outputs:
   image-ref:

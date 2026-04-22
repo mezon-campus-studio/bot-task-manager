@@ -14,7 +14,7 @@ inputs:
   reason:
     description: Human-readable reason for the rollback.
     required: false
-    default: ''
+    default: ""
   working-directory:
     description: Optional working directory for the script.
     required: false

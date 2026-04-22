@@ -33,6 +33,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    needs: verify
     services:
       postgres:
         image: postgres:15.5-alpine
@@ -58,7 +59,7 @@ jobs:
         uses: ./.github/actions/test-sample-campus
         with:
           db-host: 127.0.0.1
-          db-port: '5432'
+          db-port: "5432"
           db-username: postgres
           db-password: postgres
           db-database: ${{ env.SAMPLE_CAMPUS_BOOTSTRAP_DB }}
@@ -73,9 +74,7 @@ jobs:
 
   docker-smoke:
     runs-on: ubuntu-latest
-    needs:
-      - verify
-      - test
+    needs: test
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout
@@ -90,4 +89,4 @@ jobs:
         uses: ./.github/actions/build-sample-campus-image
         with:
           image: ${{ steps.image.outputs.value }}
-          push: 'false'
+          push: "false"

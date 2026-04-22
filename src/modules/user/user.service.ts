@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { isEmpty } from 'lodash';
+import { In, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
-import { UserStatus } from './enum/user-status.enum';
 import UserEntity from './user.entity';
 
 type UpsertUserMeta = {
   name?: string;
   email?: string;
+  avatar?: string;
 };
 
 @Injectable()
@@ -22,30 +23,35 @@ export class UserService extends CRUDService<UserEntity> {
   }
 
   private async create(user: Partial<UserEntity>) {
-    this.logger.log({
-      log: 'Attempting to create user',
-      mezonId: user.mezonId,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      status: user.status,
-    });
-
     const newUser = this.userRepository.create(user);
-    const result = await this.userRepository.save(newUser);
+    return this.userRepository.save(newUser);
+  }
 
-    this.logger.log({
-      log: 'User creation result',
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-        email: result.email,
-        role: result.role,
-        status: result.status,
-      },
-    });
-
-    return result;
+  async getUserByClanData(payload: {
+    id?: string;
+    username?: string;
+    clan?: { clan_id: string; clan_nick: string };
+  }) {
+    const { id, username, clan } = payload;
+    if (!id && !username && isEmpty(clan)) {
+      this.logger.warn(
+        'getUserByClanData called without id, username or clan data',
+      );
+      return null;
+    }
+    const query = {};
+    if (id) {
+      Object.assign(query, { id });
+    }
+    if (username) {
+      Object.assign(query, { username });
+    }
+    if (clan) {
+      Object.assign(query, {
+        clanMetaData: `clanMetaData @> '[{"clan_id": "${clan.clan_id}"}]'`,
+      });
+    }
+    return this.userRepository.findOneBy(query);
   }
 
   async getManyByIdsAndUsernames({
@@ -55,345 +61,48 @@ export class UserService extends CRUDService<UserEntity> {
     ids?: string[];
     mezonIds?: string[];
   }) {
-    this.logger.log({
-      log: 'Attempting to get users by identifiers',
-      ids,
-      mezonIds,
-    });
-
     const orConditions: Array<import('typeorm').FindOptionsWhere<UserEntity>> =
       [];
-
     if (ids?.length) {
-      orConditions.push({ id: In(ids) });
+      orConditions.push({
+        mezonId: In(ids.map((id) => parseInt(id, 10))),
+      });
     }
-
     if (mezonIds?.length) {
       orConditions.push({ mezonId: In(mezonIds) });
     }
-
     if (orConditions.length === 0) {
-      this.logger.log({
-        log: 'Fallback to empty user lookup result because no identifiers were provided',
-        ids,
-        mezonIds,
-      });
-
       return [];
     }
-
-    const result = await this.userRepository.find({ where: orConditions });
-
-    this.logger.log({
-      log: 'Got users by identifiers',
-      ids,
-      mezonIds,
-      resultCount: result.length,
-    });
-
-    return result;
+    return this.userRepository.find({ where: orConditions });
   }
 
-  async findById(id: string): Promise<UserEntity | null> {
-    this.logger.log({
-      log: 'Attempting to find user by id',
-      id,
-    });
-
-    const result = await this.userRepository.findOne({
-      where: { id },
-    });
-
-    if (result == null) {
-      this.logger.log({
-        log: 'Fallback user lookup result because user was not found by id',
-        id,
-      });
-
-      return null;
-    }
-
-    this.logger.log({
-      log: 'Got user by id',
-      id,
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-      },
-    });
-
-    return result;
+  async findById(mezonId: string): Promise<UserEntity | null> {
+    return this.userRepository.findOne({ where: { mezonId } });
   }
 
   async findByEmail(email: string): Promise<UserEntity | null> {
-    this.logger.log({
-      log: 'Attempting to find user by email',
-      email,
-    });
-
-    const result = await this.userRepository.findOne({
+    return this.userRepository.findOne({
       where: { email },
     });
-
-    if (result == null) {
-      this.logger.log({
-        log: 'Fallback user lookup result because user was not found by email',
-        email,
-      });
-
-      return null;
-    }
-
-    this.logger.log({
-      log: 'Got user by email',
-      email,
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-      },
-    });
-
-    return result;
   }
 
   async findByMezonId(mezonId: string): Promise<UserEntity | null> {
-    this.logger.log({
-      log: 'Attempting to find user by mezon id',
-      mezonId,
-    });
-
-    const result = await this.userRepository.findOne({
+    return this.userRepository.findOne({
       where: { mezonId },
     });
-
-    if (result == null) {
-      this.logger.log({
-        log: 'Fallback user lookup result because user was not found by mezon id',
-        mezonId,
-      });
-
-      return null;
-    }
-
-    this.logger.log({
-      log: 'Got user by mezon id',
-      mezonId,
-      result: {
-        id: result.id,
-        email: result.email,
-      },
-    });
-
-    return result;
   }
 
   async upsertByMezonId(
     mezonId: string,
-    meta: UpsertUserMeta = {},
+    meta?: UpsertUserMeta,
   ): Promise<UserEntity> {
-    this.logger.log({
-      log: 'Attempting to upsert user by mezon id',
-      mezonId,
-      meta,
-    });
-
     const existingUser = await this.findByMezonId(mezonId);
 
-    if (existingUser == null) {
-      this.logger.log({
-        log: 'Fallback to user creation because user was not found by mezon id',
-        mezonId,
-        meta,
-      });
-
-      const result = await this.create({ ...meta, mezonId });
-
-      this.logger.log({
-        log: 'User upsert result',
-        mezonId,
-        result: {
-          id: result.id,
-          mezonId: result.mezonId,
-          email: result.email,
-          role: result.role,
-          status: result.status,
-        },
-      });
-
-      return result;
+    if (existingUser) {
+      return this.userRepository.save(existingUser);
     }
 
-    this.logger.log({
-      log: 'Got existing user for mezon id upsert',
-      mezonId,
-      existingUserId: existingUser.id,
-    });
-
-    const updatedFields: string[] = [];
-
-    for (const [key, value] of Object.entries(meta)) {
-      if (value !== undefined) {
-        Object.assign(existingUser, {
-          [key]: value,
-        });
-        updatedFields.push(key);
-      }
-    }
-
-    const result = await this.userRepository.save(existingUser);
-
-    this.logger.log({
-      log: 'User upsert result',
-      mezonId,
-      updatedFields,
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-        email: result.email,
-        role: result.role,
-        status: result.status,
-      },
-    });
-
-    return result;
-  }
-
-  async findByIdentifier(
-    identifier: string,
-    includeDeleted = false,
-  ): Promise<UserEntity | null> {
-    const statusFilter = includeDeleted
-      ? {}
-      : { status: Not(UserStatus.DELETED) };
-    return await this.userRepository.findOne({
-      where: [
-        { mezonId: identifier, ...statusFilter },
-        { name: identifier, ...statusFilter },
-        { email: identifier, ...statusFilter },
-      ],
-      withDeleted: includeDeleted,
-    });
-  }
-
-  async softDeleteUser(identifier: string): Promise<void> {
-    this.logger.log({
-      log: 'Attempting to soft delete user by identifier (mezonId,name,email)',
-      identifier,
-    });
-
-    const existingUser = await this.findByIdentifier(identifier);
-
-    if (!existingUser) {
-      this.logger.log({
-        log: 'Fallback to no-op because user was not found by identifier for soft delete',
-      });
-      return;
-    }
-
-    if (existingUser.status === UserStatus.DELETED) {
-      this.logger.log({
-        log: 'Fallback to no-op because user was already marked as deleted',
-        mezonId: existingUser.mezonId,
-        status: existingUser.status,
-      });
-      return;
-    }
-
-    existingUser.status = UserStatus.DELETED;
-    const result = await this.userRepository.save(existingUser);
-    await this.userRepository.softRemove(existingUser);
-
-    this.logger.log({
-      log: 'Soft delete user result',
-      identifier,
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-        status: result.status,
-        deletedAt: result.deletedAt,
-      },
-    });
-  }
-
-  async restoreUser(identifier: string): Promise<void> {
-    this.logger.log({
-      log: 'Attempting to restore user by identifier (mezonId,name,email)',
-      identifier,
-    });
-
-    const existingUser = await this.findByIdentifier(identifier, true);
-
-    if (!existingUser) {
-      this.logger.log({
-        log: 'Fallback to no-op because user was not found by identifier for restore',
-      });
-      return;
-    }
-
-    if (existingUser.status !== UserStatus.DELETED) {
-      this.logger.log({
-        log: 'Fallback to no-op because user was not marked as deleted',
-        mezonId: existingUser.mezonId,
-        status: existingUser.status,
-      });
-      return;
-    }
-
-    existingUser.status = UserStatus.ACTIVE;
-    const result = await this.userRepository.save(existingUser);
-    await this.userRepository.recover(existingUser);
-
-    this.logger.log({
-      log: 'Restore user result',
-      identifier,
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-        status: result.status,
-        deletedAt: result.deletedAt,
-      },
-    });
-  }
-
-  async updateStatusUser(
-    identifier: string,
-    status: UserStatus,
-  ): Promise<void> {
-    this.logger.log({
-      log: 'Attempting to update user status by identifier (mezonId,name,email)',
-      identifier,
-      status,
-    });
-
-    const existingUser = await this.findByIdentifier(identifier);
-
-    if (!existingUser) {
-      this.logger.log({
-        log: 'Fallback to no-op because user was not found by identifier for status update',
-      });
-      return;
-    }
-
-    if (status === UserStatus.DELETED) {
-      this.logger.log({
-        log: 'Fallback to no-op because you cant change status to deleted',
-      });
-      return;
-    }
-
-    existingUser.status = status;
-    const result = await this.userRepository.save(existingUser);
-
-    this.logger.log({
-      log: 'Update user status result',
-      identifier,
-      status,
-      result: {
-        id: result.id,
-        mezonId: result.mezonId,
-        status: result.status,
-        updateAt: result.updatedAt,
-      },
-    });
+    return this.create({ ...meta, mezonId });
   }
 }

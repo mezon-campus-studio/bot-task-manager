@@ -31,12 +31,7 @@ export class RolesGuard implements CanActivate {
     if (!user) {
       throw new UnauthorizedException('User not authenticated');
     }
-    const userRoles = Array.isArray(user.roles)
-      ? user.roles
-      : user.role != null
-        ? [user.role]
-        : [];
-    const hasRole = requiredRoles.some((role) => userRoles.includes(role));
+    const hasRole = requiredRoles.some((role) => user.role === role);
 
     if (!hasRole) {
       throw new ForbiddenException(

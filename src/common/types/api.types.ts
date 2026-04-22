@@ -9,13 +9,10 @@ export interface AuthTokens {
 }
 
 export interface UserAuth {
-  id: string;
   mezonId: string;
   name: string;
   email: string;
-  currentProjectId?: number | null;
-  role?: number | null;
-  roles?: number[];
+  role: number | null;
   staffId?: number;
 }
 export interface AuthProfile {

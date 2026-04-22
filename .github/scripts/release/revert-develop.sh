@@ -39,7 +39,7 @@ This PR reverts #${PR_NUMBER} from \`${RELEASE_SOURCE_BRANCH}\`.
 - Original PR: $(printf '%s' "${pr_json}" | jq -r '.url')
 - Generated at: $(release_now)
 
-If an active release PR already exists from \`${RELEASE_SOURCE_BRANCH}\` to \`${RELEASE_TARGET_BRANCH}\`, merge this revert before promoting if you need to keep the change out of the next release.
+If #${PR_NUMBER} was queued for release, it will also be removed from the active release branch.
 EOF
 
 git fetch origin "${RELEASE_SOURCE_BRANCH}" --prune
@@ -63,5 +63,6 @@ revert_pr_url="$(gh pr create \
 rm -f "${body_file}"
 
 add_label_if_missing "${PR_NUMBER}" "${RELEASE_REVERTED_LABEL}"
+dequeue_pr_from_active_release "${PR_NUMBER}" "Removed from the active release queue because a revert PR has been opened for \`${RELEASE_SOURCE_BRANCH}\`."
 
 echo "revert_pr_url=${revert_pr_url}" >> "${GITHUB_OUTPUT:-/dev/null}"

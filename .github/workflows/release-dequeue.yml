@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: Merged PR number to inspect for release exclusion guidance.
+        description: PR number to remove from the active release queue.
         required: true
         type: number
 
@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.BOT_GH_TOKEN }}
 
-      - name: Explain direct release exclusion flow
+      - name: Dequeue PR from active release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.BOT_GH_TOKEN }}
