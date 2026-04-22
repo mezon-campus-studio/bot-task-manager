@@ -73,4 +73,42 @@ export class PermissionService extends CRUDService<PermissionEntity> {
     });
     return this.permissionRepository.find();
   }
+
+  async deleteById(id: number): Promise<void> {
+    const result = await this.permissionRepository.delete({ id });
+    if (result.affected === 0) {
+      this.logger.warn({
+        log: 'Permission not found',
+        permissionId: id,
+      });
+      throw new Error(`Permission with id ${id} not found`);
+    }
+    await this.permissionRepository.delete({ id });
+  }
+
+  async updatePermission(id: number , input: Partial<CreatePermissionInput>): Promise<PermissionEntity> {
+    const permission = await this.findById(id);
+    if (!permission) {
+      this.logger.warn({
+        log: 'Permission not found',
+        permissionId: id,
+      });
+      throw new Error(`Permission with id ${id} not found`);
+    }
+
+    if (input.key && input.key !== permission.key) {
+      const existed = await this.permissionRepository.findOne({
+        where: { key: input.key },
+      });
+      if (existed) {
+        this.logger.warn({
+          key: input.key,
+          log: 'Permission with the same key already exists',
+        });
+        throw new Error(`Permission with key ${input.key} already exists`);
+      }
+    }
+    Object.assign(permission, input);
+    return this.permissionRepository.save(permission); 
+  }
 }

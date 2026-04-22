@@ -42,6 +42,22 @@ export class UserRoleAssignmentService extends CRUDService<UserRoleAssignmentEnt
       teamId: input.teamId ?? null,
       userId: input.userId,
     });
+    const exist = await this.userRoleAssignmentRepository.findOne({
+      where: {
+        userId: input.userId,
+        roleId: input.roleId,
+        scopeType: input.scopeType,
+        projectId: input.projectId ?? IsNull(),
+        teamId: input.teamId ?? IsNull(),
+      },
+    });
+
+    if (exist) {
+      this.logger.log({
+        log: 'User role assignment already exists, skipping creation',
+      });
+      throw new Error('User role assignment already exists');
+    }
 
     const assignment = this.userRoleAssignmentRepository.create({
       ...input,
@@ -93,5 +109,23 @@ export class UserRoleAssignmentService extends CRUDService<UserRoleAssignmentEnt
     });
 
     return this.findAssignments({ userId });
+  }
+
+  async removeAssignment(id: number): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to remove user role assignment',
+    });
+    const exist = await this.userRoleAssignmentRepository.findOne({
+      where: { id },
+    });
+
+    if (!exist) {
+      this.logger.warn({
+        log: 'User role assignment not found, skipping deletion',
+        id,
+      });
+      throw new Error('User role assignment not found');
+    }
+    await this.userRoleAssignmentRepository.delete(id);
   }
 }

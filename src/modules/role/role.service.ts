@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { RoleScopeType } from './enums/role-scope-type.enum';
 import RoleEntity from './role.entity';
+import { UpdateRoleDto } from './dto/modify-role.dto';
 
 type CreateRoleInput = Pick<RoleEntity, 'key' | 'name' | 'scopeType'> &
   Partial<Pick<RoleEntity, 'description' | 'isSystem'>>;
@@ -110,10 +111,7 @@ export class RoleService extends CRUDService<RoleEntity> {
       order: { id: 'ASC' },
     });
   }
-  async updateRole(
-    id: number,
-    updates: Partial<CreateRoleInput>,
-  ): Promise<RoleEntity> {
+  async updateRole(id: number, updates: UpdateRoleDto): Promise<RoleEntity> {
     this.logger.log({
       log: 'Attempting to update role',
       roleId: id,
