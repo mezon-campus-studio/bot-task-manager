@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import TaskEntity from '@src/modules/task/task.entity';
 import UserEntity from '@src/modules/user/user.entity';
 import {
   channelMessage as channelMessageFactory,
   messageButtonClicked as messageButtonClickedFactory,
+  role as roleFactory,
+  task as taskFactory,
   user as userFactory,
 } from '@src/repl-modules/factories';
+import { RoleEntity } from '../modules/role';
 import type { ChannelMessage } from 'mezon-sdk';
 import type { MessageButtonClicked } from 'mezon-sdk/dist/cjs/rtapi/realtime';
 
@@ -16,22 +20,35 @@ export class DatabaseSeeder {
   constructor(private readonly dataSource: DataSource) {}
 
   async seed(options: SeedOptions = {}): Promise<SeedResult> {
-    const { users = 5, user = {} } = options;
+    const { users = 5, user = {}, tasks = 5, task = {}, roles = 3 } = options;
 
     this.logger.log('Starting database seeding...');
 
     await this.resetDatabase();
+    const seededRoles = await this.createRoles(roles);
     const seededUsers = await this.createUsers(users, user);
+    const seededTasks = await this.createTasks(tasks, task);
 
     this.logger.log(`Seeded ${seededUsers.length} users`);
+    this.logger.log(`Seeded ${seededTasks.length} tasks`);
 
     return {
+      roles: seededRoles,
+      tasks: seededTasks,
       users: seededUsers,
     };
   }
 
   async createUsers(count = 1, input: Partial<UserEntity> = {}) {
     return userFactory(
+      Array.from({ length: count }, () => ({
+        ...input,
+      })),
+    );
+  }
+
+  async createTasks(count = 1, input: Partial<TaskEntity> = {}) {
+    return taskFactory(
       Array.from({ length: count }, () => ({
         ...input,
       })),
@@ -74,13 +91,25 @@ export class DatabaseSeeder {
       `TRUNCATE ${tables.join(', ')} RESTART IDENTITY CASCADE;`,
     );
   }
+  async createRoles(count = 3, input: Partial<RoleEntity> = {}) {
+    return roleFactory(
+      Array.from({ length: count }, () => ({
+        ...input,
+      })),
+    );
+  }
 }
 
 type SeedOptions = {
+  task?: Partial<TaskEntity>;
+  tasks?: number;
   users?: number;
   user?: Partial<UserEntity>;
+  roles?: number;
 };
 
 type SeedResult = {
+  tasks: TaskEntity[];
   users: UserEntity[];
+  roles: RoleEntity[];
 };
