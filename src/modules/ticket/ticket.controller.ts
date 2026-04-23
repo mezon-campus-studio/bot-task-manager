@@ -18,7 +18,7 @@ import {
   TicketStatus,
 } from './enums';
 
-@Controller('tickets')/
+@Controller('tickets')
 export class TicketController {
   constructor(
     private readonly ticketService: TicketService,
@@ -106,8 +106,7 @@ export class TicketController {
   )
   async getBySeverity(
     @Param('projectId') projectId: number,
-    @Param('severity')
-    severity: TicketSeverity,
+    @Param('severity') severity: TicketSeverity,
   ) {
     return await this.ticketService.getBySeverity(
       Number(projectId),

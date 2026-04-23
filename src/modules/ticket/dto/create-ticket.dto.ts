@@ -1,7 +1,7 @@
 import {
-  IsDateString,
   IsEnum,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -9,31 +9,41 @@ import {
 } from 'class-validator';
 
 import {
-  TicketPriority,
-  TicketType,
+  TicketSeverity,
+  TicketStatus,
 } from '../enums';
 
 export class CreateTicketDto {
+  @IsNumber()
+  @IsNotEmpty()
+  projectId: number;
+
+  @IsNumber()
+  @IsOptional()
+  teamId: number | null;
+
+  @IsUUID()
+  @IsOptional()
+  assigneeUserId: string | null;
+
   @IsUUID()
   @IsNotEmpty()
-  projectId: string;
+  reporterUserId: string;
 
   @IsString()
   @IsNotEmpty()
-  @MaxLength(200)
+  @MaxLength(255)
   title: string;
-
-  @IsEnum(TicketType)
-  type: TicketType;
-
-  @IsEnum(TicketPriority)
-  priority: TicketPriority;
 
   @IsOptional()
   @IsString()
-  description: string;
+  description: string | null;
 
+  @IsEnum(TicketStatus)
   @IsOptional()
-  @IsDateString()
-  dueDate: string;
+  status: TicketStatus;
+
+  @IsEnum(TicketSeverity)
+  @IsOptional()
+  severity: TicketSeverity;
 }

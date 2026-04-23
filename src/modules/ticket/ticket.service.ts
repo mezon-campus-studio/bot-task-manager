@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
-import { TicketStatus } from './enums';
+import { TicketStatus, TicketSeverity } from './enums';
 import TicketEntity from './ticket.entity';
 
 export type CreateTicketInput = Pick<
@@ -192,6 +192,81 @@ export class TicketService extends CRUDService<TicketEntity> {
       log: 'Ticket resolution result',
       ticketId,
       result,
+    });
+
+    return result;
+  }
+
+  async getByStatus(
+    projectId: number,
+    status: TicketStatus,
+  ): Promise<TicketEntity[]> {
+    this.logger.log({
+      log: 'Attempting to get tickets by status',
+      projectId,
+      status,
+    });
+
+    const result = await this.ticketRepository.find({
+      where: { projectId, status },
+      order: { id: 'DESC' },
+    });
+
+    this.logger.log({
+      log: 'Got tickets by status result',
+      projectId,
+      status,
+      count: result.length,
+    });
+
+    return result;
+  }
+
+  async getByAssignee(
+    projectId: number,
+    assigneeUserId: string,
+  ): Promise<TicketEntity[]> {
+    this.logger.log({
+      log: 'Attempting to get tickets by assignee',
+      projectId,
+      assigneeUserId,
+    });
+
+    const result = await this.ticketRepository.find({
+      where: { projectId, assigneeUserId },
+      order: { id: 'DESC' },
+    });
+
+    this.logger.log({
+      log: 'Got tickets by assignee result',
+      projectId,
+      assigneeUserId,
+      count: result.length,
+    });
+
+    return result;
+  }
+
+  async getBySeverity(
+    projectId: number,
+    severity: TicketSeverity,
+  ): Promise<TicketEntity[]> {
+    this.logger.log({
+      log: 'Attempting to get tickets by severity',
+      projectId,
+      severity,
+    });
+
+    const result = await this.ticketRepository.find({
+      where: { projectId, severity },
+      order: { id: 'DESC' },
+    });
+
+    this.logger.log({
+      log: 'Got tickets by severity result',
+      projectId,
+      severity,
+      count: result.length,
     });
 
     return result;
