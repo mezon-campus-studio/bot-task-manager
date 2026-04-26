@@ -32,9 +32,22 @@ export class TaskController {
     return this.taskService.assignTask(id, body.assigneeUserId);
   }
 
+  @Patch(':id/assignee')
+  async reassignTask(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: AssignTaskDto,
+  ) {
+    return this.taskService.reassignTask(id, body.assigneeUserId);
+  }
+
   @Get(':id')
   async getTaskById(@Param('id', ParseIntPipe) id: number) {
     return this.taskService.findById(id);
+  }
+
+  @Delete(':id')
+  async deleteTask(@Param('id', ParseIntPipe) id: number) {
+    return this.taskService.deleteTask(id);
   }
 
   @Patch(':id')
@@ -43,10 +56,5 @@ export class TaskController {
     @Body() body: UpdateTaskDto,
   ) {
     return this.taskService.updateTask(id, body);
-  }
-
-  @Delete(':id')
-  async deleteTask(@Param('id', ParseIntPipe) id: number) {
-    return this.taskService.deleteTask(id);
   }
 }

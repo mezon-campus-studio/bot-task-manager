@@ -243,4 +243,55 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     return result;
   }
+
+  async reassignTask(
+    taskId: number,
+    assigneeUserId: string,
+  ): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to reassign task',
+      taskId,
+      assigneeUserId,
+    });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({ log: 'Got task for reassignment', taskId, task });
+
+    if (!task) {
+      this.logger.log({
+        log: 'Task not found for reassignment',
+        taskId,
+        assigneeUserId,
+      });
+
+      return null;
+    }
+
+    if (task.assigneeUserId == null) {
+      this.logger.log({
+        assigneeUserId,
+        log: 'Task reassignment failed because task has no current assignee',
+        taskId,
+      });
+
+      throw new Error('Task has no assignee to replace');
+    }
+
+    await this.validateTaskAssigneeContext(task, assigneeUserId);
+
+    task.assigneeUserId = assigneeUserId;
+
+    const result = await this.taskRepository.save(task);
+    this.logger.log({
+      log: 'Task reassignment result',
+      taskId,
+      assigneeUserId,
+      result,
+    });
+
+    return result;
+  }
 }
