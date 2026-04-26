@@ -6,6 +6,7 @@ import { ProjectMemberStatus } from '@src/modules/project-member/project-member-
 import { ProjectMemberService } from '@src/modules/project-member/project-member.service';
 import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
 import { TeamMemberService } from '@src/modules/team-member/team-member.service';
+import { TaskStatus } from './enums';
 import TaskEntity from './task.entity';
 
 export type CreateTaskInput = Pick<
@@ -58,6 +59,42 @@ export class TaskService extends CRUDService<TaskEntity> {
     });
 
     return task;
+  }
+
+  private validateTaskStatusTransition(
+    currentStatus: TaskStatus,
+    nextStatus: TaskStatus,
+  ): void {
+    this.logger.log({
+      currentStatus,
+      log: 'Attempting to validate task status transition',
+      nextStatus,
+    });
+
+    const allowedTransitions: Record<TaskStatus, TaskStatus[]> = {
+      [TaskStatus.TODO]: [TaskStatus.IN_PROGRESS, TaskStatus.CANCELLED],
+      [TaskStatus.IN_PROGRESS]: [TaskStatus.DONE, TaskStatus.CANCELLED],
+      [TaskStatus.DONE]: [],
+      [TaskStatus.CANCELLED]: [],
+    };
+
+    if (!allowedTransitions[currentStatus].includes(nextStatus)) {
+      this.logger.log({
+        currentStatus,
+        log: 'Task status transition validation failed',
+        nextStatus,
+      });
+
+      throw new Error(
+        `Task status cannot transition from ${currentStatus} to ${nextStatus}`,
+      );
+    }
+
+    this.logger.log({
+      currentStatus,
+      log: 'Task status transition validation passed',
+      nextStatus,
+    });
   }
 
   private async validateTaskAssigneeContext(
