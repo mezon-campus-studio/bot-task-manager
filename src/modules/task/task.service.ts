@@ -294,4 +294,46 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     return result;
   }
+
+  async removeTaskAssignee(taskId: number): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to remove task assignee',
+      taskId,
+    });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({ log: 'Got task for assignee removal', taskId, task });
+
+    if (!task) {
+      this.logger.log({
+        log: 'Task not found for assignee removal',
+        taskId,
+      });
+
+      return null;
+    }
+
+    if (task.assigneeUserId == null) {
+      this.logger.log({
+        log: 'Task assignee removal skipped because task already has no assignee',
+        taskId,
+      });
+
+      return task;
+    }
+
+    task.assigneeUserId = null;
+
+    const result = await this.taskRepository.save(task);
+    this.logger.log({
+      log: 'Task assignee removal result',
+      taskId,
+      result,
+    });
+
+    return result;
+  }
 }

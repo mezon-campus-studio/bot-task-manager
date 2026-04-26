@@ -45,6 +45,11 @@ export class TaskController {
     return this.taskService.findById(id);
   }
 
+  @Delete(':id/assignee')
+  async removeTaskAssignee(@Param('id', ParseIntPipe) id: number) {
+    return this.taskService.removeTaskAssignee(id);
+  }
+
   @Delete(':id')
   async deleteTask(@Param('id', ParseIntPipe) id: number) {
     return this.taskService.deleteTask(id);
