@@ -39,6 +39,27 @@ export class TaskService extends CRUDService<TaskEntity> {
     super(taskRepository);
   }
 
+  private async getTaskForStatusUpdate(
+    taskId: number,
+  ): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to get task for status update',
+      taskId,
+    });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({
+      log: 'Got task for status update',
+      taskId,
+      task,
+    });
+
+    return task;
+  }
+
   private async validateTaskAssigneeContext(
     task: TaskEntity,
     assigneeUserId: string,
