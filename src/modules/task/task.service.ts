@@ -27,6 +27,8 @@ export type CreateTaskInput = Pick<
 
 export type UpdateTaskInput = Partial<CreateTaskInput>;
 
+export type UpdateTaskStatusInput = Pick<TaskEntity, 'status'>;
+
 @Injectable()
 export class TaskService extends CRUDService<TaskEntity> {
   private readonly logger = new Logger(TaskService.name);
@@ -236,6 +238,43 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     const result = await this.taskRepository.save(task);
     this.logger.log({ log: 'Task update result', taskId, result });
+
+    return result;
+  }
+
+  async updateTaskStatus(
+    taskId: number,
+    input: UpdateTaskStatusInput,
+  ): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to update task status',
+      taskId,
+      input,
+    });
+
+    const task = await this.getTaskForStatusUpdate(taskId);
+
+    if (!task) {
+      this.logger.log({
+        log: 'Task not found for status update',
+        taskId,
+        input,
+      });
+
+      return null;
+    }
+
+    this.validateTaskStatusTransition(task.status, input.status);
+
+    task.status = input.status;
+
+    const result = await this.taskRepository.save(task);
+
+    this.logger.log({
+      log: 'Task status update result',
+      taskId,
+      result,
+    });
 
     return result;
   }
