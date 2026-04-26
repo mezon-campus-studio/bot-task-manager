@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
+import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
+import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
 import { TaskPriority, TaskStatus } from './enums';
 import TaskEntity from './task.entity';
 import { TaskService } from './task.service';
@@ -28,6 +30,30 @@ describe(TaskService.name, () => {
       projectId: nextNumericId(),
       reporterUserId: randomUUID(),
       teamId: nextNumericId(),
+    };
+  }
+
+  async function createProjectTaskContext() {
+    const project = await factory.project({});
+    const reporter = await factory.user({});
+
+    return {
+      projectId: project.id,
+      reporterUserId: reporter.id,
+    };
+  }
+
+  async function createTeamTaskContext() {
+    const project = await factory.project({});
+    const reporter = await factory.user({});
+    const team = await factory.team({
+      projectId: project.id,
+    });
+
+    return {
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: team.id,
     };
   }
 
@@ -127,43 +153,203 @@ describe(TaskService.name, () => {
     expect(tasks.every((task) => task.projectId === projectId)).toBe(true);
   });
 
-  it('should reassign an existing task to the next workflow owner', async () => {
-    const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
-    const nextAssigneeUserId = randomUUID();
+  it('should assign a task to an active project member', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
     const task = await factory.task({
-      assigneeUserId,
+      assigneeUserId: null,
       projectId,
       reporterUserId,
-      status: TaskStatus.IN_PROGRESS,
-      teamId,
+      teamId: null,
       title: 'Confirm department approvals',
     });
 
-    const updatedTask = await taskService.assignTask(
-      task.id,
-      nextAssigneeUserId,
-    );
+    await factory.projectMember({
+      projectId,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: assignee.id,
+    });
+
+    const updatedTask = await taskService.assignTask(task.id, assignee.id);
 
     expect(updatedTask).toMatchObject({
-      assigneeUserId: nextAssigneeUserId,
+      assigneeUserId: assignee.id,
       id: task.id,
     });
 
     await expect(
       taskRepository.findOneByOrFail({ id: task.id }),
     ).resolves.toMatchObject({
-      assigneeUserId: nextAssigneeUserId,
+      assigneeUserId: assignee.id,
       id: task.id,
-      status: TaskStatus.IN_PROGRESS,
+      status: TaskStatus.TODO,
     });
   });
 
+  it('should assign a task to an active team member when the task belongs to a team', async () => {
+    const { projectId, reporterUserId, teamId } = await createTeamTaskContext();
+    const assignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: null,
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Share the admissions handoff plan',
+    });
+
+    await factory.teamMember({
+      status: TeamMemberStatus.ACTIVE,
+      teamId,
+      userId: assignee.id,
+    });
+
+    const updatedTask = await taskService.assignTask(task.id, assignee.id);
+
+    expect(updatedTask).toMatchObject({
+      assigneeUserId: assignee.id,
+      id: task.id,
+      teamId,
+    });
+  });
+
+  it('should reject assigning a task to a non-active project member', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: null,
+      projectId,
+      reporterUserId,
+      teamId: null,
+      title: 'Review the intake form changes',
+    });
+
+    await factory.projectMember({
+      projectId,
+      status: ProjectMemberStatus.INVITED,
+      userId: assignee.id,
+    });
+
+    await expect(taskService.assignTask(task.id, assignee.id)).rejects.toThrow(
+      'Task assignee must be an active project member',
+    );
+  });
+
+  it('should reject assigning a task to a non-active team member', async () => {
+    const { projectId, reporterUserId, teamId } = await createTeamTaskContext();
+    const assignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: null,
+      projectId,
+      reporterUserId,
+      teamId,
+      title: 'Prepare the faculty support schedule',
+    });
+
+    await factory.teamMember({
+      status: TeamMemberStatus.DECLINED,
+      teamId,
+      userId: assignee.id,
+    });
+
+    await expect(taskService.assignTask(task.id, assignee.id)).rejects.toThrow(
+      'Task assignee must be an active team member',
+    );
+  });
+
   it('should return null when the task assignment target does not exist', async () => {
+    const assignee = await factory.user({});
+
     await expect(
-      taskService.assignTask(999_999, randomUUID()),
+      taskService.assignTask(999_999, assignee.id),
     ).resolves.toBeNull();
     await expect(taskRepository.count()).resolves.toBe(0);
+  });
+
+  it('should reassign a task to the next active project member', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const currentAssignee = await factory.user({});
+    const nextAssignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: currentAssignee.id,
+      projectId,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: null,
+      title: 'Confirm department approvals',
+    });
+
+    await factory.projectMember({
+      projectId,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: currentAssignee.id,
+    });
+    await factory.projectMember({
+      projectId,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: nextAssignee.id,
+    });
+
+    const updatedTask = await taskService.reassignTask(
+      task.id,
+      nextAssignee.id,
+    );
+
+    expect(updatedTask).toMatchObject({
+      assigneeUserId: nextAssignee.id,
+      id: task.id,
+    });
+  });
+
+  it('should reject reassignment when the task has no assignee yet', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const nextAssignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: null,
+      projectId,
+      reporterUserId,
+      teamId: null,
+      title: 'Finalize the reviewer routing',
+    });
+
+    await factory.projectMember({
+      projectId,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: nextAssignee.id,
+    });
+
+    await expect(
+      taskService.reassignTask(task.id, nextAssignee.id),
+    ).rejects.toThrow('Task has no assignee to replace');
+  });
+
+  it('should remove the current task assignee', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: assignee.id,
+      projectId,
+      reporterUserId,
+      teamId: null,
+      title: 'Remove the current assignment after the workflow shift',
+    });
+
+    const updatedTask = await taskService.removeTaskAssignee(task.id);
+
+    expect(updatedTask).toMatchObject({
+      assigneeUserId: null,
+      id: task.id,
+    });
+
+    await expect(
+      taskRepository.findOneByOrFail({ id: task.id }),
+    ).resolves.toMatchObject({
+      assigneeUserId: null,
+      id: task.id,
+    });
+  });
+
+  it('should return null when removing the assignee from a missing task', async () => {
+    await expect(taskService.removeTaskAssignee(999_999)).resolves.toBeNull();
   });
 
   it('should find a task by id', async () => {
