@@ -2,6 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
+import { ProjectMemberService } from '@src/modules/project-member/project-member.service';
+import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
+import { TeamMemberService } from '@src/modules/team-member/team-member.service';
 import TaskEntity from './task.entity';
 
 export type CreateTaskInput = Pick<
@@ -29,8 +33,80 @@ export class TaskService extends CRUDService<TaskEntity> {
   constructor(
     @InjectRepository(TaskEntity)
     private taskRepository: Repository<TaskEntity>,
+    private readonly projectMemberService: ProjectMemberService,
+    private readonly teamMemberService: TeamMemberService,
   ) {
     super(taskRepository);
+  }
+
+  private async validateTaskAssigneeContext(
+    task: TaskEntity,
+    assigneeUserId: string,
+  ): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to validate task assignee context',
+      assigneeUserId,
+      projectId: task.projectId,
+      taskId: task.id,
+      teamId: task.teamId,
+    });
+
+    if (task.teamId != null) {
+      const membership = await this.teamMemberService.findMembership(
+        task.teamId,
+        assigneeUserId,
+      );
+
+      if (membership == null || membership.status !== TeamMemberStatus.ACTIVE) {
+        this.logger.log({
+          assigneeUserId,
+          log: 'Task assignee validation failed because team membership is not active',
+          status: membership?.status ?? null,
+          taskId: task.id,
+          teamId: task.teamId,
+        });
+
+        throw new Error('Task assignee must be an active team member');
+      }
+
+      this.logger.log({
+        assigneeUserId,
+        log: 'Task assignee validation passed for team member',
+        membershipId: membership.id,
+        taskId: task.id,
+        teamId: task.teamId,
+      });
+
+      return;
+    }
+
+    const membership = await this.projectMemberService.findByProjectAndUser(
+      task.projectId,
+      assigneeUserId,
+    );
+
+    if (
+      membership == null ||
+      membership.status !== ProjectMemberStatus.ACTIVE
+    ) {
+      this.logger.log({
+        assigneeUserId,
+        log: 'Task assignee validation failed because project membership is not active',
+        projectId: task.projectId,
+        status: membership?.status ?? null,
+        taskId: task.id,
+      });
+
+      throw new Error('Task assignee must be an active project member');
+    }
+
+    this.logger.log({
+      assigneeUserId,
+      log: 'Task assignee validation passed for project member',
+      membershipId: membership.id,
+      projectId: task.projectId,
+      taskId: task.id,
+    });
   }
 
   async createTask(input: CreateTaskInput): Promise<TaskEntity> {
@@ -151,6 +227,10 @@ export class TaskService extends CRUDService<TaskEntity> {
       return null;
     }
 
+    if (assigneeUserId != null) {
+      await this.validateTaskAssigneeContext(task, assigneeUserId);
+    }
+
     task.assigneeUserId = assigneeUserId;
 
     const result = await this.taskRepository.save(task);
@@ -158,6 +238,99 @@ export class TaskService extends CRUDService<TaskEntity> {
       log: 'Task assignment result',
       taskId,
       assigneeUserId,
+      result,
+    });
+
+    return result;
+  }
+
+  async reassignTask(
+    taskId: number,
+    assigneeUserId: string,
+  ): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to reassign task',
+      taskId,
+      assigneeUserId,
+    });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({ log: 'Got task for reassignment', taskId, task });
+
+    if (!task) {
+      this.logger.log({
+        log: 'Task not found for reassignment',
+        taskId,
+        assigneeUserId,
+      });
+
+      return null;
+    }
+
+    if (task.assigneeUserId == null) {
+      this.logger.log({
+        assigneeUserId,
+        log: 'Task reassignment failed because task has no current assignee',
+        taskId,
+      });
+
+      throw new Error('Task has no assignee to replace');
+    }
+
+    await this.validateTaskAssigneeContext(task, assigneeUserId);
+
+    task.assigneeUserId = assigneeUserId;
+
+    const result = await this.taskRepository.save(task);
+    this.logger.log({
+      log: 'Task reassignment result',
+      taskId,
+      assigneeUserId,
+      result,
+    });
+
+    return result;
+  }
+
+  async removeTaskAssignee(taskId: number): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to remove task assignee',
+      taskId,
+    });
+
+    const task = await this.taskRepository.findOne({
+      where: { id: taskId },
+    });
+
+    this.logger.log({ log: 'Got task for assignee removal', taskId, task });
+
+    if (!task) {
+      this.logger.log({
+        log: 'Task not found for assignee removal',
+        taskId,
+      });
+
+      return null;
+    }
+
+    if (task.assigneeUserId == null) {
+      this.logger.log({
+        log: 'Task assignee removal skipped because task already has no assignee',
+        taskId,
+      });
+
+      return task;
+    }
+
+    task.assigneeUserId = null;
+
+    const result = await this.taskRepository.save(task);
+    this.logger.log({
+      log: 'Task assignee removal result',
+      taskId,
       result,
     });
 
