@@ -9,6 +9,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskService } from './task.service';
@@ -21,6 +22,14 @@ export class TaskController {
   @Post()
   async createTask(@Body() body: CreateTaskDto) {
     return this.taskService.createTask(body);
+  }
+
+  @Post(':id/assignee')
+  async assignTask(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: AssignTaskDto,
+  ) {
+    return this.taskService.assignTask(id, body.assigneeUserId);
   }
 
   @Get(':id')
