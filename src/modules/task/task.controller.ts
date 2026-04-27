@@ -11,6 +11,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskService } from './task.service';
 
@@ -53,6 +54,14 @@ export class TaskController {
   @Delete(':id')
   async deleteTask(@Param('id', ParseIntPipe) id: number) {
     return this.taskService.deleteTask(id);
+  }
+
+  @Patch(':id/status')
+  async updateTaskStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateTaskStatusDto,
+  ) {
+    return this.taskService.updateTaskStatus(id, body);
   }
 
   @Patch(':id')
