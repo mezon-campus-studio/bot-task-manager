@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { NoteResourceType } from '@src/modules/note/enums';
-import { NoteService } from '@src/modules/note/note.service';
+import NoteEntity from '@src/modules/note/note.entity';
 import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
 import { ProjectMemberService } from '@src/modules/project-member/project-member.service';
 import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
@@ -40,7 +40,6 @@ export class TaskService extends CRUDService<TaskEntity> {
   constructor(
     @InjectRepository(TaskEntity)
     private taskRepository: Repository<TaskEntity>,
-    private readonly noteService: NoteService,
     private readonly projectMemberService: ProjectMemberService,
     private readonly teamMemberService: TeamMemberService,
   ) {
@@ -56,13 +55,14 @@ export class TaskService extends CRUDService<TaskEntity> {
 
   private async getTaskForStatusUpdate(
     taskId: number,
+    entityManager = this.taskRepository.manager,
   ): Promise<TaskEntity | null> {
     this.logger.log({
       log: 'Attempting to get task for status update',
       taskId,
     });
 
-    const task = await this.taskRepository.findOne({
+    const task = await entityManager.findOne(TaskEntity, {
       where: { id: taskId },
     });
 
@@ -264,32 +264,49 @@ export class TaskService extends CRUDService<TaskEntity> {
       input,
     });
 
-    const task = await this.getTaskForStatusUpdate(taskId);
+    const result = await this.taskRepository.manager.transaction(
+      async (transactionalEntityManager: EntityManager) => {
+        const task = await this.getTaskForStatusUpdate(
+          taskId,
+          transactionalEntityManager,
+        );
 
-    if (!task) {
-      this.logger.log({
-        log: 'Task not found for status update',
-        taskId,
-        input,
-      });
+        if (!task) {
+          this.logger.log({
+            log: 'Task not found for status update',
+            taskId,
+            input,
+          });
 
-      return null;
-    }
+          return null;
+        }
 
-    const currentStatus = task.status;
-    this.validateTaskStatusTransition(currentStatus, input.status);
+        const currentStatus = task.status;
+        this.validateTaskStatusTransition(currentStatus, input.status);
 
-    task.status = input.status;
+        task.status = input.status;
 
-    const result = await this.taskRepository.save(task);
+        const updatedTask = await transactionalEntityManager.save(
+          TaskEntity,
+          task,
+        );
 
-    await this.noteService.createNote({
-      authorUserId: input.authorUserId,
-      content: this.buildTaskStatusHistoryContent(currentStatus, input.status),
-      projectId: task.projectId,
-      resourceId: String(task.id),
-      resourceType: NoteResourceType.TASK,
-    });
+        const note = transactionalEntityManager.create(NoteEntity, {
+          authorUserId: input.authorUserId,
+          content: this.buildTaskStatusHistoryContent(
+            currentStatus,
+            input.status,
+          ),
+          projectId: task.projectId,
+          resourceId: String(task.id),
+          resourceType: NoteResourceType.TASK,
+        });
+
+        await transactionalEntityManager.save(NoteEntity, note);
+
+        return updatedTask;
+      },
+    );
 
     this.logger.log({
       log: 'Task status update result',
