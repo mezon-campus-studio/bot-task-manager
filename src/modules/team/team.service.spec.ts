@@ -1,3 +1,4 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
 import ProjectEntity from '@src/modules/project/project.entity';
@@ -43,6 +44,7 @@ describe(TeamService.name, () => {
         name: 'Platform',
         projectId: project.id,
         slug: 'platform',
+        leaderId: owner.id,
       });
 
       expect(createdTeam).toMatchObject({
@@ -52,6 +54,7 @@ describe(TeamService.name, () => {
         name: 'Platform',
         projectId: project.id,
         slug: 'platform',
+        leaderId: owner.id,
         updatedBy: null,
       });
 
@@ -64,6 +67,7 @@ describe(TeamService.name, () => {
         name: 'Platform',
         projectId: project.id,
         slug: 'platform',
+        leaderId: owner.id,
         updatedBy: null,
       });
     });
@@ -85,8 +89,34 @@ describe(TeamService.name, () => {
           name: 'Platform Copy',
           projectId: project.id,
           slug: 'platform',
+          leaderId: owner.id,
         }),
-      ).rejects.toThrow();
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should deactivate old default team when a new default team is created', async () => {
+      const owner = await factory.user({ mezonId: 'owner-3' });
+      const project = await createProject('project-3', owner.id);
+
+      const oldDefault = await factory.team({
+        projectId: project.id,
+        isDefault: true,
+        slug: 'old-default',
+      });
+
+      const newTeam = await teamService.createTeam({
+        name: 'New Default',
+        projectId: project.id,
+        slug: 'new-default',
+        leaderId: owner.id,
+        isDefault: true,
+      });
+
+      const updatedOldDefault = await teamRepository.findOneBy({
+        id: oldDefault.id,
+      });
+      expect(updatedOldDefault?.isDefault).toBe(false);
+      expect(newTeam.isDefault).toBe(true);
     });
   });
 
@@ -194,6 +224,145 @@ describe(TeamService.name, () => {
         projectId: project.id,
         slug: 'design-team',
       });
+    });
+  });
+
+  describe('findByLeaderId', () => {
+    it('should return a list of teams led by the specified user', async () => {
+      const leader = await factory.user({ mezonId: 'leader-1' });
+      const project = await createProject('leader-project', leader.id);
+
+      await factory.team({
+        projectId: project.id,
+        leaderId: leader.id,
+        slug: 'team-1',
+      });
+      await factory.team({
+        projectId: project.id,
+        leaderId: leader.id,
+        slug: 'team-2',
+      });
+
+      const teams = await teamService.findByLeaderId(leader.id);
+
+      expect(teams).toHaveLength(2);
+      expect(teams.every((t) => t.leaderId === leader.id)).toBe(true);
+    });
+  });
+
+  describe('findDefaultTeamByProjectId', () => {
+    it('should return the default team of the project', async () => {
+      const owner = await factory.user();
+      const project = await createProject('p-find-default', owner.id);
+      await factory.team({
+        projectId: project.id,
+        isDefault: true,
+        slug: 'the-default',
+      });
+      await factory.team({
+        projectId: project.id,
+        isDefault: false,
+        slug: 'not-default',
+      });
+
+      const team = await teamService.findDefaultTeamByProjectId(project.id);
+
+      expect(team).not.toBeNull();
+      expect(team?.slug).toBe('the-default');
+      expect(team?.isDefault).toBe(true);
+    });
+  });
+
+  describe('updateTeam', () => {
+    it('should successfully update team information', async () => {
+      const owner = await factory.user();
+      const project = await createProject('p-update', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        name: 'Old Name',
+      });
+
+      const updated = await teamService.updateTeam(team.id, {
+        name: 'New Name',
+      });
+      expect(updated.name).toBe('New Name');
+    });
+
+    it('should throw ConflictException if updated name conflicts with another team', async () => {
+      const owner = await factory.user();
+      const project = await createProject('p-conflict', owner.id);
+      await factory.team({ projectId: project.id, name: 'Existing' });
+      const myTeam = await factory.team({
+        projectId: project.id,
+        name: 'My Team',
+      });
+
+      await expect(
+        teamService.updateTeam(myTeam.id, { name: 'Existing' }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should deactivate the old default team when an existing team is updated to be the new default', async () => {
+      const owner = await factory.user();
+      const project = await createProject('p-update-default-logic', owner.id);
+
+      const oldDefault = await factory.team({
+        projectId: project.id,
+        isDefault: true,
+        slug: 'old-default',
+      });
+      const targetTeam = await factory.team({
+        projectId: project.id,
+        isDefault: false,
+        slug: 'target-team',
+      });
+
+      await teamService.updateTeam(targetTeam.id, { isDefault: true });
+
+      const updatedOldDefault = await teamRepository.findOneBy({
+        id: oldDefault.id,
+      });
+      const updatedTarget = await teamRepository.findOneBy({
+        id: targetTeam.id,
+      });
+
+      expect(updatedOldDefault?.isDefault).toBe(false);
+      expect(updatedTarget?.isDefault).toBe(true);
+    });
+  });
+
+  describe('softDelete', () => {
+    it('should perform soft delete successfully', async () => {
+      const owner = await factory.user();
+      const project = await createProject('p-delete', owner.id);
+      const team = await factory.team({ projectId: project.id });
+
+      await teamService.softDelete(team.id);
+
+      const found = await teamRepository.findOne({ where: { id: team.id } });
+      expect(found).toBeNull();
+    });
+
+    it('should throw NotFoundException when deleting non-existent team', async () => {
+      await expect(teamService.softDelete(99999)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should verify the record still exists in the database with a deletedAt timestamp after soft delete', async () => {
+      const owner = await factory.user();
+      const project = await createProject('p-soft-delete-verify', owner.id);
+      const team = await factory.team({ projectId: project.id });
+
+      await teamService.softDelete(team.id);
+
+      const deletedTeam = await teamRepository.findOne({
+        where: { id: team.id },
+        withDeleted: true,
+      });
+
+      expect(deletedTeam).not.toBeNull();
+      expect(deletedTeam?.deletedAt).toBeInstanceOf(Date);
     });
   });
 });
