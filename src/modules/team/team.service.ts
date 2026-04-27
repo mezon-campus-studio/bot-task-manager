@@ -139,18 +139,20 @@ export class TeamService extends CRUDService<TeamEntity> {
         });
         if (!team) throw new NotFoundException('Team not found');
 
-        if (input.name || input.slug) {
+        const targetProjectId = input.projectId ?? team.projectId;
+
+        if (input.name || input.slug || input.projectId) {
           const duplicate = await transactionalEntityManager.findOne(
             TeamEntity,
             {
               where: [
                 {
-                  projectId: team.projectId,
+                  projectId: targetProjectId,
                   slug: input.slug ?? team.slug,
                   id: Not(id),
                 },
                 {
-                  projectId: team.projectId,
+                  projectId: targetProjectId,
                   name: input.name ?? team.name,
                   id: Not(id),
                 },
@@ -160,7 +162,7 @@ export class TeamService extends CRUDService<TeamEntity> {
 
           if (duplicate) {
             throw new ConflictException(
-              'New name or slug already exists in this project',
+              'New name or slug already exists in the target project',
             );
           }
         }
@@ -168,7 +170,10 @@ export class TeamService extends CRUDService<TeamEntity> {
         if (input.isDefault === true) {
           await transactionalEntityManager.update(
             TeamEntity,
-            { projectId: team.projectId, isDefault: true },
+            {
+              projectId: targetProjectId,
+              isDefault: true,
+            },
             { isDefault: false },
           );
         }
