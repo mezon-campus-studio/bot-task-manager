@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import TaskEntity from '@src/modules/task/task.entity';
+import TeamEntity from '@src/modules/team/team.entity';
 import TicketEntity from '@src/modules/ticket/ticket.entity';
 import UserEntity from '@src/modules/user/user.entity';
 import {
@@ -8,6 +9,7 @@ import {
   messageButtonClicked as messageButtonClickedFactory,
   role as roleFactory,
   task as taskFactory,
+  team as teamFactory,
   ticket as ticketFactory,
   user as userFactory,
 } from '@src/repl-modules/factories';
@@ -30,6 +32,8 @@ export class DatabaseSeeder {
       tickets = 5,
       ticket = {},
       roles = 3,
+      teams = 2,
+      team = {},
     } = options;
 
     this.logger.log('Starting database seeding...');
@@ -39,16 +43,22 @@ export class DatabaseSeeder {
     const seededUsers = await this.createUsers(users, user);
     const seededTasks = await this.createTasks(tasks, task);
     const seededTickets = await this.createTickets(tickets, ticket);
+    const seededTeams = await this.createTeams(teams, {
+      leaderId: seededUsers[0].id,
+      ...team,
+    });
 
     this.logger.log(`Seeded ${seededUsers.length} users`);
     this.logger.log(`Seeded ${seededTasks.length} tasks`);
     this.logger.log(`Seeded ${seededTickets.length} tickets`);
+    this.logger.log(`Seeded ${seededTeams.length} teams`);
 
     return {
       roles: seededRoles,
       tasks: seededTasks,
       tickets: seededTickets,
       users: seededUsers,
+      teams: seededTeams,
     };
   }
 
@@ -62,6 +72,14 @@ export class DatabaseSeeder {
 
   async createTasks(count = 1, input: Partial<TaskEntity> = {}) {
     return taskFactory(
+      Array.from({ length: count }, () => ({
+        ...input,
+      })),
+    );
+  }
+
+  async createTeams(count = 1, input: Partial<TeamEntity> = {}) {
+    return teamFactory(
       Array.from({ length: count }, () => ({
         ...input,
       })),
@@ -129,6 +147,8 @@ type SeedOptions = {
   users?: number;
   user?: Partial<UserEntity>;
   roles?: number;
+  teams?: number;
+  team?: Partial<TeamEntity>;
 };
 
 type SeedResult = {
@@ -136,4 +156,5 @@ type SeedResult = {
   tickets: TicketEntity[];
   users: UserEntity[];
   roles: RoleEntity[];
+  teams: TeamEntity[];
 };

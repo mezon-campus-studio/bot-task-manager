@@ -1,7 +1,7 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
-  name = 'ChangeDecoratorDelete1776784618570';
+export class InitialSchema1777266421961 implements MigrationInterface {
+  name = 'InitialSchema1777266421961';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
@@ -20,6 +20,15 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
       `CREATE UNIQUE INDEX "user_role_assignments_system_scope_key" ON "user_role_assignments" ("user_id", "role_id") WHERE "scope_type" = 'SYSTEM'`,
     );
     await queryRunner.query(
+      `CREATE TYPE "public"."team_members_status_enum" AS ENUM('INVITED', 'ACTIVE', 'DECLINED', 'REMOVED')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "team_members" ("id" SERIAL NOT NULL, "team_id" integer NOT NULL, "user_id" uuid NOT NULL, "status" "public"."team_members_status_enum" NOT NULL, "invited_by_user_id" uuid, "joined_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_ca3eae89dcf20c9fd95bf7460aa" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE UNIQUE INDEX "team_members_team_id_user_id_key" ON "team_members" ("team_id", "user_id") `,
+    );
+    await queryRunner.query(
       `CREATE TYPE "public"."users_role_enum" AS ENUM('0', '1', '2', '3')`,
     );
     await queryRunner.query(
@@ -35,37 +44,13 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
       `CREATE UNIQUE INDEX "UQ_users_mezon_id" ON "users" ("mezon_id") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."tickets_status_enum" AS ENUM('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')`,
+      `CREATE TYPE "public"."teams_status_enum" AS ENUM('active', 'inactive')`,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."tickets_severity_enum" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`,
+      `CREATE TABLE "teams" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "name" character varying NOT NULL, "leader_id" uuid, "slug" character varying NOT NULL, "description" text, "is_default" boolean NOT NULL DEFAULT false, "status" "public"."teams_status_enum" NOT NULL DEFAULT 'active', "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_7e5523774a38b08a6236d322403" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
-      `CREATE TABLE "tickets" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "assignee_user_id" uuid, "reporter_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."tickets_status_enum" NOT NULL DEFAULT 'OPEN', "severity" "public"."tickets_severity_enum" NOT NULL DEFAULT 'MEDIUM', "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY ("id"))`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_tickets_reporter" ON "tickets" ("reporter_user_id") `,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_tickets_assignee_status" ON "tickets" ("assignee_user_id", "status") `,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_tickets_project_team" ON "tickets" ("project_id", "team_id") `,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_tickets_project_status" ON "tickets" ("project_id", "status") `,
-    );
-    await queryRunner.query(
-      `CREATE TYPE "public"."team_members_status_enum" AS ENUM('INVITED', 'ACTIVE', 'DECLINED', 'REMOVED')`,
-    );
-    await queryRunner.query(
-      `CREATE TABLE "team_members" ("id" SERIAL NOT NULL, "team_id" integer NOT NULL, "user_id" uuid NOT NULL, "status" "public"."team_members_status_enum" NOT NULL, "invited_by_user_id" uuid, "joined_at" TIMESTAMP WITH TIME ZONE, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_ca3eae89dcf20c9fd95bf7460aa" PRIMARY KEY ("id"))`,
-    );
-    await queryRunner.query(
-      `CREATE UNIQUE INDEX "team_members_team_id_user_id_key" ON "team_members" ("team_id", "user_id") `,
-    );
-    await queryRunner.query(
-      `CREATE TABLE "teams" ("id" SERIAL NOT NULL, "project_id" integer NOT NULL, "name" character varying NOT NULL, "slug" character varying NOT NULL, "description" text, "is_default" boolean NOT NULL DEFAULT false, "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_7e5523774a38b08a6236d322403" PRIMARY KEY ("id"))`,
+      `CREATE INDEX "IDX_teams_leader_id" ON "teams" ("leader_id") `,
     );
     await queryRunner.query(
       `CREATE UNIQUE INDEX "teams_project_id_name_key" ON "teams" ("project_id", "name") `,
@@ -110,6 +95,27 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
       `CREATE UNIQUE INDEX "roles_key_key" ON "roles" ("key") `,
     );
     await queryRunner.query(
+      `CREATE TYPE "public"."tickets_status_enum" AS ENUM('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."tickets_severity_enum" AS ENUM('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "tickets" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "team_id" integer, "assignee_user_id" uuid, "reporter_user_id" uuid NOT NULL, "title" character varying(255) NOT NULL, "description" text, "status" "public"."tickets_status_enum" NOT NULL DEFAULT 'OPEN', "severity" "public"."tickets_severity_enum" NOT NULL DEFAULT 'MEDIUM', "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_343bc942ae261cf7a1377f48fd0" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_reporter" ON "tickets" ("reporter_user_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_assignee_status" ON "tickets" ("assignee_user_id", "status") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_project_team" ON "tickets" ("project_id", "team_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_tickets_project_status" ON "tickets" ("project_id", "status") `,
+    );
+    await queryRunner.query(
       `CREATE TYPE "public"."projects_onboarding_status_enum" AS ENUM('PENDING', 'IN_PROGRESS', 'COMPLETED')`,
     );
     await queryRunner.query(
@@ -146,21 +152,6 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
       `CREATE UNIQUE INDEX "permissions_key_key" ON "permissions" ("key") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."notes_resource_type_enum" AS ENUM('USER', 'PROJECT', 'TEAM', 'TASK', 'TICKET', 'EVENT')`,
-    );
-    await queryRunner.query(
-      `CREATE TABLE "notes" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "author_user_id" uuid NOT NULL, "resource_type" "public"."notes_resource_type_enum" NOT NULL, "resource_id" character varying NOT NULL, "content" text NOT NULL, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_af6206538ea96c4e77e9f400c3d" PRIMARY KEY ("id"))`,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_notes_resource" ON "notes" ("resource_type", "resource_id") `,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_notes_project_resource" ON "notes" ("project_id", "resource_type", "resource_id") `,
-    );
-    await queryRunner.query(
-      `CREATE INDEX "IDX_notes_project_author" ON "notes" ("project_id", "author_user_id") `,
-    );
-    await queryRunner.query(
       `CREATE TYPE "public"."events_status_enum" AS ENUM('DRAFT', 'SCHEDULED', 'CANCELLED', 'COMPLETED')`,
     );
     await queryRunner.query(
@@ -177,6 +168,21 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
     );
     await queryRunner.query(
       `CREATE TABLE "messages" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "message_id" character varying NOT NULL, "type" character varying NOT NULL DEFAULT 'reply', "owner_id" character varying NOT NULL, "channel_id" character varying NOT NULL, "bill_id" integer, CONSTRAINT "PK_6187089f850b8deeca0232cfeba" PRIMARY KEY ("message_id"))`,
+    );
+    await queryRunner.query(
+      `CREATE TYPE "public"."notes_resource_type_enum" AS ENUM('USER', 'PROJECT', 'TEAM', 'TASK', 'TICKET', 'EVENT')`,
+    );
+    await queryRunner.query(
+      `CREATE TABLE "notes" ("created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "created_by" uuid, "updated_by" uuid, "id" SERIAL NOT NULL, "project_id" integer NOT NULL, "author_user_id" uuid NOT NULL, "resource_type" "public"."notes_resource_type_enum" NOT NULL, "resource_id" character varying NOT NULL, "content" text NOT NULL, "deleted_at" TIMESTAMP WITH TIME ZONE, CONSTRAINT "PK_af6206538ea96c4e77e9f400c3d" PRIMARY KEY ("id"))`,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_notes_resource" ON "notes" ("resource_type", "resource_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_notes_project_resource" ON "notes" ("project_id", "resource_type", "resource_id") `,
+    );
+    await queryRunner.query(
+      `CREATE INDEX "IDX_notes_project_author" ON "notes" ("project_id", "author_user_id") `,
     );
     await queryRunner.query(
       `ALTER TABLE "projects" ADD CONSTRAINT "FK_30f70ec4c2d480f78aa55925777" FOREIGN KEY ("ownerUserId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
@@ -205,6 +211,11 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "projects" DROP CONSTRAINT "FK_30f70ec4c2d480f78aa55925777"`,
     );
+    await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_author"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_resource"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_notes_resource"`);
+    await queryRunner.query(`DROP TABLE "notes"`);
+    await queryRunner.query(`DROP TYPE "public"."notes_resource_type_enum"`);
     await queryRunner.query(`DROP TABLE "messages"`);
     await queryRunner.query(
       `DROP INDEX "public"."IDX_events_project_status_starts_at"`,
@@ -213,11 +224,6 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
     await queryRunner.query(`DROP INDEX "public"."IDX_events_owner_status"`);
     await queryRunner.query(`DROP TABLE "events"`);
     await queryRunner.query(`DROP TYPE "public"."events_status_enum"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_author"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_notes_project_resource"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_notes_resource"`);
-    await queryRunner.query(`DROP TABLE "notes"`);
-    await queryRunner.query(`DROP TYPE "public"."notes_resource_type_enum"`);
     await queryRunner.query(`DROP INDEX "public"."permissions_key_key"`);
     await queryRunner.query(
       `DROP INDEX "public"."permissions_resource_action_key"`,
@@ -240,6 +246,15 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
     await queryRunner.query(
       `DROP TYPE "public"."projects_onboarding_status_enum"`,
     );
+    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_status"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_team"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."IDX_tickets_assignee_status"`,
+    );
+    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_reporter"`);
+    await queryRunner.query(`DROP TABLE "tickets"`);
+    await queryRunner.query(`DROP TYPE "public"."tickets_severity_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."tickets_status_enum"`);
     await queryRunner.query(`DROP INDEX "public"."roles_key_key"`);
     await queryRunner.query(`DROP TABLE "roles"`);
     await queryRunner.query(`DROP TYPE "public"."roles_scope_type_enum"`);
@@ -256,21 +271,9 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
     await queryRunner.query(`DROP TYPE "public"."tasks_status_enum"`);
     await queryRunner.query(`DROP INDEX "public"."teams_project_id_slug_key"`);
     await queryRunner.query(`DROP INDEX "public"."teams_project_id_name_key"`);
+    await queryRunner.query(`DROP INDEX "public"."IDX_teams_leader_id"`);
     await queryRunner.query(`DROP TABLE "teams"`);
-    await queryRunner.query(
-      `DROP INDEX "public"."team_members_team_id_user_id_key"`,
-    );
-    await queryRunner.query(`DROP TABLE "team_members"`);
-    await queryRunner.query(`DROP TYPE "public"."team_members_status_enum"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_status"`);
-    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_project_team"`);
-    await queryRunner.query(
-      `DROP INDEX "public"."IDX_tickets_assignee_status"`,
-    );
-    await queryRunner.query(`DROP INDEX "public"."IDX_tickets_reporter"`);
-    await queryRunner.query(`DROP TABLE "tickets"`);
-    await queryRunner.query(`DROP TYPE "public"."tickets_severity_enum"`);
-    await queryRunner.query(`DROP TYPE "public"."tickets_status_enum"`);
+    await queryRunner.query(`DROP TYPE "public"."teams_status_enum"`);
     await queryRunner.query(`DROP INDEX "public"."UQ_users_mezon_id"`);
     await queryRunner.query(
       `DROP INDEX "public"."IDX_users_current_project_id"`,
@@ -278,6 +281,11 @@ export class ChangeDecoratorDelete1776784618570 implements MigrationInterface {
     await queryRunner.query(`DROP TABLE "users"`);
     await queryRunner.query(`DROP TYPE "public"."users_status_enum"`);
     await queryRunner.query(`DROP TYPE "public"."users_role_enum"`);
+    await queryRunner.query(
+      `DROP INDEX "public"."team_members_team_id_user_id_key"`,
+    );
+    await queryRunner.query(`DROP TABLE "team_members"`);
+    await queryRunner.query(`DROP TYPE "public"."team_members_status_enum"`);
     await queryRunner.query(
       `DROP INDEX "public"."user_role_assignments_system_scope_key"`,
     );
