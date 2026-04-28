@@ -33,6 +33,13 @@ export type UpdateTaskStatusInput = Pick<TaskEntity, 'status'> & {
   authorUserId: string;
 };
 
+export type QueryTasksInput = Partial<
+  Pick<
+    TaskEntity,
+    'teamId' | 'assigneeUserId' | 'reporterUserId' | 'status' | 'priority'
+  >
+>;
+
 @Injectable()
 export class TaskService extends CRUDService<TaskEntity> {
   private readonly logger = new Logger(TaskService.name);
@@ -205,6 +212,65 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     this.logger.log({
       log: 'Got tasks by project result',
+      projectId,
+      count: result.length,
+      taskIds: result.map(({ id }) => id),
+    });
+
+    return result;
+  }
+
+  async queryTasks(
+    projectId: number,
+    input: QueryTasksInput,
+  ): Promise<TaskEntity[]> {
+    this.logger.log({
+      log: 'Attempting to query tasks',
+      projectId,
+      input,
+    });
+
+    const queryBuilder = this.taskRepository
+      .createQueryBuilder('task')
+      .where('task.projectId = :projectId', { projectId });
+
+    if (input.teamId != null) {
+      queryBuilder.andWhere('task.teamId = :teamId', {
+        teamId: input.teamId,
+      });
+    }
+
+    if (input.assigneeUserId != null) {
+      queryBuilder.andWhere('task.assigneeUserId = :assigneeUserId', {
+        assigneeUserId: input.assigneeUserId,
+      });
+    }
+
+    if (input.reporterUserId != null) {
+      queryBuilder.andWhere('task.reporterUserId = :reporterUserId', {
+        reporterUserId: input.reporterUserId,
+      });
+    }
+
+    if (input.status != null) {
+      queryBuilder.andWhere('task.status = :status', {
+        status: input.status,
+      });
+    }
+
+    if (input.priority != null) {
+      queryBuilder.andWhere('task.priority = :priority', {
+        priority: input.priority,
+      });
+    }
+
+    const result = await queryBuilder
+      .orderBy('task.dueAt', 'ASC')
+      .addOrderBy('task.id', 'DESC')
+      .getMany();
+
+    this.logger.log({
+      log: 'Got task query result',
       projectId,
       count: result.length,
       taskIds: result.map(({ id }) => id),

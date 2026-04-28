@@ -7,10 +7,12 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { QueryTasksDto } from './dto/query-tasks.dto';
 import { UpdateTaskStatusDto } from './dto/update-task-status.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { TaskService } from './task.service';
@@ -39,6 +41,14 @@ export class TaskController {
     @Body() body: AssignTaskDto,
   ) {
     return this.taskService.reassignTask(id, body.assigneeUserId);
+  }
+
+  @Get('project/:projectId')
+  async getTasksByProject(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Query() query: QueryTasksDto,
+  ) {
+    return this.taskService.queryTasks(projectId, query);
   }
 
   @Get(':id')
