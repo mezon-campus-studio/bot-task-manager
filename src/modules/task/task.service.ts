@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { AppPaginationDto } from '@src/common/dtos/paginate.dto';
+import { SearchOrder } from '@src/common/enums';
 import { CRUDService } from '@src/common/utils/crud';
 import { NoteResourceType } from '@src/modules/note/enums';
 import NoteEntity from '@src/modules/note/note.entity';
@@ -39,7 +41,11 @@ export type QueryTasksInput = Partial<
     'teamId' | 'assigneeUserId' | 'reporterUserId' | 'status' | 'priority'
   >
 > & {
+  order?: SearchOrder;
+  page?: number;
   q?: string;
+  skip?: number;
+  take?: number;
 };
 
 @Injectable()
@@ -225,7 +231,7 @@ export class TaskService extends CRUDService<TaskEntity> {
   async queryTasks(
     projectId: number,
     input: QueryTasksInput,
-  ): Promise<TaskEntity[]> {
+  ): Promise<AppPaginationDto<TaskEntity>> {
     this.logger.log({
       log: 'Attempting to query tasks',
       projectId,
@@ -277,19 +283,31 @@ export class TaskService extends CRUDService<TaskEntity> {
       );
     }
 
-    const result = await queryBuilder
+    const page = input.page ?? 1;
+    const take = input.take ?? 10;
+    const skip = input.skip ?? (page - 1) * take;
+
+    const [result, total] = await queryBuilder
       .orderBy('task.dueAt', 'ASC')
-      .addOrderBy('task.id', 'DESC')
-      .getMany();
+      .addOrderBy('task.id', input.order ?? SearchOrder.DESC)
+      .skip(skip)
+      .take(take)
+      .getManyAndCount();
 
     this.logger.log({
       log: 'Got task query result',
       projectId,
       count: result.length,
+      total,
       taskIds: result.map(({ id }) => id),
     });
 
-    return result;
+    return {
+      page,
+      pageSize: take,
+      result,
+      total,
+    };
   }
 
   async findById(id: number): Promise<TaskEntity | null> {
