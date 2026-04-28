@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
+import { SearchOrder } from '@src/common/enums';
 import { NoteResourceType } from '@src/modules/note/enums';
 import NoteEntity from '@src/modules/note/note.entity';
 import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
@@ -264,7 +265,7 @@ describe(TaskService.name, () => {
       reporterUserId,
       title: 'Second paginated task',
     });
-    await factory.task({
+    const thirdTask = await factory.task({
       dueAt: new Date('2026-08-03T09:00:00.000Z'),
       projectId,
       reporterUserId,
@@ -284,6 +285,17 @@ describe(TaskService.name, () => {
     expect(result.result).toHaveLength(1);
     expect(result.result[0]).toMatchObject({
       id: secondTask.id,
+      projectId,
+    });
+
+    const descendingResult = await taskService.queryTasks(projectId, {
+      order: SearchOrder.DESC,
+      page: 1,
+      take: 1,
+    });
+
+    expect(descendingResult.result[0]).toMatchObject({
+      id: thirdTask.id,
       projectId,
     });
   });

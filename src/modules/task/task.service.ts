@@ -286,10 +286,11 @@ export class TaskService extends CRUDService<TaskEntity> {
     const page = input.page ?? 1;
     const take = input.take ?? 10;
     const skip = input.skip ?? (page - 1) * take;
+    const order = input.order ?? SearchOrder.ASC;
 
     const [result, total] = await queryBuilder
-      .orderBy('task.dueAt', 'ASC')
-      .addOrderBy('task.id', input.order ?? SearchOrder.DESC)
+      .orderBy('task.dueAt', order)
+      .addOrderBy('task.id', SearchOrder.DESC)
       .skip(skip)
       .take(take)
       .getManyAndCount();
