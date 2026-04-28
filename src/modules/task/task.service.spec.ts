@@ -157,6 +157,137 @@ describe(TaskService.name, () => {
     expect(tasks.every((task) => task.projectId === projectId)).toBe(true);
   });
 
+  it('should query tasks by project and supported filters', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
+    const team = await factory.team({
+      projectId,
+    });
+    const otherProject = await factory.project({});
+
+    const matchingTask = await factory.task({
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      projectId,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: team.id,
+      title: 'Review the matched task filter',
+    });
+
+    await factory.task({
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      projectId,
+      reporterUserId,
+      status: TaskStatus.TODO,
+      teamId: team.id,
+      title: 'Ignore task with different status',
+    });
+    await factory.task({
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      projectId: otherProject.id,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: team.id,
+      title: 'Ignore matching task from another project',
+    });
+
+    const result = await taskService.queryTasks(projectId, {
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: team.id,
+    });
+
+    expect(result).toMatchObject({
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    });
+    expect(result.result).toHaveLength(1);
+    expect(result.result[0]).toMatchObject({
+      id: matchingTask.id,
+      projectId,
+      status: TaskStatus.IN_PROGRESS,
+    });
+  });
+
+  it('should search project tasks by keyword in title or description', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const otherProject = await factory.project({});
+
+    const titleMatchTask = await factory.task({
+      description: null,
+      projectId,
+      reporterUserId,
+      title: 'Prepare advisor onboarding notes',
+    });
+    const descriptionMatchTask = await factory.task({
+      description: 'Confirm the ADVISOR invite list before launch.',
+      projectId,
+      reporterUserId,
+      title: 'Prepare invite list',
+    });
+
+    await factory.task({
+      description: 'Advisor keyword belongs to another project.',
+      projectId: otherProject.id,
+      title: 'Ignore cross project keyword',
+    });
+
+    const result = await taskService.queryTasks(projectId, {
+      q: 'advisor',
+    });
+
+    expect(result.total).toBe(2);
+    expect(result.result.map(({ id }) => id)).toEqual([
+      descriptionMatchTask.id,
+      titleMatchTask.id,
+    ]);
+  });
+
+  it('should paginate task query results with a stable order', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+
+    await factory.task({
+      dueAt: new Date('2026-08-01T09:00:00.000Z'),
+      projectId,
+      reporterUserId,
+      title: 'First paginated task',
+    });
+    const secondTask = await factory.task({
+      dueAt: new Date('2026-08-02T09:00:00.000Z'),
+      projectId,
+      reporterUserId,
+      title: 'Second paginated task',
+    });
+    await factory.task({
+      dueAt: new Date('2026-08-03T09:00:00.000Z'),
+      projectId,
+      reporterUserId,
+      title: 'Third paginated task',
+    });
+
+    const result = await taskService.queryTasks(projectId, {
+      page: 2,
+      take: 1,
+    });
+
+    expect(result).toMatchObject({
+      page: 2,
+      pageSize: 1,
+      total: 3,
+    });
+    expect(result.result).toHaveLength(1);
+    expect(result.result[0]).toMatchObject({
+      id: secondTask.id,
+      projectId,
+    });
+  });
+
   it('should assign a task to an active project member', async () => {
     const { projectId, reporterUserId } = await createProjectTaskContext();
     const assignee = await factory.user({});
