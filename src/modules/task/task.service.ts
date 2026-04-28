@@ -38,7 +38,9 @@ export type QueryTasksInput = Partial<
     TaskEntity,
     'teamId' | 'assigneeUserId' | 'reporterUserId' | 'status' | 'priority'
   >
->;
+> & {
+  q?: string;
+};
 
 @Injectable()
 export class TaskService extends CRUDService<TaskEntity> {
@@ -262,6 +264,17 @@ export class TaskService extends CRUDService<TaskEntity> {
       queryBuilder.andWhere('task.priority = :priority', {
         priority: input.priority,
       });
+    }
+
+    const keyword = input.q?.trim();
+
+    if (keyword) {
+      queryBuilder.andWhere(
+        '(task.title ILIKE :keyword OR task.description ILIKE :keyword)',
+        {
+          keyword: `%${keyword}%`,
+        },
+      );
     }
 
     const result = await queryBuilder
