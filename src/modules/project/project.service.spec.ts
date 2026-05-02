@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { createTestingModule, factory, testingModule } from '#jest';
 import { ProjectOnboardingStatus } from './project.enums';
 import { ProjectService } from './project.service';
@@ -60,6 +61,28 @@ describe(ProjectService.name, () => {
       ownerUserId: owner.id,
       slug: 'campus-beta',
     });
+  });
+
+  it('rejects creating a project with an existing slug', async () => {
+    const owner = await factory.user({
+      email: 'project-owner-duplicate@example.com',
+      mezonId: 'project-owner-duplicate',
+      name: 'Project Owner Duplicate',
+    });
+
+    await projectService.createProject({
+      name: 'Campus Duplicate',
+      ownerUserId: owner.id,
+      slug: 'campus-duplicate',
+    });
+
+    await expect(
+      projectService.createProject({
+        name: 'Campus Duplicate Copy',
+        ownerUserId: owner.id,
+        slug: 'campus-duplicate',
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('finds a project by internal id', async () => {
@@ -147,6 +170,23 @@ describe(ProjectService.name, () => {
       name: 'Campus Update Final',
       slug: 'campus-update-final',
     });
+  });
+
+  it('rejects updating a project to an existing slug', async () => {
+    await factory.project({
+      name: 'Campus Existing Slug',
+      slug: 'campus-existing-slug',
+    });
+    const project = await factory.project({
+      name: 'Campus Target Slug',
+      slug: 'campus-target-slug',
+    });
+
+    await expect(
+      projectService.updateProject(project.id, {
+        slug: 'campus-existing-slug',
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('returns null when updating a missing project', async () => {

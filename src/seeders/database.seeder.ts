@@ -50,16 +50,16 @@ export class DatabaseSeeder {
       ...project,
     });
     const seededTasks = await this.createTasks(tasks, {
-      projectId: seededProjects[0].id,
+      projectId: seededProjects[0]?.id,
       ...task,
     });
     const seededTickets = await this.createTickets(tickets, {
-      projectId: seededProjects[0].id,
+      projectId: seededProjects[0]?.id,
       ...ticket,
     });
     const seededTeams = await this.createTeams(teams, {
       leaderId: seededUsers[0].id,
-      projectId: seededProjects[0].id,
+      projectId: seededProjects[0]?.id,
       ...team,
     });
 

@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import ProjectEntity from './project.entity';
 import { ProjectOnboardingStatus } from './project.enums';
@@ -33,6 +33,22 @@ export class ProjectService extends CRUDService<ProjectEntity> {
       slug: input.slug,
       onboardingStatus: input.onboardingStatus,
     });
+
+    const existingProject = await this.projectRepository.findOne({
+      where: { slug: input.slug },
+    });
+
+    if (existingProject != null) {
+      this.logger.log({
+        log: 'Project creation failed because slug already exists',
+        existingProjectId: existingProject.id,
+        slug: input.slug,
+      });
+
+      throw new ConflictException(
+        `Project with slug ${input.slug} already exists`,
+      );
+    }
 
     const project = this.projectRepository.create({
       ...input,
@@ -132,6 +148,28 @@ export class ProjectService extends CRUDService<ProjectEntity> {
     }
 
     Object.assign(project, input);
+
+    if (input.slug != null) {
+      const duplicateProject = await this.projectRepository.findOne({
+        where: {
+          id: Not(projectId),
+          slug: input.slug,
+        },
+      });
+
+      if (duplicateProject != null) {
+        this.logger.log({
+          log: 'Project update failed because slug already exists',
+          duplicateProjectId: duplicateProject.id,
+          projectId,
+          slug: input.slug,
+        });
+
+        throw new ConflictException(
+          `Project with slug ${input.slug} already exists`,
+        );
+      }
+    }
 
     if (input.ownerUserId != null) {
       project.ownerUser = { id: input.ownerUserId } as never;
