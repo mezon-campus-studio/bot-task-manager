@@ -1,4 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
@@ -177,6 +182,22 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
     });
 
     await this.validateInviteInput(input, this.projectMemberRepository.manager);
+
+    const existingMembership = await this.findByProjectAndUser(
+      input.projectId,
+      input.userId,
+    );
+
+    if (existingMembership != null) {
+      this.logger.log({
+        log: 'Project member invite failed because membership already exists',
+        membershipId: existingMembership.id,
+        projectId: input.projectId,
+        userId: input.userId,
+      });
+
+      throw new ConflictException('Project member already exists');
+    }
 
     const membership = this.projectMemberRepository.create({
       invitedByUser:
