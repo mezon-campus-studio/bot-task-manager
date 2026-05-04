@@ -228,6 +228,51 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
     return result;
   }
 
+  async removeProjectMember(
+    projectId: number,
+    userId: string,
+  ): Promise<boolean> {
+    this.logger.log({
+      log: 'Attempting to remove project member',
+      projectId,
+      userId,
+    });
+
+    const membership = await this.findByProjectAndUser(projectId, userId);
+
+    await this.validateProjectOwnerRemoval(
+      projectId,
+      userId,
+      this.projectMemberRepository.manager,
+    );
+
+    if (
+      membership == null ||
+      membership.status === ProjectMemberStatus.REMOVED
+    ) {
+      this.logger.log({
+        log: 'Fallback project member remove result because membership was not active',
+        projectId,
+        status: membership?.status ?? null,
+        userId,
+      });
+
+      return false;
+    }
+
+    membership.status = ProjectMemberStatus.REMOVED;
+    await this.projectMemberRepository.save(membership);
+
+    this.logger.log({
+      log: 'Project member remove result',
+      membershipId: membership.id,
+      projectId,
+      userId,
+    });
+
+    return true;
+  }
+
   private async validateInviteInput(
     input: InviteProjectMemberInput,
     transactionalEntityManager: EntityManager,
@@ -258,6 +303,24 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
 
     if (inviter == null) {
       throw new NotFoundException('Inviter not found');
+    }
+  }
+
+  private async validateProjectOwnerRemoval(
+    projectId: number,
+    userId: string,
+    transactionalEntityManager: EntityManager,
+  ): Promise<void> {
+    const project = await transactionalEntityManager.findOne(ProjectEntity, {
+      where: { id: projectId },
+    });
+
+    if (project == null) {
+      return;
+    }
+
+    if (project.ownerUserId === userId) {
+      throw new ConflictException('Project owner cannot be removed');
     }
   }
 }

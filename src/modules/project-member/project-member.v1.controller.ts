@@ -1,4 +1,12 @@
-import { Body, Controller, Param, ParseIntPipe, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Param,
+  ParseIntPipe,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { InviteProjectMemberDto } from './dtos/invite-project-member.dto';
 import { ProjectMemberService } from './project-member.service';
@@ -17,5 +25,13 @@ export class ProjectMemberV1Controller {
       ...body,
       projectId,
     });
+  }
+
+  @Delete(':userId')
+  async removeProjectMember(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.projectMemberService.removeProjectMember(projectId, userId);
   }
 }
