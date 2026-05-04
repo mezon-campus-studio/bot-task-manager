@@ -11,6 +11,12 @@ type UpsertProjectMemberInput = Pick<
 > &
   Partial<Pick<ProjectMemberEntity, 'invitedByUserId' | 'joinedAt' | 'status'>>;
 
+type InviteProjectMemberInput = Pick<
+  ProjectMemberEntity,
+  'projectId' | 'userId'
+> &
+  Partial<Pick<ProjectMemberEntity, 'invitedByUserId'>>;
+
 @Injectable()
 export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
   private readonly logger = new Logger(ProjectMemberService.name);
@@ -152,6 +158,45 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
         projectId: result.projectId,
         userId: result.userId,
         status: result.status,
+      },
+    });
+
+    return result;
+  }
+
+  async inviteProjectMember(
+    input: InviteProjectMemberInput,
+  ): Promise<ProjectMemberEntity> {
+    this.logger.log({
+      log: 'Attempting to invite project member',
+      projectId: input.projectId,
+      userId: input.userId,
+      invitedByUserId: input.invitedByUserId,
+    });
+
+    const membership = this.projectMemberRepository.create({
+      invitedByUser:
+        input.invitedByUserId == null
+          ? null
+          : ({ id: input.invitedByUserId } as never),
+      invitedByUserId: input.invitedByUserId ?? null,
+      joinedAt: null,
+      project: { id: input.projectId } as never,
+      projectId: input.projectId,
+      status: ProjectMemberStatus.INVITED,
+      user: { id: input.userId } as never,
+      userId: input.userId,
+    });
+
+    const result = await this.projectMemberRepository.save(membership);
+
+    this.logger.log({
+      log: 'Project member invite result',
+      result: {
+        id: result.id,
+        projectId: result.projectId,
+        status: result.status,
+        userId: result.userId,
       },
     });
 
