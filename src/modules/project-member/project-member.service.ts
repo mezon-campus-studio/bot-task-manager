@@ -191,6 +191,35 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
     );
 
     if (existingMembership != null) {
+      if (existingMembership.status === ProjectMemberStatus.REMOVED) {
+        const membership = this.projectMemberRepository.merge(
+          existingMembership,
+          {
+            invitedByUser:
+              input.invitedByUserId == null
+                ? null
+                : ({ id: input.invitedByUserId } as never),
+            invitedByUserId: input.invitedByUserId ?? null,
+            joinedAt: null,
+            status: ProjectMemberStatus.INVITED,
+          },
+        );
+
+        const result = await this.saveInvitedMembership(membership, input);
+
+        this.logger.log({
+          log: 'Project member re-invite result',
+          result: {
+            id: result.id,
+            projectId: result.projectId,
+            status: result.status,
+            userId: result.userId,
+          },
+        });
+
+        return result;
+      }
+
       this.logger.log({
         log: 'Project member invite failed because membership already exists',
         membershipId: existingMembership.id,
@@ -215,23 +244,7 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
       userId: input.userId,
     });
 
-    const result = await this.projectMemberRepository.manager.transaction(
-      async (transactionalEntityManager) => {
-        const savedMembership =
-          await transactionalEntityManager.save(membership);
-
-        await this.projectMemberRoleSyncService.assignDefaultProjectMemberRole(
-          {
-            assignedByUserId: input.invitedByUserId ?? null,
-            projectId: input.projectId,
-            userId: input.userId,
-          },
-          transactionalEntityManager,
-        );
-
-        return savedMembership;
-      },
-    );
+    const result = await this.saveInvitedMembership(membership, input);
 
     this.logger.log({
       log: 'Project member invite result',
@@ -349,5 +362,28 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
     if (project.ownerUserId === userId) {
       throw new ConflictException('Project owner cannot be removed');
     }
+  }
+
+  private async saveInvitedMembership(
+    membership: ProjectMemberEntity,
+    input: InviteProjectMemberInput,
+  ): Promise<ProjectMemberEntity> {
+    return this.projectMemberRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const savedMembership =
+          await transactionalEntityManager.save(membership);
+
+        await this.projectMemberRoleSyncService.assignDefaultProjectMemberRole(
+          {
+            assignedByUserId: input.invitedByUserId ?? null,
+            projectId: input.projectId,
+            userId: input.userId,
+          },
+          transactionalEntityManager,
+        );
+
+        return savedMembership;
+      },
+    );
   }
 }
