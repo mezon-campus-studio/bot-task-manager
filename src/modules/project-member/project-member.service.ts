@@ -9,6 +9,7 @@ import { EntityManager, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import ProjectEntity from '@src/modules/project/project.entity';
 import UserEntity from '@src/modules/user/user.entity';
+import { ProjectMemberRoleSyncService } from './project-member-role-sync.service';
 import { ProjectMemberStatus } from './project-member-status.enum';
 import ProjectMemberEntity from './project-member.entity';
 
@@ -31,6 +32,7 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
   constructor(
     @InjectRepository(ProjectMemberEntity)
     private projectMemberRepository: Repository<ProjectMemberEntity>,
+    private readonly projectMemberRoleSyncService: ProjectMemberRoleSyncService,
   ) {
     super(projectMemberRepository);
   }
@@ -213,7 +215,23 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
       userId: input.userId,
     });
 
-    const result = await this.projectMemberRepository.save(membership);
+    const result = await this.projectMemberRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const savedMembership =
+          await transactionalEntityManager.save(membership);
+
+        await this.projectMemberRoleSyncService.assignDefaultProjectMemberRole(
+          {
+            assignedByUserId: input.invitedByUserId ?? null,
+            projectId: input.projectId,
+            userId: input.userId,
+          },
+          transactionalEntityManager,
+        );
+
+        return savedMembership;
+      },
+    );
 
     this.logger.log({
       log: 'Project member invite result',
@@ -260,8 +278,17 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
       return false;
     }
 
-    membership.status = ProjectMemberStatus.REMOVED;
-    await this.projectMemberRepository.save(membership);
+    await this.projectMemberRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        membership.status = ProjectMemberStatus.REMOVED;
+        await transactionalEntityManager.save(membership);
+        await this.projectMemberRoleSyncService.removeDefaultProjectMemberRole(
+          projectId,
+          userId,
+          transactionalEntityManager,
+        );
+      },
+    );
 
     this.logger.log({
       log: 'Project member remove result',
