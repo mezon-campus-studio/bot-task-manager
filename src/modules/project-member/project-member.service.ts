@@ -1,7 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import ProjectEntity from '@src/modules/project/project.entity';
+import UserEntity from '@src/modules/user/user.entity';
 import { ProjectMemberStatus } from './project-member-status.enum';
 import ProjectMemberEntity from './project-member.entity';
 
@@ -174,6 +176,8 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
       invitedByUserId: input.invitedByUserId,
     });
 
+    await this.validateInviteInput(input, this.projectMemberRepository.manager);
+
     const membership = this.projectMemberRepository.create({
       invitedByUser:
         input.invitedByUserId == null
@@ -201,5 +205,38 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
     });
 
     return result;
+  }
+
+  private async validateInviteInput(
+    input: InviteProjectMemberInput,
+    transactionalEntityManager: EntityManager,
+  ): Promise<void> {
+    const project = await transactionalEntityManager.findOne(ProjectEntity, {
+      where: { id: input.projectId },
+    });
+
+    if (project == null) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const user = await transactionalEntityManager.findOne(UserEntity, {
+      where: { id: input.userId },
+    });
+
+    if (user == null) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (input.invitedByUserId == null) {
+      return;
+    }
+
+    const inviter = await transactionalEntityManager.findOne(UserEntity, {
+      where: { id: input.invitedByUserId },
+    });
+
+    if (inviter == null) {
+      throw new NotFoundException('Inviter not found');
+    }
   }
 }
