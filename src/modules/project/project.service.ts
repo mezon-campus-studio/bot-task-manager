@@ -2,18 +2,17 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { ProjectOnboardingService } from './project-onboarding.service';
 import ProjectEntity from './project.entity';
 import { ProjectOnboardingStatus } from './project.enums';
 
 type CreateProjectInput = Pick<ProjectEntity, 'name' | 'ownerUserId' | 'slug'> &
-  Partial<
-    Pick<
-      ProjectEntity,
-      'description' | 'onboardingCompletedAt' | 'onboardingStatus'
-    >
-  >;
+  Partial<Pick<ProjectEntity, 'description'>>;
 
-type UpdateProjectInput = Partial<CreateProjectInput>;
+type UpdateProjectInput = Partial<
+  CreateProjectInput &
+    Pick<ProjectEntity, 'onboardingCompletedAt' | 'onboardingStatus'>
+>;
 
 @Injectable()
 export class ProjectService extends CRUDService<ProjectEntity> {
@@ -22,6 +21,7 @@ export class ProjectService extends CRUDService<ProjectEntity> {
   constructor(
     @InjectRepository(ProjectEntity)
     private projectRepository: Repository<ProjectEntity>,
+    private readonly projectOnboardingService: ProjectOnboardingService,
   ) {
     super(projectRepository);
   }
@@ -31,35 +31,50 @@ export class ProjectService extends CRUDService<ProjectEntity> {
       log: 'Attempting to create project',
       ownerUserId: input.ownerUserId,
       slug: input.slug,
-      onboardingStatus: input.onboardingStatus,
     });
 
-    const existingProject = await this.projectRepository.findOne({
-      where: { slug: input.slug },
-    });
+    const result = await this.projectRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const existingProject = await transactionalEntityManager.findOne(
+          ProjectEntity,
+          {
+            where: { slug: input.slug },
+          },
+        );
 
-    if (existingProject != null) {
-      this.logger.log({
-        log: 'Project creation failed because slug already exists',
-        existingProjectId: existingProject.id,
-        slug: input.slug,
-      });
+        if (existingProject != null) {
+          this.logger.log({
+            log: 'Project creation failed because slug already exists',
+            existingProjectId: existingProject.id,
+            slug: input.slug,
+          });
 
-      throw new ConflictException(
-        `Project with slug ${input.slug} already exists`,
-      );
-    }
+          throw new ConflictException(
+            `Project with slug ${input.slug} already exists`,
+          );
+        }
 
-    const project = this.projectRepository.create({
-      ...input,
-      description: input.description ?? null,
-      onboardingCompletedAt: input.onboardingCompletedAt ?? null,
-      onboardingStatus:
-        input.onboardingStatus ?? ProjectOnboardingStatus.PENDING,
-      ownerUser: { id: input.ownerUserId } as never,
-    });
+        const project = transactionalEntityManager.create(ProjectEntity, {
+          ...input,
+          description: input.description ?? null,
+          onboardingCompletedAt: null,
+          onboardingStatus: ProjectOnboardingStatus.IN_PROGRESS,
+          ownerUser: { id: input.ownerUserId } as never,
+        });
 
-    const result = await this.projectRepository.save(project);
+        const createdProject = await transactionalEntityManager.save(project);
+
+        await this.projectOnboardingService.initializeProjectDefaults(
+          createdProject,
+          transactionalEntityManager,
+        );
+
+        createdProject.onboardingCompletedAt = new Date();
+        createdProject.onboardingStatus = ProjectOnboardingStatus.COMPLETED;
+
+        return transactionalEntityManager.save(createdProject);
+      },
+    );
 
     this.logger.log({
       log: 'Project creation result',

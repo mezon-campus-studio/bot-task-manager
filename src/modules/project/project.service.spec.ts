@@ -1,18 +1,48 @@
 import { ConflictException } from '@nestjs/common';
+import { DataSource, In, IsNull, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
+import PermissionEntity from '@src/modules/permission/permission.entity';
+import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
+import ProjectMemberEntity from '@src/modules/project-member/project-member.entity';
+import { RoleScopeType } from '@src/modules/role/enums/role-scope-type.enum';
+import RoleEntity from '@src/modules/role/role.entity';
+import RolePermissionEntity from '@src/modules/role-permission/role-permission.entity';
+import TeamEntity from '@src/modules/team/team.entity';
+import UserRoleAssignmentEntity from '@src/modules/user-role-assignment/user-role-assignment.entity';
+import {
+  PROJECT_DEFAULT_PERMISSIONS,
+  PROJECT_DEFAULT_ROLE_KEYS,
+  PROJECT_DEFAULT_TEAM,
+} from './constants';
 import { ProjectOnboardingStatus } from './project.enums';
 import { ProjectService } from './project.service';
 
 describe(ProjectService.name, () => {
+  let permissionRepository: Repository<PermissionEntity>;
+  let projectMemberRepository: Repository<ProjectMemberEntity>;
   let projectService: ProjectService;
+  let rolePermissionRepository: Repository<RolePermissionEntity>;
+  let roleRepository: Repository<RoleEntity>;
+  let teamRepository: Repository<TeamEntity>;
+  let userRoleAssignmentRepository: Repository<UserRoleAssignmentEntity>;
 
   beforeAll(createTestingModule);
 
   beforeAll(() => {
+    const dataSource = testingModule!.get(DataSource);
+
+    permissionRepository = dataSource.getRepository(PermissionEntity);
+    projectMemberRepository = dataSource.getRepository(ProjectMemberEntity);
     projectService = testingModule!.get(ProjectService);
+    rolePermissionRepository = dataSource.getRepository(RolePermissionEntity);
+    roleRepository = dataSource.getRepository(RoleEntity);
+    teamRepository = dataSource.getRepository(TeamEntity);
+    userRoleAssignmentRepository = dataSource.getRepository(
+      UserRoleAssignmentEntity,
+    );
   });
 
-  it('creates a project with pending onboarding defaults when optional fields are omitted', async () => {
+  it('creates a project with completed onboarding defaults when optional fields are omitted', async () => {
     const owner = await factory.user({
       email: 'project-owner-alpha@example.com',
       mezonId: 'project-owner-alpha',
@@ -29,37 +59,123 @@ describe(ProjectService.name, () => {
       id: expect.any(Number),
       description: null,
       name: 'Campus Alpha',
-      onboardingCompletedAt: null,
-      onboardingStatus: ProjectOnboardingStatus.PENDING,
+      onboardingCompletedAt: expect.any(Date),
+      onboardingStatus: ProjectOnboardingStatus.COMPLETED,
       ownerUserId: owner.id,
       slug: 'campus-alpha',
     });
   });
 
-  it('preserves the provided onboarding fields when project setup is already completed', async () => {
+  it('initializes default project data after creating a project', async () => {
     const owner = await factory.user({
       email: 'project-owner-beta@example.com',
       mezonId: 'project-owner-beta',
       name: 'Project Owner Beta',
     });
-    const onboardingCompletedAt = new Date('2026-04-19T11:30:00.000Z');
 
     const project = await projectService.createProject({
       description: 'Initial project brief',
       name: 'Campus Beta',
-      onboardingCompletedAt,
-      onboardingStatus: ProjectOnboardingStatus.COMPLETED,
       ownerUserId: owner.id,
       slug: 'campus-beta',
     });
 
-    expect(project).toMatchObject({
-      description: 'Initial project brief',
-      name: 'Campus Beta',
-      onboardingCompletedAt,
-      onboardingStatus: ProjectOnboardingStatus.COMPLETED,
-      ownerUserId: owner.id,
-      slug: 'campus-beta',
+    await expect(
+      teamRepository.findOneByOrFail({
+        isDefault: true,
+        projectId: project.id,
+        slug: PROJECT_DEFAULT_TEAM.slug,
+      }),
+    ).resolves.toMatchObject({
+      description: PROJECT_DEFAULT_TEAM.description,
+      isDefault: true,
+      leaderId: owner.id,
+      name: PROJECT_DEFAULT_TEAM.name,
+      projectId: project.id,
+      slug: PROJECT_DEFAULT_TEAM.slug,
+    });
+
+    const roles = await roleRepository.find({
+      where: {
+        key: In(Object.values(PROJECT_DEFAULT_ROLE_KEYS)),
+      },
+      order: {
+        key: 'ASC',
+      },
+    });
+    const permissions = await permissionRepository.find({
+      where: {
+        key: In(PROJECT_DEFAULT_PERMISSIONS.map(({ key }) => key)),
+      },
+    });
+
+    expect(roles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          isSystem: true,
+          key: PROJECT_DEFAULT_ROLE_KEYS.owner,
+          scopeType: RoleScopeType.PROJECT,
+        }),
+        expect.objectContaining({
+          isSystem: true,
+          key: PROJECT_DEFAULT_ROLE_KEYS.admin,
+          scopeType: RoleScopeType.PROJECT,
+        }),
+        expect.objectContaining({
+          isSystem: true,
+          key: PROJECT_DEFAULT_ROLE_KEYS.member,
+          scopeType: RoleScopeType.PROJECT,
+        }),
+      ]),
+    );
+    expect(permissions).toEqual(
+      expect.arrayContaining(
+        PROJECT_DEFAULT_PERMISSIONS.map((permission) =>
+          expect.objectContaining(permission),
+        ),
+      ),
+    );
+
+    const rolePermissionCount = await rolePermissionRepository.count({
+      where: {
+        roleId: In(roles.map(({ id }) => id)),
+        permissionId: In(permissions.map(({ id }) => id)),
+      },
+    });
+
+    expect(rolePermissionCount).toBe(8);
+
+    await expect(
+      projectMemberRepository.findOneByOrFail({
+        projectId: project.id,
+        userId: owner.id,
+      }),
+    ).resolves.toMatchObject({
+      invitedByUserId: owner.id,
+      projectId: project.id,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: owner.id,
+    });
+
+    const ownerRole = roles.find(
+      ({ key }) => key === PROJECT_DEFAULT_ROLE_KEYS.owner,
+    )!;
+
+    await expect(
+      userRoleAssignmentRepository.findOneByOrFail({
+        projectId: project.id,
+        roleId: ownerRole.id,
+        scopeType: RoleScopeType.PROJECT,
+        teamId: IsNull(),
+        userId: owner.id,
+      }),
+    ).resolves.toMatchObject({
+      assignedByUserId: owner.id,
+      projectId: project.id,
+      roleId: ownerRole.id,
+      scopeType: RoleScopeType.PROJECT,
+      teamId: null,
+      userId: owner.id,
     });
   });
 

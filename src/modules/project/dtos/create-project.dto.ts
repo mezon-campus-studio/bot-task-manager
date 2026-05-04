@@ -1,14 +1,10 @@
-import { Type } from 'class-transformer';
 import {
-  IsDate,
   IsDefined,
-  IsEnum,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
 } from 'class-validator';
-import { ProjectOnboardingStatus } from '../project.enums';
 
 export class CreateProjectDto {
   @IsDefined()
@@ -28,13 +24,4 @@ export class CreateProjectDto {
   @IsDefined()
   @IsUUID()
   ownerUserId!: string;
-
-  @IsOptional()
-  @IsEnum(ProjectOnboardingStatus)
-  onboardingStatus?: ProjectOnboardingStatus;
-
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  onboardingCompletedAt?: Date | null;
 }
