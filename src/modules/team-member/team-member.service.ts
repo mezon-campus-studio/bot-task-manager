@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
@@ -22,6 +22,11 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
   async createMembership(
     input: CreateTeamMemberInput,
   ): Promise<TeamMemberEntity> {
+    const existing = await this.findMembership(input.teamId, input.userId);
+    if (existing) {
+      throw new ConflictException('User is already a member of this team');
+    }
+
     this.logger.log({
       log: 'Attempting to create team membership',
       status: input.status ?? TeamMemberStatus.INVITED,
