@@ -1,13 +1,17 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import TeamEntity from './team.entity';
+import { TeamMemberStatus } from '../team-member/enums/team-member-status.enum';
+import { TeamMemberService } from '../team-member/team-member.service';
 
 type CreateTeamInput = Pick<
   TeamEntity,
@@ -23,6 +27,8 @@ export class TeamService extends CRUDService<TeamEntity> {
   constructor(
     @InjectRepository(TeamEntity)
     private readonly teamRepository: Repository<TeamEntity>,
+    @Inject(forwardRef(() => TeamMemberService))
+    private readonly teamMemberService: TeamMemberService,
   ) {
     super(teamRepository);
   }
@@ -60,7 +66,17 @@ export class TeamService extends CRUDService<TeamEntity> {
           isDefault: input.isDefault ?? false,
         });
 
-        return await transactionalEntityManager.save(team);
+        const savedTeam = await transactionalEntityManager.save(team);
+
+        if (input.leaderId) {
+          await this.teamMemberService.createMembership({
+            teamId: savedTeam.id,
+            userId: input.leaderId,
+            status: TeamMemberStatus.ACTIVE,
+          });
+        }
+
+        return savedTeam;
       },
     );
   }

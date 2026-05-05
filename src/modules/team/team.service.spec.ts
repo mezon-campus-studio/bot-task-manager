@@ -5,20 +5,39 @@ import ProjectEntity from '@src/modules/project/project.entity';
 import { ProjectOnboardingStatus } from '@src/modules/project/project.enums';
 import TeamEntity from './team.entity';
 import { TeamService } from './team.service';
+import { TeamMemberService } from '../team-member/team-member.service';
+
+jest.mock('../team-member/team-member.service');
 
 describe(TeamService.name, () => {
   let projectRepository: Repository<ProjectEntity>;
   let teamService: TeamService;
   let teamRepository: Repository<TeamEntity>;
+  let teamMemberService: TeamMemberService;
 
-  beforeAll(createTestingModule);
+  const mockTeamMemberService = {
+    createMembership: jest.fn().mockResolvedValue({}),
+  };
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    await createTestingModule({
+      providers: [
+        {
+          provide: TeamMemberService,
+          useValue: mockTeamMemberService,
+        },
+      ],
+    });
     projectRepository = testingModule!
       .get(DataSource)
       .getRepository(ProjectEntity);
     teamService = testingModule!.get(TeamService);
     teamRepository = testingModule!.get(DataSource).getRepository(TeamEntity);
+    teamMemberService = testingModule!.get(TeamMemberService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   async function createProject(slug: string, ownerUserId: string) {
@@ -117,6 +136,41 @@ describe(TeamService.name, () => {
       });
       expect(updatedOldDefault?.isDefault).toBe(false);
       expect(newTeam.isDefault).toBe(true);
+    });
+
+    it('should persist a team and AUTOMATICALLY create a membership for the leader', async () => {
+      const owner = await factory.user({ mezonId: 'team-create-owner' });
+      const project = await createProject('team-create-project', owner.id);
+
+      const createdTeam = await teamService.createTeam({
+        name: 'Platform',
+        projectId: project.id,
+        slug: 'platform',
+        leaderId: owner.id,
+      });
+
+      expect(createdTeam).toMatchObject({
+        name: 'Platform',
+        leaderId: owner.id,
+      });
+
+      expect(teamMemberService.createMembership).toHaveBeenCalledWith({
+        teamId: createdTeam.id,
+        userId: owner.id,
+        status: 'ACTIVE',
+      });
+    });
+
+    it('should not create membership if leaderId is missing', async () => {
+      const owner = await factory.user();
+      const project = await createProject('no-leader-project', owner.id);
+
+      await teamService.createTeam({
+        name: 'No Leader Team',
+        projectId: project.id,
+        slug: 'no-leader',
+        leaderId: undefined as any,
+      });
     });
   });
 
