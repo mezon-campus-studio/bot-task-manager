@@ -9,9 +9,9 @@ import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { TeamMemberStatus } from './enums/team-member-status.enum';
 import TeamMemberEntity from './team-member.entity';
+import { ProjectService } from '../project/project.service';
 import { TeamService } from '../team/team.service';
 import { UserService } from '../user/user.service';
-import { ProjectService } from '../project/project.service';
 
 type CreateTeamMemberInput = Pick<TeamMemberEntity, 'teamId' | 'userId'> &
   Partial<Pick<TeamMemberEntity, 'status' | 'invitedByUserId' | 'joinedAt'>>;
