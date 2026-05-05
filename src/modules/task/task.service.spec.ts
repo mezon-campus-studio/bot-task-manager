@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
+import { SearchOrder } from '@src/common/enums';
+import { NoteResourceType } from '@src/modules/note/enums';
+import NoteEntity from '@src/modules/note/note.entity';
 import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
 import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
 import { TaskPriority, TaskStatus } from './enums';
@@ -9,6 +12,7 @@ import { TaskService } from './task.service';
 
 describe(TaskService.name, () => {
   let taskService: TaskService;
+  let noteRepository: Repository<NoteEntity>;
   let taskRepository: Repository<TaskEntity>;
   let numericSequence = 0;
 
@@ -16,6 +20,7 @@ describe(TaskService.name, () => {
 
   beforeAll(() => {
     taskService = testingModule!.get(TaskService);
+    noteRepository = testingModule!.get(DataSource).getRepository(NoteEntity);
     taskRepository = testingModule!.get(DataSource).getRepository(TaskEntity);
   });
 
@@ -151,6 +156,148 @@ describe(TaskService.name, () => {
       olderSameDayTask.id,
     ]);
     expect(tasks.every((task) => task.projectId === projectId)).toBe(true);
+  });
+
+  it('should query tasks by project and supported filters', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
+    const team = await factory.team({
+      projectId,
+    });
+    const otherProject = await factory.project({});
+
+    const matchingTask = await factory.task({
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      projectId,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: team.id,
+      title: 'Review the matched task filter',
+    });
+
+    await factory.task({
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      projectId,
+      reporterUserId,
+      status: TaskStatus.TODO,
+      teamId: team.id,
+      title: 'Ignore task with different status',
+    });
+    await factory.task({
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      projectId: otherProject.id,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: team.id,
+      title: 'Ignore matching task from another project',
+    });
+
+    const result = await taskService.queryTasks(projectId, {
+      assigneeUserId: assignee.id,
+      priority: TaskPriority.HIGH,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: team.id,
+    });
+
+    expect(result).toMatchObject({
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    });
+    expect(result.result).toHaveLength(1);
+    expect(result.result[0]).toMatchObject({
+      id: matchingTask.id,
+      projectId,
+      status: TaskStatus.IN_PROGRESS,
+    });
+  });
+
+  it('should search project tasks by keyword in title or description', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const otherProject = await factory.project({});
+
+    const titleMatchTask = await factory.task({
+      description: null,
+      projectId,
+      reporterUserId,
+      title: 'Prepare advisor onboarding notes',
+    });
+    const descriptionMatchTask = await factory.task({
+      description: 'Confirm the ADVISOR invite list before launch.',
+      projectId,
+      reporterUserId,
+      title: 'Prepare invite list',
+    });
+
+    await factory.task({
+      description: 'Advisor keyword belongs to another project.',
+      projectId: otherProject.id,
+      title: 'Ignore cross project keyword',
+    });
+
+    const result = await taskService.queryTasks(projectId, {
+      q: 'advisor',
+    });
+
+    expect(result.total).toBe(2);
+    expect(result.result.map(({ id }) => id)).toEqual([
+      descriptionMatchTask.id,
+      titleMatchTask.id,
+    ]);
+  });
+
+  it('should paginate task query results with a stable order', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+
+    await factory.task({
+      dueAt: new Date('2026-08-01T09:00:00.000Z'),
+      projectId,
+      reporterUserId,
+      title: 'First paginated task',
+    });
+    const secondTask = await factory.task({
+      dueAt: new Date('2026-08-02T09:00:00.000Z'),
+      projectId,
+      reporterUserId,
+      title: 'Second paginated task',
+    });
+    const thirdTask = await factory.task({
+      dueAt: new Date('2026-08-03T09:00:00.000Z'),
+      projectId,
+      reporterUserId,
+      title: 'Third paginated task',
+    });
+
+    const result = await taskService.queryTasks(projectId, {
+      page: 2,
+      take: 1,
+    });
+
+    expect(result).toMatchObject({
+      page: 2,
+      pageSize: 1,
+      total: 3,
+    });
+    expect(result.result).toHaveLength(1);
+    expect(result.result[0]).toMatchObject({
+      id: secondTask.id,
+      projectId,
+    });
+
+    const descendingResult = await taskService.queryTasks(projectId, {
+      order: SearchOrder.DESC,
+      page: 1,
+      take: 1,
+    });
+
+    expect(descendingResult.result[0]).toMatchObject({
+      id: thirdTask.id,
+      projectId,
+    });
   });
 
   it('should assign a task to an active project member', async () => {
@@ -350,6 +497,104 @@ describe(TaskService.name, () => {
 
   it('should return null when removing the assignee from a missing task', async () => {
     await expect(taskService.removeTaskAssignee(999_999)).resolves.toBeNull();
+  });
+
+  it('should update task status from TODO to IN_PROGRESS and persist the change', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const author = await factory.user({});
+    const task = await factory.task({
+      projectId,
+      reporterUserId,
+      status: TaskStatus.TODO,
+      teamId: null,
+      title: 'Start the review workflow',
+    });
+
+    const updatedTask = await taskService.updateTaskStatus(task.id, {
+      authorUserId: author.id,
+      status: TaskStatus.IN_PROGRESS,
+    });
+
+    expect(updatedTask).toMatchObject({
+      id: task.id,
+      status: TaskStatus.IN_PROGRESS,
+    });
+
+    await expect(
+      taskRepository.findOneByOrFail({ id: task.id }),
+    ).resolves.toMatchObject({
+      id: task.id,
+      status: TaskStatus.IN_PROGRESS,
+    });
+  });
+
+  it('should update task status from IN_PROGRESS to DONE and save a task history note', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const author = await factory.user({});
+    const task = await factory.task({
+      projectId,
+      reporterUserId,
+      status: TaskStatus.IN_PROGRESS,
+      teamId: null,
+      title: 'Complete the review workflow',
+    });
+
+    const updatedTask = await taskService.updateTaskStatus(task.id, {
+      authorUserId: author.id,
+      status: TaskStatus.DONE,
+    });
+
+    expect(updatedTask).toMatchObject({
+      id: task.id,
+      status: TaskStatus.DONE,
+    });
+
+    await expect(
+      noteRepository.findOneByOrFail({
+        authorUserId: author.id,
+        projectId,
+        resourceId: String(task.id),
+        resourceType: NoteResourceType.TASK,
+      }),
+    ).resolves.toMatchObject({
+      authorUserId: author.id,
+      content: 'Task status changed from IN_PROGRESS to DONE',
+      projectId,
+      resourceId: String(task.id),
+      resourceType: NoteResourceType.TASK,
+    });
+  });
+
+  it('should return null when updating status for a missing task', async () => {
+    const author = await factory.user({});
+
+    await expect(
+      taskService.updateTaskStatus(999_999, {
+        authorUserId: author.id,
+        status: TaskStatus.IN_PROGRESS,
+      }),
+    ).resolves.toBeNull();
+    await expect(noteRepository.count()).resolves.toBe(0);
+  });
+
+  it('should reject invalid task status transitions', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const author = await factory.user({});
+    const task = await factory.task({
+      projectId,
+      reporterUserId,
+      status: TaskStatus.DONE,
+      teamId: null,
+      title: 'Keep the completed workflow closed',
+    });
+
+    await expect(
+      taskService.updateTaskStatus(task.id, {
+        authorUserId: author.id,
+        status: TaskStatus.IN_PROGRESS,
+      }),
+    ).rejects.toThrow('Task status cannot transition from DONE to IN_PROGRESS');
+    await expect(noteRepository.count()).resolves.toBe(0);
   });
 
   it('should find a task by id', async () => {
