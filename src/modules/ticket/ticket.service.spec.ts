@@ -227,37 +227,6 @@ describe(TicketService.name, () => {
     });
   });
 
-  it('should unassign a ticket when assigneeId is null', async () => {
-    const reporter = await factory.user();
-    const project = await factory.project();
-    const assignee = await factory.user();
-
-    await factory.projectMember({
-      projectId: project.id,
-      userId: assignee.id,
-      status: ProjectMemberStatus.ACTIVE,
-    });
-
-    const ticket = await factory.ticket({
-      assigneeUserId: assignee.id,
-      projectId: project.id,
-      reporterUserId: reporter.id,
-      teamId: nextNumericId(),
-      title: 'Ticket will be unassigned',
-    });
-
-    const unassignedTicket = await ticketService.assignTicket(
-      project.id,
-      ticket.id,
-      null,
-    );
-
-    expect(unassignedTicket).toMatchObject({
-      id: ticket.id,
-      assigneeUserId: null,
-    });
-  });
-
   it('should update assigneeUserId via generic updateTicket with project scope validation', async () => {
     const reporter = await factory.user();
     const project = await factory.project();
@@ -313,6 +282,56 @@ describe(TicketService.name, () => {
       id: ticket.id,
       assigneeUserId: null,
     });
+  });
+
+  it('should validate all assignment conditions: project exists, ticket exists in project, user exists, user is active project member', async () => {
+    const reporter = await factory.user();
+    const project = await factory.project();
+    const assignee = await factory.user();
+    const outsider = await factory.user();
+
+    // Setup valid assignment
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    const ticket = await factory.ticket({
+      assigneeUserId: null,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: nextNumericId(),
+      title: 'Validation test ticket',
+    });
+
+    // Test 1: Valid assignment should succeed
+    const result = await ticketService.assignTicket(
+      project.id,
+      ticket.id,
+      assignee.id,
+    );
+    expect(result.assigneeUserId).toBe(assignee.id);
+
+    // Test 2: Invalid project should fail
+    await expect(
+      ticketService.assignTicket(99999, ticket.id, assignee.id),
+    ).rejects.toThrow('Project 99999 not found');
+
+    // Test 3: Invalid ticket should fail
+    await expect(
+      ticketService.assignTicket(project.id, 99999, assignee.id),
+    ).rejects.toThrow(`Ticket #99999 not found in project ${project.id}`);
+
+    // Test 4: Invalid user should fail
+    await expect(
+      ticketService.assignTicket(project.id, ticket.id, 'invalid-uuid'),
+    ).rejects.toThrow('User invalid-uuid not found');
+
+    // Test 5: User not in project should fail
+    await expect(
+      ticketService.assignTicket(project.id, ticket.id, outsider.id),
+    ).rejects.toThrow(`User ${outsider.id} is not a member of project ${project.id}`);
   });
 
   it('should support updateEntry from the CRUD base for ticket closure updates', async () => {

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
@@ -10,25 +6,17 @@ import { TicketStatus, TicketSeverity } from './enums';
 import TicketEntity from './ticket.entity';
 import { TicketAssignmentValidatorService } from './ticket-assignment-validator.service';
 
-export type CreateTicketInput = Omit<
-  Pick<
-    TicketEntity,
-    | 'projectId'
-    | 'teamId'
-    | 'assigneeUserId'
-    | 'reporterUserId'
-    | 'title'
-    | 'description'
-    | 'status'
-    | 'severity'
-  >,
-  'teamId' | 'assigneeUserId' | 'description' | 'status'
-> & {
-  teamId?: number | null;
-  assigneeUserId?: string | null;
-  description?: string | null;
-  status?: TicketStatus;
-};
+export type CreateTicketInput = Pick<
+  TicketEntity,
+  | 'projectId'
+  | 'teamId'
+  | 'assigneeUserId'
+  | 'reporterUserId'
+  | 'title'
+  | 'description'
+  | 'status'
+  | 'severity'
+>;
 
 @Injectable()
 export class TicketService extends CRUDService<TicketEntity> {
@@ -186,7 +174,7 @@ export class TicketService extends CRUDService<TicketEntity> {
   async assignTicket(
     projectId: number,
     ticketId: number,
-    assigneeUserId: string | null,
+    assigneeUserId: string,
   ): Promise<TicketEntity> {
     this.logger.log({
       log: 'Attempting to assign ticket',
@@ -194,34 +182,6 @@ export class TicketService extends CRUDService<TicketEntity> {
       ticketId,
       assigneeUserId,
     });
-
-    if (assigneeUserId === null) {
-      const ticket = await this.getDetailTicket(
-        projectId,
-        ticketId,
-      );
-
-      if (!ticket) {
-        throw new NotFoundException(
-          `Ticket #${ticketId} not found in project ${projectId}`,
-        );
-      }
-
-      ticket.assigneeUserId = null;
-
-      const result = await this.ticketRepository.save(
-        ticket,
-      );
-
-      this.logger.log({
-        log: 'Ticket unassignment result',
-        ticketId,
-        assigneeUserId,
-        updatedTicketId: result.id,
-      });
-
-      return result;
-    }
 
     const {
       ticket,

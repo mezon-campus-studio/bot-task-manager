@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -47,7 +46,6 @@ export class TicketController {
   @Get('project/:projectId/:id')
   async getDetailTicket(
     @Param('projectId') projectId: number,
-    //xác thực id
     @Param('id') id: number,
   ) {
     return await this.ticketService.getDetailTicket(
@@ -62,19 +60,10 @@ export class TicketController {
     @Param('id') id: number,
     @Body() body: UpdateTicketDto,
   ) {
-    const payload = {
-      ...body,
-      assigneeUserId: body.assigneeId,
-    };
-
-    if ('assigneeId' in payload) {
-      delete payload.assigneeId;
-    }
-
     return await this.ticketService.updateTicket(
       Number(projectId),
       Number(id),
-      payload,
+      body,
     );
   }
 
@@ -84,18 +73,10 @@ export class TicketController {
     @Param('id') id: number,
     @Body() body: AssignTicketDto,
   ) {
-    const assigneeUserId = body.assigneeId;
-
-    if (assigneeUserId === undefined) {
-      throw new BadRequestException(
-        'assigneeId is required',
-      );
-    }
-
     return await this.ticketService.assignTicket(
       Number(projectId),
       Number(id),
-      assigneeUserId,
+      body.assigneeUserId,
     );
   }
 
