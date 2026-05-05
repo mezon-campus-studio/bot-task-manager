@@ -1,7 +1,9 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
 import ProjectEntity from '@src/modules/project/project.entity';
 import { ProjectOnboardingStatus } from '@src/modules/project/project.enums';
+import { ProjectMemberService } from './../project-member/project-member.service';
 import { TeamMemberStatus } from './enums/team-member-status.enum';
 import TeamMemberEntity from './team-member.entity';
 import { TeamMemberService } from './team-member.service';
@@ -10,6 +12,7 @@ describe(TeamMemberService.name, () => {
   let projectRepository: Repository<ProjectEntity>;
   let teamMemberService: TeamMemberService;
   let teamMemberRepository: Repository<TeamMemberEntity>;
+  let projectMemberService: ProjectMemberService;
 
   beforeAll(createTestingModule);
 
@@ -21,6 +24,7 @@ describe(TeamMemberService.name, () => {
     teamMemberRepository = testingModule!
       .get(DataSource)
       .getRepository(TeamMemberEntity);
+    projectMemberService = testingModule!.get(ProjectMemberService);
   });
 
   async function createProject(slug: string, ownerUserId: string) {
@@ -104,6 +108,65 @@ describe(TeamMemberService.name, () => {
         }),
       ).rejects.toThrow();
     });
+
+    it('should synchronize to project and persist team membership', async () => {
+      const owner = await factory.user({ mezonId: 'owner-1' });
+      const project = await createProject('project-sync-test', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'team-sync',
+      });
+      const user = await factory.user({ mezonId: 'user-sync' });
+      const upsertSpy = jest.spyOn(projectMemberService, 'upsertMembership');
+      const membership = await teamMemberService.createMembership({
+        teamId: team.id,
+        userId: user.id,
+      });
+
+      expect(upsertSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: project.id,
+          userId: user.id,
+        }),
+      );
+
+      expect(membership).toMatchObject({
+        teamId: team.id,
+        userId: user.id,
+        status: TeamMemberStatus.INVITED,
+      });
+
+      upsertSpy.mockRestore();
+    });
+
+    it('should throw NotFoundException if team does not exist', async () => {
+      const user = await factory.user({ mezonId: 'user-not-found' });
+
+      await expect(
+        teamMemberService.createMembership({
+          teamId: 9999,
+          userId: user.id,
+        }),
+      ).rejects.toThrow(NotFoundException);
+    });
+    it('should throw ConflictException if user is already in team', async () => {
+      const owner = await factory.user({ mezonId: 'owner-dup' });
+      const project = await createProject('project-dup', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'team-dup',
+      });
+      const user = await factory.user({ mezonId: 'user-dup' });
+
+      await factory.teamMember({ teamId: team.id, userId: user.id });
+
+      await expect(
+        teamMemberService.createMembership({
+          teamId: team.id,
+          userId: user.id,
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
   });
 
   describe('findMembership', () => {
@@ -177,7 +240,6 @@ describe(TeamMemberService.name, () => {
         teamId: team.id,
         userId: (await factory.user({ mezonId: 'team-member-list-user-2' })).id,
       });
-
       const otherOwner = await factory.user({
         mezonId: 'team-member-list-other-owner',
       });
@@ -262,6 +324,36 @@ describe(TeamMemberService.name, () => {
           teamId: team.id,
         }),
       ]);
+    });
+    it('should return only active members', async () => {
+      const owner = await factory.user({ mezonId: 'owner-active' });
+      const project = await createProject('project-active', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'team-active',
+      });
+
+      const activeUser = await factory.user({ mezonId: 'user-active' });
+      const invitedUser = await factory.user({ mezonId: 'user-invited' });
+
+      await factory.teamMember({
+        teamId: team.id,
+        userId: activeUser.id,
+        status: TeamMemberStatus.ACTIVE,
+      });
+      await factory.teamMember({
+        teamId: team.id,
+        userId: invitedUser.id,
+        status: TeamMemberStatus.INVITED,
+      });
+
+      const results = await teamMemberService.findActiveMembersByTeamId(
+        team.id,
+      );
+
+      expect(results).toHaveLength(1);
+      expect(results[0].userId).toBe(activeUser.id);
+      expect(results[0].status).toBe(TeamMemberStatus.ACTIVE);
     });
   });
 });

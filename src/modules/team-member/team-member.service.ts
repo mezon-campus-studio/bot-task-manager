@@ -1,9 +1,18 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { TeamMemberStatus } from './enums/team-member-status.enum';
 import TeamMemberEntity from './team-member.entity';
+import { ProjectMemberService } from '../project-member/project-member.service';
+import { TeamService } from '../team';
 
 type CreateTeamMemberInput = Pick<TeamMemberEntity, 'teamId' | 'userId'> &
   Partial<Pick<TeamMemberEntity, 'status' | 'invitedByUserId' | 'joinedAt'>>;
@@ -15,6 +24,10 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
   constructor(
     @InjectRepository(TeamMemberEntity)
     private readonly teamMemberRepository: Repository<TeamMemberEntity>,
+    @Inject(forwardRef(() => TeamService))
+    private readonly teamService: TeamService,
+    @Inject(forwardRef(() => ProjectMemberService))
+    private readonly projectMemberService: ProjectMemberService,
   ) {
     super(teamMemberRepository);
   }
@@ -26,6 +39,20 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
     if (existing) {
       throw new ConflictException('User is already a member of this team');
     }
+
+    const team = await this.teamService.findOne({
+      where: { id: input.teamId },
+    });
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${input.teamId} not found`);
+    }
+
+    await this.projectMemberService.upsertMembership({
+      projectId: team.projectId,
+      userId: input.userId,
+      invitedByUserId: input.invitedByUserId,
+    });
 
     this.logger.log({
       log: 'Attempting to create team membership',

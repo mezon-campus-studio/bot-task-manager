@@ -1,7 +1,7 @@
 import { Column, DeleteDateColumn, Entity, Index, OneToMany } from 'typeorm';
 import { AbstractEntity } from '#src/common/database/abstract.entity.js';
 import { TeamStatus } from './enum/team-status.enum';
-import TeamMemberEntity from '../team-member/team-member.entity';
+import type TeamMemberEntity from '../team-member/team-member.entity';
 
 @Entity('teams')
 @Index('teams_project_id_slug_key', ['projectId', 'slug'], { unique: true })
@@ -17,7 +17,7 @@ export default class TeamEntity extends AbstractEntity {
   @Index('IDX_teams_leader_id')
   leaderId!: string | null;
 
-  @OneToMany(() => TeamMemberEntity, (member) => member.team)
+  @OneToMany('TeamMemberEntity', (member: TeamMemberEntity) => member.team)
   members?: TeamMemberEntity[];
 
   @Column({ type: 'varchar' })

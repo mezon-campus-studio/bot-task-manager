@@ -1,8 +1,8 @@
 import { Column, Entity, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { AbstractEntity } from '#src/common/database/abstract.entity.js';
 import { TeamMemberStatus } from './enums/team-member-status.enum';
-import TeamEntity from '../team/team.entity';
 import UserEntity from '../user/user.entity';
+import type TeamEntity from '../team/team.entity';
 
 @Entity('team_members')
 @Index('team_members_team_id_user_id_key', ['teamId', 'userId'], {
@@ -15,7 +15,7 @@ export default class TeamMemberEntity extends AbstractEntity {
   @Column({ type: 'uuid' })
   userId!: string;
 
-  @ManyToOne(() => TeamEntity, (team) => team.members)
+  @ManyToOne('TeamEntity', (team: TeamEntity) => team.members)
   @JoinColumn({ name: 'teamId' })
   team!: TeamEntity;
 
