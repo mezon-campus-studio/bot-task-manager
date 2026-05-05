@@ -16,4 +16,4 @@ import { ProjectModule } from '../project/project.module';
   providers: [TeamMemberService],
   exports: [TeamMemberService],
 })
-export class TeamMemberModule { }
+export class TeamMemberModule {}

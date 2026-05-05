@@ -269,7 +269,10 @@ describe(TeamMemberService.name, () => {
     it('should add a new member successfully after validating context', async () => {
       const owner = await factory.user({ mezonId: 'add-member-owner' });
       const project = await createProject('add-member-project', owner.id);
-      const team = await factory.team({ projectId: project.id, slug: 'add-member-team' });
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'add-member-team',
+      });
       const user = await factory.user({ mezonId: 'add-member-user' });
 
       const result = await teamMemberService.addMember(
@@ -289,7 +292,10 @@ describe(TeamMemberService.name, () => {
     it('should restore a previously deleted member', async () => {
       const owner = await factory.user({ mezonId: 'restore-member-owner' });
       const project = await createProject('restore-member-project', owner.id);
-      const team = await factory.team({ projectId: project.id, slug: 'restore-member-team' });
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'restore-member-team',
+      });
       const user = await factory.user({ mezonId: 'restore-member-user' });
 
       const member = await factory.teamMember({
@@ -309,7 +315,7 @@ describe(TeamMemberService.name, () => {
       expect(result.status).toBe(TeamMemberStatus.ACTIVE);
       const dbMember = await teamMemberRepository.findOne({
         where: { id: member.id },
-        withDeleted: false
+        withDeleted: false,
       });
       expect(dbMember).not.toBeNull();
     });
@@ -317,7 +323,10 @@ describe(TeamMemberService.name, () => {
     it('should throw ConflictException if user is already an active member', async () => {
       const owner = await factory.user({ mezonId: 'conflict-member-owner' });
       const project = await createProject('conflict-member-project', owner.id);
-      const team = await factory.team({ projectId: project.id, slug: 'conflict-member-team' });
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'conflict-member-team',
+      });
       const user = await factory.user({ mezonId: 'conflict-member-user' });
 
       await factory.teamMember({
@@ -336,7 +345,10 @@ describe(TeamMemberService.name, () => {
     it('should soft delete an existing member', async () => {
       const owner = await factory.user({ mezonId: 'remove-member-owner' });
       const project = await createProject('remove-member-project', owner.id);
-      const team = await factory.team({ projectId: project.id, slug: 'remove-member-team' });
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'remove-member-team',
+      });
       const user = await factory.user({ mezonId: 'remove-member-user' });
 
       await factory.teamMember({
@@ -345,17 +357,26 @@ describe(TeamMemberService.name, () => {
         status: TeamMemberStatus.ACTIVE,
       });
 
-      const result = await teamMemberService.removeMember(project.id, team.id, user.id);
+      const result = await teamMemberService.removeMember(
+        project.id,
+        team.id,
+        user.id,
+      );
       expect(result.message).toContain('removed');
 
-      const dbMember = await teamMemberRepository.findOne({ where: { teamId: team.id, userId: user.id } });
+      const dbMember = await teamMemberRepository.findOne({
+        where: { teamId: team.id, userId: user.id },
+      });
       expect(dbMember).toBeNull();
     });
 
     it('should throw NotFoundException if member does not exist in team', async () => {
       const owner = await factory.user({ mezonId: 'remove-missing-owner' });
       const project = await createProject('remove-missing-project', owner.id);
-      const team = await factory.team({ projectId: project.id, slug: 'remove-missing-team' });
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'remove-missing-team',
+      });
       const user = await factory.user({ mezonId: 'remove-missing-user' });
 
       await expect(
@@ -376,11 +397,19 @@ describe(TeamMemberService.name, () => {
       const owner = await factory.user({ mezonId: 'wrong-project-owner' });
       const project1 = await createProject('project-1', owner.id);
       const project2 = await createProject('project-2', owner.id);
-      const teamOfProject2 = await factory.team({ projectId: project2.id, slug: 'team-p2' });
+      const teamOfProject2 = await factory.team({
+        projectId: project2.id,
+        slug: 'team-p2',
+      });
       const user = await factory.user({ mezonId: 'wrong-project-user' });
 
       await expect(
-        teamMemberService.addMember(project1.id, teamOfProject2.id, user.id, owner.id),
+        teamMemberService.addMember(
+          project1.id,
+          teamOfProject2.id,
+          user.id,
+          owner.id,
+        ),
       ).rejects.toThrow(/does not belong to Project/);
     });
   });

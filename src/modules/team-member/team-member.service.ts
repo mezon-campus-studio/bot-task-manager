@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
@@ -127,8 +132,13 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
     });
 
     if (existingMember) {
-      if (!existingMember.deletedAt && existingMember.status === TeamMemberStatus.ACTIVE) {
-        throw new ConflictException('User is already an active member of this team');
+      if (
+        !existingMember.deletedAt &&
+        existingMember.status === TeamMemberStatus.ACTIVE
+      ) {
+        throw new ConflictException(
+          'User is already an active member of this team',
+        );
       }
 
       await this.teamMemberRepository.restore(existingMember.id);
