@@ -1,9 +1,11 @@
 # Skill 02: Thin Controllers + Workflow Services
 
 ## Goal
+
 Enforce strict layer boundaries so controllers stay dumb and services become powerful workflow orchestrators.
 
 ## Controller Rules (Non-Negotiable)
+
 A controller method is allowed **only** these 4 responsibilities:
 
 1. Route definition + versioning
@@ -15,12 +17,14 @@ A controller method is allowed **only** these 4 responsibilities:
 Anything more → move to service.
 
 **Forbidden in controllers:**
+
 - Business branching or decisions
 - Complex queries or data shaping
 - Side effects or transaction management
 - Manual patching or transformation
 
 ## Service Rules — The Workflow Orchestrator
+
 Services must own the **complete operational flow**:
 
 - Early guard clauses (fail fast with domain errors)
@@ -35,10 +39,13 @@ Services must own the **complete operational flow**:
 **When a workflow grows large** (mobile crypto, queue processing, webhook handling, etc.) → extract to its own bounded module immediately.
 
 ## Practical Test
+
 Open any controller file:
+
 - Count lines of actual logic (ignore decorators)
 - If > 20 lines → violation
 - Can you explain the full workflow just by reading the service? If not → service is incomplete
 
 ## Success Signal
+
 A new developer can read the service and immediately understand the entire business process, including what happens on failure and how to retry.
