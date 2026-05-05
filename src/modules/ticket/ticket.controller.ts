@@ -62,11 +62,9 @@ export class TicketController {
     @Param('id') id: number,
     @Body() body: UpdateTicketDto,
   ) {
-    //tạo payload mới để có thể update cả trường assigneeUserId và assigneeId, nếu có trường nào thì sẽ update trường đó
     const payload = {
       ...body,
-      assigneeUserId:
-        body.assigneeUserId ?? body.assigneeId,
+      assigneeUserId: body.assigneeId,
     };
 
     if ('assigneeId' in payload) {
@@ -86,12 +84,11 @@ export class TicketController {
     @Param('id') id: number,
     @Body() body: AssignTicketDto,
   ) {
-    const assigneeUserId =
-      body.assigneeUserId ?? body.assigneeId;
+    const assigneeUserId = body.assigneeId;
 
     if (assigneeUserId === undefined) {
       throw new BadRequestException(
-        'assigneeId or assigneeUserId is required',
+        'assigneeId is required',
       );
     }
 

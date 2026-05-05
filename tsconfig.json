@@ -21,6 +21,7 @@
       "@nezon": ["src/libs/nezon"],
       "#jest": ["test/jest/index.ts"]
     },
+    "ignoreDeprecations": "6.0",
     "incremental": true,
     "strictNullChecks": true,
     "skipLibCheck": true,

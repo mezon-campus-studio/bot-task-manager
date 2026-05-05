@@ -1,37 +1,42 @@
 import {
+  IsDateString,
   IsEnum,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 import {
+  TicketPriority,
   TicketSeverity,
   TicketStatus,
+  TicketType,
 } from '../enums';
 
 export class UpdateTicketDto {
-  @IsNumber()
   @IsOptional()
-  projectId?: number;
+  @IsNumber()
+  projectId?: number; // hoặc UUID nếu project dùng UUID
 
-  @IsNumber()
   @IsOptional()
+  @IsNumber()
   teamId?: number | null;
 
-  @IsUUID()
   @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @IsUUID()
   assigneeUserId?: string | null;
 
-  @IsUUID()
   @IsOptional()
-  // thêm assigneeId để có thể update cả trường assigneeUserId và assigneeId, nếu có trường nào thì sẽ update trường đó
+  @ValidateIf((_, v) => v !== null)
+  @IsUUID()
   assigneeId?: string | null;
 
-  @IsUUID()
   @IsOptional()
+  @IsUUID()
   reporterUserId?: string;
 
   @IsOptional()
@@ -43,11 +48,23 @@ export class UpdateTicketDto {
   @IsString()
   description?: string | null;
 
-  @IsEnum(TicketStatus)
   @IsOptional()
+  @IsEnum(TicketType)
+  type?: TicketType;
+
+  @IsOptional()
+  @IsEnum(TicketPriority)
+  priority?: TicketPriority;
+
+  @IsOptional()
+  @IsEnum(TicketStatus)
   status?: TicketStatus;
 
-  @IsEnum(TicketSeverity)
   @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsOptional()
+  @IsEnum(TicketSeverity)
   severity?: TicketSeverity;
 }

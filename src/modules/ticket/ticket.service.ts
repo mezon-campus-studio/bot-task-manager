@@ -10,17 +10,25 @@ import { TicketStatus, TicketSeverity } from './enums';
 import TicketEntity from './ticket.entity';
 import { TicketAssignmentValidatorService } from './ticket-assignment-validator.service';
 
-export type CreateTicketInput = Pick<
-  TicketEntity,
-  | 'projectId'
-  | 'teamId'
-  | 'assigneeUserId'
-  | 'reporterUserId'
-  | 'title'
-  | 'description'
-  | 'status'
-  | 'severity'
->;
+export type CreateTicketInput = Omit<
+  Pick<
+    TicketEntity,
+    | 'projectId'
+    | 'teamId'
+    | 'assigneeUserId'
+    | 'reporterUserId'
+    | 'title'
+    | 'description'
+    | 'status'
+    | 'severity'
+  >,
+  'teamId' | 'assigneeUserId' | 'description' | 'status'
+> & {
+  teamId?: number | null;
+  assigneeUserId?: string | null;
+  description?: string | null;
+  status?: TicketStatus;
+};
 
 @Injectable()
 export class TicketService extends CRUDService<TicketEntity> {
