@@ -1,9 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { TicketStatus, TicketSeverity } from './enums';
 import TicketEntity from './ticket.entity';
+import { TicketAssignmentValidatorService } from './ticket-assignment-validator.service';
 
 export type CreateTicketInput = Pick<
   TicketEntity,
@@ -26,6 +31,7 @@ export class TicketService extends CRUDService<TicketEntity> {
   constructor(
     @InjectRepository(TicketEntity)
     private ticketRepository: Repository<TicketEntity>,
+    private assignmentValidatorService: TicketAssignmentValidatorService,
   ) {
     super(ticketRepository);
   }
@@ -112,6 +118,13 @@ export class TicketService extends CRUDService<TicketEntity> {
     ticketId: number,
     input: Partial<CreateTicketInput>,
   ): Promise<TicketEntity | null> {
+    this.logger.log({
+      log: 'Attempting to update ticket',
+      projectId,
+      ticketId,
+      input,
+    });
+
     const ticket =
       await this.getDetailTicket(
         projectId,
@@ -119,14 +132,115 @@ export class TicketService extends CRUDService<TicketEntity> {
       );
 
     if (!ticket) {
+      this.logger.log({
+        log: 'Ticket not found for update',
+        projectId,
+        ticketId,
+      });
       return null;
+    }
+
+    // If assigneeUserId is being updated, validate project scope
+    if (
+      input.assigneeUserId !== undefined &&
+      input.assigneeUserId !== ticket.assigneeUserId
+    ) {
+      this.logger.log({
+        log: 'Validating assignee change during ticket update',
+        ticketId,
+        newAssigneeUserId: input.assigneeUserId,
+      });
+
+      if (input.assigneeUserId !== null) {
+        await this.assignmentValidatorService.validateAssignment(
+          projectId,
+          ticketId,
+          input.assigneeUserId,
+        );
+      }
     }
 
     Object.assign(ticket, input);
 
-    return await this.ticketRepository.save(
+    const result = await this.ticketRepository.save(
       ticket,
     );
+
+    this.logger.log({
+      log: 'Ticket update result',
+      ticketId,
+      updatedFields: Object.keys(input),
+    });
+
+    return result;
+  }
+
+  async assignTicket(
+    projectId: number,
+    ticketId: number,
+    assigneeUserId: string | null,
+  ): Promise<TicketEntity> {
+    this.logger.log({
+      log: 'Attempting to assign ticket',
+      projectId,
+      ticketId,
+      assigneeUserId,
+    });
+
+    if (assigneeUserId === null) {
+      const ticket = await this.getDetailTicket(
+        projectId,
+        ticketId,
+      );
+
+      if (!ticket) {
+        throw new NotFoundException(
+          `Ticket #${ticketId} not found in project ${projectId}`,
+        );
+      }
+
+      ticket.assigneeUserId = null;
+
+      const result = await this.ticketRepository.save(
+        ticket,
+      );
+
+      this.logger.log({
+        log: 'Ticket unassignment result',
+        ticketId,
+        assigneeUserId,
+        updatedTicketId: result.id,
+      });
+
+      return result;
+    }
+
+    const {
+      ticket,
+      isReassignment,
+      previousAssigneeUserId,
+    } = await this.assignmentValidatorService.validateAssignment(
+      projectId,
+      ticketId,
+      assigneeUserId,
+    );
+
+    ticket.assigneeUserId = assigneeUserId;
+
+    const result = await this.ticketRepository.save(
+      ticket,
+    );
+
+    this.logger.log({
+      log: 'Ticket assignment result',
+      ticketId,
+      assigneeUserId,
+      isReassignment,
+      previousAssigneeUserId,
+      updatedTicketId: result.id,
+    });
+
+    return result;
   }
 
   async deleteTicket(
@@ -272,5 +386,3 @@ export class TicketService extends CRUDService<TicketEntity> {
     return result;
   }
 }
-
-  

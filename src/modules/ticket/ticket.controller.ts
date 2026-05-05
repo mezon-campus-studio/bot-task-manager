@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -12,6 +13,7 @@ import { TicketService } from './ticket.service';
 
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+import { AssignTicketDto } from './dto/assign-ticket.dto';
 
 import {
   TicketSeverity,
@@ -45,6 +47,7 @@ export class TicketController {
   @Get('project/:projectId/:id')
   async getDetailTicket(
     @Param('projectId') projectId: number,
+    //xác thực id
     @Param('id') id: number,
   ) {
     return await this.ticketService.getDetailTicket(
@@ -59,10 +62,43 @@ export class TicketController {
     @Param('id') id: number,
     @Body() body: UpdateTicketDto,
   ) {
+    //tạo payload mới để có thể update cả trường assigneeUserId và assigneeId, nếu có trường nào thì sẽ update trường đó
+    const payload = {
+      ...body,
+      assigneeUserId:
+        body.assigneeUserId ?? body.assigneeId,
+    };
+
+    if ('assigneeId' in payload) {
+      delete payload.assigneeId;
+    }
+
     return await this.ticketService.updateTicket(
       Number(projectId),
       Number(id),
-      body,
+      payload,
+    );
+  }
+
+  @Patch('project/:projectId/:id/assign')
+  async assignTicket(
+    @Param('projectId') projectId: number,
+    @Param('id') id: number,
+    @Body() body: AssignTicketDto,
+  ) {
+    const assigneeUserId =
+      body.assigneeUserId ?? body.assigneeId;
+
+    if (assigneeUserId === undefined) {
+      throw new BadRequestException(
+        'assigneeId or assigneeUserId is required',
+      );
+    }
+
+    return await this.ticketService.assignTicket(
+      Number(projectId),
+      Number(id),
+      assigneeUserId,
     );
   }
 

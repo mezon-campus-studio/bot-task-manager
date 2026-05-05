@@ -27,6 +27,11 @@ export class UpdateTicketDto {
 
   @IsUUID()
   @IsOptional()
+  // thêm assigneeId để có thể update cả trường assigneeUserId và assigneeId, nếu có trường nào thì sẽ update trường đó
+  assigneeId?: string | null;
+
+  @IsUUID()
+  @IsOptional()
   reporterUserId?: string;
 
   @IsOptional()

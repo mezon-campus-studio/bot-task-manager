@@ -4,6 +4,7 @@ import { createTestingModule, factory, testingModule } from '#jest';
 import { TicketSeverity, TicketStatus } from './enums';
 import TicketEntity from './ticket.entity';
 import { TicketService } from './ticket.service';
+import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
 
 describe(TicketService.name, () => {
   let ticketService: TicketService;
@@ -174,6 +175,143 @@ describe(TicketService.name, () => {
       id: ticket.id,
       severity: TicketSeverity.CRITICAL,
       status: TicketStatus.IN_PROGRESS,
+    });
+  });
+
+  it('should assign and reassign a ticket only when assignee is active in the current project scope', async () => {
+    const reporter = await factory.user();
+    const project = await factory.project();
+    const assignee = await factory.user();
+    const nextAssignee = await factory.user();
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: nextAssignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    const ticket = await factory.ticket({
+      assigneeUserId: null,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: nextNumericId(),
+      title: 'Project scope assignment test',
+    });
+
+    const assignedTicket = await ticketService.assignTicket(
+      project.id,
+      ticket.id,
+      assignee.id,
+    );
+
+    expect(assignedTicket).toMatchObject({
+      id: ticket.id,
+      assigneeUserId: assignee.id,
+    });
+
+    const reassignedTicket = await ticketService.assignTicket(
+      project.id,
+      ticket.id,
+      nextAssignee.id,
+    );
+
+    expect(reassignedTicket).toMatchObject({
+      id: ticket.id,
+      assigneeUserId: nextAssignee.id,
+    });
+  });
+
+  it('should unassign a ticket when assigneeId is null', async () => {
+    const reporter = await factory.user();
+    const project = await factory.project();
+    const assignee = await factory.user();
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    const ticket = await factory.ticket({
+      assigneeUserId: assignee.id,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: nextNumericId(),
+      title: 'Ticket will be unassigned',
+    });
+
+    const unassignedTicket = await ticketService.assignTicket(
+      project.id,
+      ticket.id,
+      null,
+    );
+
+    expect(unassignedTicket).toMatchObject({
+      id: ticket.id,
+      assigneeUserId: null,
+    });
+  });
+
+  it('should update assigneeUserId via generic updateTicket with project scope validation', async () => {
+    const reporter = await factory.user();
+    const project = await factory.project();
+    const firstAssignee = await factory.user();
+    const secondAssignee = await factory.user();
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: firstAssignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: secondAssignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    const ticket = await factory.ticket({
+      assigneeUserId: firstAssignee.id,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      severity: TicketSeverity.MEDIUM,
+      status: TicketStatus.OPEN,
+      teamId: nextNumericId(),
+      title: 'Update assignee via generic update',
+    });
+
+    const updatedTicket = await ticketService.updateTicket(
+      project.id,
+      ticket.id,
+      {
+        assigneeUserId: secondAssignee.id,
+        status: TicketStatus.IN_PROGRESS,
+      },
+    );
+
+    expect(updatedTicket).toMatchObject({
+      id: ticket.id,
+      assigneeUserId: secondAssignee.id,
+      status: TicketStatus.IN_PROGRESS,
+    });
+
+    const unassignedTicket = await ticketService.updateTicket(
+      project.id,
+      ticket.id,
+      {
+        assigneeUserId: null,
+      },
+    );
+
+    expect(unassignedTicket).toMatchObject({
+      id: ticket.id,
+      assigneeUserId: null,
     });
   });
 
