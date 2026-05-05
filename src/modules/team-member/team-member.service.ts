@@ -9,13 +9,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { CreateTeamMemberDto } from './dtos/create-team-member.dto';
 import { TeamMemberStatus } from './enums/team-member-status.enum';
 import TeamMemberEntity from './team-member.entity';
 import { ProjectMemberService } from '../project-member/project-member.service';
 import { TeamService } from '../team';
-
-type CreateTeamMemberInput = Pick<TeamMemberEntity, 'teamId' | 'userId'> &
-  Partial<Pick<TeamMemberEntity, 'status' | 'invitedByUserId' | 'joinedAt'>>;
 
 @Injectable()
 export class TeamMemberService extends CRUDService<TeamMemberEntity> {
@@ -33,7 +31,7 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
   }
 
   async createMembership(
-    input: CreateTeamMemberInput,
+    input: CreateTeamMemberDto,
   ): Promise<TeamMemberEntity> {
     const existing = await this.findMembership(input.teamId, input.userId);
     if (existing) {
