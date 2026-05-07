@@ -264,4 +264,153 @@ describe(TeamMemberService.name, () => {
       ]);
     });
   });
+
+  describe('addMember', () => {
+    it('should add a new member successfully after validating context', async () => {
+      const owner = await factory.user({ mezonId: 'add-member-owner' });
+      const project = await createProject('add-member-project', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'add-member-team',
+      });
+      const user = await factory.user({ mezonId: 'add-member-user' });
+
+      const result = await teamMemberService.addMember(
+        project.id,
+        team.id,
+        user.id,
+        owner.id,
+      );
+
+      expect(result).toMatchObject({
+        teamId: team.id,
+        userId: user.id,
+        status: TeamMemberStatus.ACTIVE,
+      });
+    });
+
+    it('should restore a previously deleted member', async () => {
+      const owner = await factory.user({ mezonId: 'restore-member-owner' });
+      const project = await createProject('restore-member-project', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'restore-member-team',
+      });
+      const user = await factory.user({ mezonId: 'restore-member-user' });
+
+      const member = await factory.teamMember({
+        teamId: team.id,
+        userId: user.id,
+        status: TeamMemberStatus.INVITED,
+      });
+      await teamMemberRepository.softDelete(member.id);
+
+      const result = await teamMemberService.addMember(
+        project.id,
+        team.id,
+        user.id,
+        owner.id,
+      );
+
+      expect(result.status).toBe(TeamMemberStatus.ACTIVE);
+      const dbMember = await teamMemberRepository.findOne({
+        where: { id: member.id },
+        withDeleted: false,
+      });
+      expect(dbMember).not.toBeNull();
+    });
+
+    it('should throw ConflictException if user is already an active member', async () => {
+      const owner = await factory.user({ mezonId: 'conflict-member-owner' });
+      const project = await createProject('conflict-member-project', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'conflict-member-team',
+      });
+      const user = await factory.user({ mezonId: 'conflict-member-user' });
+
+      await factory.teamMember({
+        teamId: team.id,
+        userId: user.id,
+        status: TeamMemberStatus.ACTIVE,
+      });
+
+      await expect(
+        teamMemberService.addMember(project.id, team.id, user.id, owner.id),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('removeMember', () => {
+    it('should soft delete an existing member', async () => {
+      const owner = await factory.user({ mezonId: 'remove-member-owner' });
+      const project = await createProject('remove-member-project', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'remove-member-team',
+      });
+      const user = await factory.user({ mezonId: 'remove-member-user' });
+
+      await factory.teamMember({
+        teamId: team.id,
+        userId: user.id,
+        status: TeamMemberStatus.ACTIVE,
+      });
+
+      const result = await teamMemberService.removeMember(
+        project.id,
+        team.id,
+        user.id,
+      );
+      expect(result.message).toContain('removed');
+
+      const dbMember = await teamMemberRepository.findOne({
+        where: { teamId: team.id, userId: user.id },
+      });
+      expect(dbMember).toBeNull();
+    });
+
+    it('should throw NotFoundException if member does not exist in team', async () => {
+      const owner = await factory.user({ mezonId: 'remove-missing-owner' });
+      const project = await createProject('remove-missing-project', owner.id);
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'remove-missing-team',
+      });
+      const user = await factory.user({ mezonId: 'remove-missing-user' });
+
+      await expect(
+        teamMemberService.removeMember(project.id, team.id, user.id),
+      ).rejects.toThrow();
+    });
+  });
+
+  describe('validateContext Errors', () => {
+    it('should throw NotFoundException when project ID is invalid', async () => {
+      const user = await factory.user({ mezonId: 'invalid-project-user' });
+      await expect(
+        teamMemberService.addMember(999999, 1, user.id, 'someone'),
+      ).rejects.toThrow(/Project with ID 999999 not found/);
+    });
+
+    it('should throw ConflictException when team does not belong to project', async () => {
+      const owner = await factory.user({ mezonId: 'wrong-project-owner' });
+      const project1 = await createProject('project-1', owner.id);
+      const project2 = await createProject('project-2', owner.id);
+      const teamOfProject2 = await factory.team({
+        projectId: project2.id,
+        slug: 'team-p2',
+      });
+      const user = await factory.user({ mezonId: 'wrong-project-user' });
+
+      await expect(
+        teamMemberService.addMember(
+          project1.id,
+          teamOfProject2.id,
+          user.id,
+          owner.id,
+        ),
+      ).rejects.toThrow(/does not belong to Project/);
+    });
+  });
 });
