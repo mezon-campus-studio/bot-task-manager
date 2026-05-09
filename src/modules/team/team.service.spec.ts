@@ -1,14 +1,28 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
+import { ProjectContextService } from '@src/modules/project/project-context.service';
 import ProjectEntity from '@src/modules/project/project.entity';
 import { ProjectOnboardingStatus } from '@src/modules/project/project.enums';
+import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
+import ProjectMemberEntity from '@src/modules/project-member/project-member.entity';
+import TaskEntity from '@src/modules/task/task.entity';
+import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
+import TeamMemberEntity from '@src/modules/team-member/team-member.entity';
 import TeamEntity from './team.entity';
 import { TeamService } from './team.service';
 
 describe(TeamService.name, () => {
   let projectRepository: Repository<ProjectEntity>;
+  let projectContextService: ProjectContextService;
   let teamService: TeamService;
+  let taskRepository: Repository<TaskEntity>;
+  let teamMemberRepository: Repository<TeamMemberEntity>;
   let teamRepository: Repository<TeamEntity>;
 
   beforeAll(createTestingModule);
@@ -17,7 +31,12 @@ describe(TeamService.name, () => {
     projectRepository = testingModule!
       .get(DataSource)
       .getRepository(ProjectEntity);
+    projectContextService = testingModule!.get(ProjectContextService);
     teamService = testingModule!.get(TeamService);
+    taskRepository = testingModule!.get(DataSource).getRepository(TaskEntity);
+    teamMemberRepository = testingModule!
+      .get(DataSource)
+      .getRepository(TeamMemberEntity);
     teamRepository = testingModule!.get(DataSource).getRepository(TeamEntity);
   });
 
@@ -31,6 +50,32 @@ describe(TeamService.name, () => {
     });
 
     return projectRepository.save(project);
+  }
+
+  async function createCurrentProjectContext(slug: string) {
+    const owner = await factory.user({
+      mezonId: `${slug}-owner`,
+    });
+    const user = await factory.user({
+      mezonId: `${slug}-member`,
+    });
+    const project = await createProject(slug, owner.id);
+
+    await factory.projectMember({
+      projectId: project.id,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: user.id,
+    });
+    await projectContextService.useProject({
+      projectId: project.id,
+      userId: user.id,
+    });
+
+    return {
+      owner,
+      project,
+      user,
+    };
   }
 
   describe('createTeam', () => {
@@ -270,6 +315,210 @@ describe(TeamService.name, () => {
       expect(team).not.toBeNull();
       expect(team?.slug).toBe('the-default');
       expect(team?.isDefault).toBe(true);
+    });
+  });
+
+  describe('current project team flow', () => {
+    it('should reject team current project operations when the user has not selected a project', async () => {
+      const user = await factory.user({
+        mezonId: 'team-current-missing-context-user',
+      });
+
+      await expect(
+        projectContextService.getRequiredCurrentProject(user.id),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject team current project operations when the selected member was removed', async () => {
+      const { project, user } = await createCurrentProjectContext(
+        'team-current-removed-member-project',
+      );
+
+      await testingModule!
+        .get(DataSource)
+        .getRepository(ProjectMemberEntity)
+        .update(
+          { projectId: project.id, userId: user.id },
+          { status: ProjectMemberStatus.REMOVED },
+        );
+
+      await expect(
+        projectContextService.getRequiredCurrentProject(user.id),
+      ).rejects.toThrow(ForbiddenException);
+      await expect(
+        projectContextService.getRequiredCurrentProjectByMezonId(user.mezonId),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should create a team inside the selected current project', async () => {
+      const { project, user } = await createCurrentProjectContext(
+        'team-current-create-project',
+      );
+      const context = await projectContextService.getRequiredCurrentProject(
+        user.id,
+      );
+
+      const team = await teamService.createTeamInProject(context.projectId, {
+        leaderId: user.id,
+        name: 'Current Project Team',
+        slug: 'current-project-team',
+      });
+
+      expect(team).toMatchObject({
+        leaderId: user.id,
+        name: 'Current Project Team',
+        projectId: project.id,
+        slug: 'current-project-team',
+      });
+    });
+
+    it('should list only teams from the selected current project', async () => {
+      const { project, user } = await createCurrentProjectContext(
+        'team-current-scope-project',
+      );
+      const otherOwner = await factory.user({
+        mezonId: 'team-current-scope-other-owner',
+      });
+      const otherProject = await createProject(
+        'team-current-scope-other-project',
+        otherOwner.id,
+      );
+
+      const currentTeam = await factory.team({
+        projectId: project.id,
+        slug: 'current-scope-team',
+      });
+
+      await factory.team({
+        projectId: otherProject.id,
+        slug: 'other-scope-team',
+      });
+
+      const context = await projectContextService.getRequiredCurrentProject(
+        user.id,
+      );
+      const teams = await teamService.findByProjectId(context.projectId);
+
+      expect(teams.map(({ id }) => id)).toEqual([currentTeam.id]);
+    });
+
+    it('should assign an existing team to the selected current project', async () => {
+      const { project, user } = await createCurrentProjectContext(
+        'team-current-assign-project',
+      );
+      const sourceOwner = await factory.user({
+        mezonId: 'team-current-assign-source-owner',
+      });
+      const sourceProject = await createProject(
+        'team-current-assign-source-project',
+        sourceOwner.id,
+      );
+      const team = await factory.team({
+        isDefault: true,
+        projectId: sourceProject.id,
+        slug: 'assignable-team',
+      });
+      const sourceTask = await factory.task({
+        projectId: sourceProject.id,
+        reporterUserId: sourceOwner.id,
+        teamId: team.id,
+        title: 'Source task should lose moved team mapping',
+      });
+      const context = await projectContextService.getRequiredCurrentProject(
+        user.id,
+      );
+
+      const result = await teamService.assignTeamToProject(
+        context.projectId,
+        team.id,
+      );
+
+      expect(result).toMatchObject({
+        id: team.id,
+        isDefault: false,
+        projectId: project.id,
+      });
+      await expect(
+        taskRepository.findOneByOrFail({ id: sourceTask.id }),
+      ).resolves.toMatchObject({
+        id: sourceTask.id,
+        teamId: null,
+      });
+    });
+
+    it('should delete a team from current project and cleanup team members and task mapping', async () => {
+      const { project, user } = await createCurrentProjectContext(
+        'team-current-delete-project',
+      );
+      const team = await factory.team({
+        projectId: project.id,
+        slug: 'delete-current-team',
+      });
+      const membership = await factory.teamMember({
+        status: TeamMemberStatus.ACTIVE,
+        teamId: team.id,
+        userId: user.id,
+      });
+      const task = await factory.task({
+        projectId: project.id,
+        reporterUserId: user.id,
+        teamId: team.id,
+        title: 'Cleanup team task mapping',
+      });
+      const context = await projectContextService.getRequiredCurrentProject(
+        user.id,
+      );
+
+      await teamService.deleteTeamFromProject(context.projectId, team.id);
+
+      await expect(
+        teamRepository.findOne({
+          where: { id: team.id },
+          withDeleted: true,
+        }),
+      ).resolves.toMatchObject({
+        deletedAt: expect.any(Date),
+        id: team.id,
+      });
+      await expect(
+        teamMemberRepository.findOne({
+          where: { id: membership.id },
+          withDeleted: true,
+        }),
+      ).resolves.toMatchObject({
+        deletedAt: expect.any(Date),
+        id: membership.id,
+      });
+      await expect(
+        taskRepository.findOneByOrFail({ id: task.id }),
+      ).resolves.toMatchObject({
+        id: task.id,
+        teamId: null,
+      });
+    });
+
+    it('should reject deleting a team that does not belong to the selected current project', async () => {
+      const { user } = await createCurrentProjectContext(
+        'team-current-delete-mismatch-project',
+      );
+      const otherOwner = await factory.user({
+        mezonId: 'team-current-delete-mismatch-owner',
+      });
+      const otherProject = await createProject(
+        'team-current-delete-mismatch-other-project',
+        otherOwner.id,
+      );
+      const otherTeam = await factory.team({
+        projectId: otherProject.id,
+        slug: 'other-delete-team',
+      });
+      const context = await projectContextService.getRequiredCurrentProject(
+        user.id,
+      );
+
+      await expect(
+        teamService.deleteTeamFromProject(context.projectId, otherTeam.id),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
