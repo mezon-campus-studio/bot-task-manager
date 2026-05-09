@@ -9,11 +9,12 @@ import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import TeamEntity from './team.entity';
 
-type CreateTeamInput = Pick<
-  TeamEntity,
-  'projectId' | 'name' | 'slug' | 'leaderId'
-> &
-  Partial<Pick<TeamEntity, 'description' | 'isDefault'>> &
+export type CreateTeamInput = Pick<TeamEntity, 'projectId' | 'name' | 'slug'> &
+  Partial<Pick<TeamEntity, 'leaderId' | 'description' | 'isDefault'>> &
+  Partial<Pick<TeamEntity, 'createdBy' | 'updatedBy'>>;
+
+export type CreateTeamInProjectInput = Pick<TeamEntity, 'name' | 'slug'> &
+  Partial<Pick<TeamEntity, 'leaderId' | 'description' | 'isDefault'>> &
   Partial<Pick<TeamEntity, 'createdBy' | 'updatedBy'>>;
 
 @Injectable()
@@ -58,6 +59,7 @@ export class TeamService extends CRUDService<TeamEntity> {
           ...input,
           description: input.description ?? null,
           isDefault: input.isDefault ?? false,
+          leaderId: input.leaderId ?? null,
         });
 
         return await transactionalEntityManager.save(team);
@@ -123,6 +125,22 @@ export class TeamService extends CRUDService<TeamEntity> {
 
     return this.teamRepository.findOne({
       where: { projectId, isDefault: true },
+    });
+  }
+
+  async createTeamInProject(
+    projectId: number,
+    input: CreateTeamInProjectInput,
+  ): Promise<TeamEntity> {
+    this.logger.log({
+      log: 'Attempting to create team in current project',
+      input,
+      projectId,
+    });
+
+    return this.createTeam({
+      ...input,
+      projectId,
     });
   }
 
