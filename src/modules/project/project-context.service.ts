@@ -170,6 +170,8 @@ export class ProjectContextService {
       throw new NotFoundException('Project not found');
     }
 
+    await this.validateActiveMembership(project.id, user.id);
+
     return {
       project,
       projectId: project.id,
@@ -218,6 +220,8 @@ export class ProjectContextService {
     if (context.project == null || context.projectId == null) {
       throw new BadRequestException('Current project has not been selected');
     }
+
+    await this.validateActiveMembership(context.project.id, context.user.id);
 
     return {
       project: context.project,
