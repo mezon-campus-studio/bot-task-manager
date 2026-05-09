@@ -5,7 +5,7 @@ import {
   Command,
   ManagedMessage,
   SmartMessage,
-} from '@nezon';
+} from '@src/libs/nezon';
 import { ProjectContextService } from './project-context.service';
 
 @Injectable()

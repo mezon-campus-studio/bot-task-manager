@@ -146,6 +146,37 @@ export class ProjectContextService {
     return result;
   }
 
+  async getRequiredCurrentProject(
+    userId: string,
+  ): Promise<SelectedProjectContext> {
+    this.logger.log({
+      log: 'Attempting to get required current project',
+      userId,
+    });
+
+    const user = await this.userService.findById(userId);
+
+    if (user == null) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.currentProjectId == null) {
+      throw new BadRequestException('Current project has not been selected');
+    }
+
+    const project = await this.projectService.findById(user.currentProjectId);
+
+    if (project == null) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return {
+      project,
+      projectId: project.id,
+      user,
+    };
+  }
+
   async getCurrentProjectByMezonId(
     mezonId: string,
   ): Promise<CurrentProjectContext> {
