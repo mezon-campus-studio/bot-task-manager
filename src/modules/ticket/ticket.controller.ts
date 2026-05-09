@@ -27,7 +27,9 @@ export class TicketController {
   constructor(private readonly ticketService: TicketService) {}
 
   @Post()
-  async createTicket(@Body() body: CreateTicketDto): Promise<TicketResponseDto> {
+  async createTicket(
+    @Body() body: CreateTicketDto,
+  ): Promise<TicketResponseDto> {
     const ticket = await this.ticketService.createTicket(body);
     return plainToInstance(TicketResponseDto, ticket, {
       excludeExtraneousValues: true,
@@ -100,7 +102,8 @@ export class TicketController {
   @Get('project/:projectId/severity/:severity')
   async getBySeverity(
     @Param('projectId', ParseIntPipe) projectId: number,
-    @Param('severity', new ParseEnumPipe(TicketSeverity)) severity: TicketSeverity,
+    @Param('severity', new ParseEnumPipe(TicketSeverity))
+    severity: TicketSeverity,
   ): Promise<TicketResponseDto[]> {
     const tickets = await this.ticketService.getBySeverity(projectId, severity);
     return plainToInstance(TicketResponseDto, tickets, {
