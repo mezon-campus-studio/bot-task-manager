@@ -35,8 +35,8 @@ export default class UserEntity extends AbstractUuidEntity {
   })
   status!: UserStatus | null;
 
-  @Column({ type: 'varchar', nullable: true })
-  currentProjectId?: string | null;
+  @Column({ type: 'int', nullable: true })
+  currentProjectId?: number | null;
 
   @Column({ type: 'timestamp', nullable: true })
   lastActiveAt?: Date | null;
