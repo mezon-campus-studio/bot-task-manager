@@ -21,6 +21,12 @@ export default class NoteEntity extends AbstractEntity {
   })
   authorUserId!: string;
 
+  @Column({ default: false })
+  isPinned: boolean;
+
+  @Column({ default: true })
+  isShared: boolean;
+
   @Column({
     type: 'enum',
     enum: NoteResourceType,
