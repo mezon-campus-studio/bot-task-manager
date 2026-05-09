@@ -1,12 +1,13 @@
 import { Logger, Module } from '@nestjs/common';
 import { MezonClient } from 'mezon-sdk';
-import { NezonModule } from '@nezon';
 import { BotCronModule } from '@src/bot/cron/bot-cron.module';
 import ChannelMessageHandler from '@src/bot/handler/channel-message.handler';
 import { DatabaseModule } from '@src/common/database/database.module';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import { SharedModule } from '@src/common/shared/shared.module';
+import { NezonModule } from '@src/libs/nezon';
 import { ProjectModule } from '@src/modules/project/project.module';
+import { TeamModule } from '@src/modules/team/team.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ProjectModule } from '@src/modules/project/project.module';
     }),
     DatabaseModule,
     ProjectModule,
+    TeamModule,
     BotCronModule,
   ],
   providers: [ChannelMessageHandler],
