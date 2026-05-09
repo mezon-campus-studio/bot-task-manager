@@ -11,11 +11,13 @@ import {
   Post,
   UseInterceptors,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamMemberService } from './team-member.service';
 
+@ApiTags('Team Members')
 @Controller('team-members')
 @UseInterceptors(ClassSerializerInterceptor)
 export class TeamMemberController {
