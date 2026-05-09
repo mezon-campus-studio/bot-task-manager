@@ -68,6 +68,23 @@ export class TeamController {
     });
   }
 
+  @Patch('current/:userId/:teamId/assign')
+  async assignToCurrentProject(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('teamId', ParseIntPipe) teamId: number,
+  ): Promise<TeamResponseDto> {
+    const context =
+      await this.projectContextService.getRequiredCurrentProject(userId);
+    const team = await this.teamService.assignTeamToProject(
+      context.projectId,
+      teamId,
+    );
+
+    return plainToInstance(TeamResponseDto, team, {
+      excludeExtraneousValues: true,
+    });
+  }
+
   @Get('project/:projectId')
   async findByProject(
     @Param('projectId', ParseIntPipe) projectId: number,

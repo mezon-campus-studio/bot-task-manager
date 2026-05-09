@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import TaskEntity from '@src/modules/task/task.entity';
 import TeamEntity from './team.entity';
 
 export type CreateTeamInput = Pick<TeamEntity, 'projectId' | 'name' | 'slug'> &
@@ -142,6 +143,63 @@ export class TeamService extends CRUDService<TeamEntity> {
       ...input,
       projectId,
     });
+  }
+
+  async assignTeamToProject(
+    projectId: number,
+    teamId: number,
+  ): Promise<TeamEntity> {
+    this.logger.log({
+      log: 'Attempting to assign team to current project',
+      projectId,
+      teamId,
+    });
+
+    const team = await this.findById(teamId);
+
+    if (!team) {
+      throw new NotFoundException('Team not found');
+    }
+
+    if (team.projectId === projectId) {
+      return team;
+    }
+
+    return this.teamRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const duplicate = await transactionalEntityManager.findOne(TeamEntity, {
+          where: [
+            {
+              projectId,
+              slug: team.slug,
+              id: Not(teamId),
+            },
+            {
+              projectId,
+              name: team.name,
+              id: Not(teamId),
+            },
+          ],
+        });
+
+        if (duplicate) {
+          throw new ConflictException(
+            'New name or slug already exists in the target project',
+          );
+        }
+
+        await transactionalEntityManager.update(
+          TaskEntity,
+          { projectId: team.projectId, teamId },
+          { teamId: null },
+        );
+
+        team.projectId = projectId;
+        team.isDefault = false;
+
+        return transactionalEntityManager.save(TeamEntity, team);
+      },
+    );
   }
 
   async updateTeam(
