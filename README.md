@@ -160,17 +160,21 @@ You can use this template:
 
 ```md
 ## Ticket
+
 MEZON-123
 
 ## Summary
+
 - Brief summary of the completed work
 
 ## Changes
+
 - Add API ...
 - Update service ...
 - Update migration ... (if any)
 
 ## Notes
+
 - Points the reviewer should pay attention to
 ```
 

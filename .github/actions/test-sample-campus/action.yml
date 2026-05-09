@@ -33,13 +33,13 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
-        CI: "true"
-        NO_POSTGRES: "true"
-        NO_REDIS: "true"
+        CI: 'true'
+        NO_POSTGRES: 'true'
+        NO_REDIS: 'true'
         DB_HOST: ${{ inputs.db-host }}
         DB_PORT: ${{ inputs.db-port }}
         DB_USERNAME: ${{ inputs.db-username }}
         DB_PASSWORD: ${{ inputs.db-password }}
         DB_DATABASE: ${{ inputs.db-database }}
-        NEZON_DISABLE_BOOTSTRAP: "true"
+        NEZON_DISABLE_BOOTSTRAP: 'true'
       run: ${{ inputs.test-command }}

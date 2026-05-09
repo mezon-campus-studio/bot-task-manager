@@ -1,25 +1,20 @@
-import {
-  Column,
-  CreateDateColumn,
-  DeleteDateColumn,
-  Entity,
-  Index,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, DeleteDateColumn, Entity, Index } from 'typeorm';
+import { AbstractEntity } from '#src/common/database/abstract.entity.js';
+import { TeamStatus } from './enum/team-status.enum';
 
 @Entity('teams')
 @Index('teams_project_id_slug_key', ['projectId', 'slug'], { unique: true })
 @Index('teams_project_id_name_key', ['projectId', 'name'], { unique: true })
-export default class TeamEntity {
-  @PrimaryGeneratedColumn('increment')
-  id!: number;
-
+export default class TeamEntity extends AbstractEntity {
   @Column({ type: 'int' })
   projectId!: number;
 
   @Column({ type: 'varchar' })
   name!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  @Index('IDX_teams_leader_id')
+  leaderId!: string | null;
 
   @Column({ type: 'varchar' })
   slug!: string;
@@ -30,17 +25,12 @@ export default class TeamEntity {
   @Column({ type: 'boolean', default: false })
   isDefault!: boolean;
 
-  @CreateDateColumn({ type: 'timestamptz' })
-  createdAt!: Date;
-
-  @UpdateDateColumn({ type: 'timestamptz' })
-  updatedAt!: Date;
-
-  @Column({ type: 'uuid', nullable: true })
-  createdBy!: string | null;
-
-  @Column({ type: 'uuid', nullable: true })
-  updatedBy!: string | null;
+  @Column({
+    type: 'enum',
+    enum: TeamStatus,
+    default: TeamStatus.ACTIVE,
+  })
+  status!: TeamStatus;
 
   @DeleteDateColumn({ type: 'timestamptz', nullable: true })
   deletedAt!: Date | null;
