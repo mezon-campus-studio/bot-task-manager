@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import TaskEntity from '@src/modules/task/task.entity';
+import TeamMemberEntity from '@src/modules/team-member/team-member.entity';
 import TeamEntity from './team.entity';
 
 export type CreateTeamInput = Pick<TeamEntity, 'projectId' | 'name' | 'slug'> &
@@ -267,5 +268,44 @@ export class TeamService extends CRUDService<TeamEntity> {
         `Cannot delete Team with ID ${id} because it does not exist`,
       );
     }
+  }
+
+  async deleteTeamFromProject(
+    projectId: number,
+    teamId: number,
+  ): Promise<void> {
+    this.logger.log({
+      log: 'Attempting to delete team from current project',
+      projectId,
+      teamId,
+    });
+
+    await this.teamRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const team = await transactionalEntityManager.findOne(TeamEntity, {
+          where: { id: teamId },
+        });
+
+        if (!team) {
+          throw new NotFoundException('Team not found');
+        }
+
+        if (team.projectId !== projectId) {
+          throw new ConflictException(
+            `Team ${teamId} does not belong to Project ${projectId}`,
+          );
+        }
+
+        await transactionalEntityManager.softDelete(TeamMemberEntity, {
+          teamId,
+        });
+        await transactionalEntityManager.update(
+          TaskEntity,
+          { projectId, teamId },
+          { teamId: null },
+        );
+        await transactionalEntityManager.softDelete(TeamEntity, teamId);
+      },
+    );
   }
 }

@@ -85,6 +85,18 @@ export class TeamController {
     });
   }
 
+  @Delete('current/:userId/:teamId')
+  @HttpCode(204)
+  async removeFromCurrentProject(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Param('teamId', ParseIntPipe) teamId: number,
+  ): Promise<void> {
+    const context =
+      await this.projectContextService.getRequiredCurrentProject(userId);
+
+    await this.teamService.deleteTeamFromProject(context.projectId, teamId);
+  }
+
   @Get('project/:projectId')
   async findByProject(
     @Param('projectId', ParseIntPipe) projectId: number,
