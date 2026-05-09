@@ -6,6 +6,7 @@ import ChannelMessageHandler from '@src/bot/handler/channel-message.handler';
 import { DatabaseModule } from '@src/common/database/database.module';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import { SharedModule } from '@src/common/shared/shared.module';
+import { ProjectModule } from '@src/modules/project/project.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { SharedModule } from '@src/common/shared/shared.module';
       useFactory: async (config: AppConfigService) => config.botConfig,
     }),
     DatabaseModule,
+    ProjectModule,
     BotCronModule,
   ],
   providers: [ChannelMessageHandler],

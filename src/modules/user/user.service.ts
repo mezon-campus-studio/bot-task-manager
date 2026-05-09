@@ -396,4 +396,28 @@ export class UserService extends CRUDService<UserEntity> {
       },
     });
   }
+
+  async updateCurrentProject(
+    user: UserEntity,
+    currentProjectId: number | null,
+  ): Promise<UserEntity> {
+    this.logger.log({
+      log: 'Attempting to update user current project',
+      currentProjectId,
+      userId: user.id,
+    });
+
+    user.currentProjectId = currentProjectId;
+    const result = await this.userRepository.save(user);
+
+    this.logger.log({
+      log: 'User current project update result',
+      result: {
+        currentProjectId: result.currentProjectId,
+        id: result.id,
+      },
+    });
+
+    return result;
+  }
 }

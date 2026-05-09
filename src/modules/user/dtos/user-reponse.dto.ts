@@ -5,7 +5,7 @@ export class UserReponseDto {
   avatar?: string | null;
   role: string | null;
   status: string | null;
-  currentProjectId?: string | null;
+  currentProjectId?: number | null;
   creatAt: Date | null;
   updatedAt: Date | null;
   lastActiveAt?: Date | null;
