@@ -55,7 +55,7 @@ export default class EventEntity extends AbstractEntity {
     type: 'timestamptz',
     nullable: true,
   })
-  endsAt!: Date | null;
+  endsAt!: Date ;
 
   @Column({
     type: 'varchar',
@@ -68,4 +68,7 @@ export default class EventEntity extends AbstractEntity {
     nullable: true,
   })
   deletedAt!: Date | null;
+
+  @Column({ type: 'int', nullable: true, default: 0 })
+  reminder: number;
 }

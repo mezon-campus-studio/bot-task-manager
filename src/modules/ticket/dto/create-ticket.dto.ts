@@ -1,48 +1,64 @@
 import {
-  IsDefined,
   IsEnum,
-  IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   MaxLength,
+  IsDateString, // <--- Thêm import này
 } from 'class-validator';
 
-import { TicketSeverity, TicketStatus } from '../enums';
+import {
+  TicketSeverity,
+  TicketStatus,
+  TicketPriority,
+  TicketType,
+} from '../enums';
 
 export class CreateTicketDto {
-  @IsDefined()
-  @IsInt()
-  projectId!: number;
+  @IsNumber()
+  @IsNotEmpty()
+  projectId: number;
 
-  @IsDefined()
-  @IsUUID()
-  reporterUserId!: string;
-
-  @IsDefined()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  title!: string;
+  title: string;
 
-  @IsOptional()
-  @IsInt()
-  teamId?: number | null;
+  @IsEnum(TicketType)
+  @IsNotEmpty()
+  type: TicketType;
 
-  @IsOptional()
-  @IsUUID()
-  assigneeUserId?: string | null;
+  @IsEnum(TicketPriority)
+  @IsNotEmpty()
+  priority: TicketPriority;
+
+  @IsDateString() // <--- Validate định dạng ISO8601 (VD: 2024-12-31)
+  @IsNotEmpty()
+  deadline: string;
 
   @IsOptional()
   @IsString()
-  description?: string | null;
+  description: string | null;
 
-  @IsOptional()
   @IsEnum(TicketStatus)
-  status?: TicketStatus;
-
   @IsOptional()
+  status: TicketStatus;
+
   @IsEnum(TicketSeverity)
-  severity?: TicketSeverity;
+  @IsOptional()
+  severity: TicketSeverity;
+
+  @IsUUID()
+  @IsNotEmpty()
+  reporterUserId: string;
+
+  @IsUUID()
+  @IsOptional()
+  assigneeUserId: string | null;
+
+  @IsNumber()
+  @IsOptional()
+  teamId: number | null;
 }

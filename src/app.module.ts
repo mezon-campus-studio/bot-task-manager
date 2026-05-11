@@ -21,11 +21,13 @@ import { TeamMemberModule } from './modules/team-member/team-member.module';
 import { TicketModule } from './modules/ticket/ticket.module';
 import { UserModule } from './modules/user/user.module';
 import { UserRoleAssignmentModule } from './modules/user-role-assignment/user-role-assignment.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
     SharedModule,
     DatabaseModule,
+    ScheduleModule.forRoot(),
     NezonModule.forRootAsync({
       inject: [AppConfigService],
       useFactory: async (config: AppConfigService) => config.botConfig,

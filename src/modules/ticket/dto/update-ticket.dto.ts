@@ -6,9 +6,15 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  IsDateString, // <--- Đảm bảo có import
 } from 'class-validator';
 
-import { TicketSeverity, TicketStatus } from '../enums';
+import {
+  TicketSeverity,
+  TicketStatus,
+  TicketPriority,
+  TicketType,
+} from '../enums';
 
 export class UpdateTicketDto {
   @IsOptional()
@@ -16,6 +22,18 @@ export class UpdateTicketDto {
   @IsNotEmpty()
   @MaxLength(255)
   title?: string;
+
+  @IsOptional()
+  @IsEnum(TicketType)
+  type?: TicketType;
+
+  @IsOptional()
+  @IsEnum(TicketPriority)
+  priority?: TicketPriority;
+
+  @IsOptional()
+  @IsDateString() // <--- Validate nếu người dùng có truyền lên
+  deadline?: string;
 
   @IsOptional()
   @IsString()

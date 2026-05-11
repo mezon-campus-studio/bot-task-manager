@@ -5,9 +5,11 @@ import TaskEntity from '@src/modules/task/task.entity';
 import TeamEntity from '@src/modules/team/team.entity';
 import TicketEntity from '@src/modules/ticket/ticket.entity';
 import UserEntity from '@src/modules/user/user.entity';
+import EventEntity from '@src/modules/event/event.entity';
 import {
   channelMessage as channelMessageFactory,
   messageButtonClicked as messageButtonClickedFactory,
+  event as eventFactory,
   project as projectFactory,
   role as roleFactory,
   task as taskFactory,
@@ -38,6 +40,8 @@ export class DatabaseSeeder {
       project = {},
       teams = 2,
       team = {},
+      events = 10, 
+      event = {},
     } = options;
 
     this.logger.log('Starting database seeding...');
@@ -63,6 +67,14 @@ export class DatabaseSeeder {
       ...team,
     });
 
+    const seededEvents = await createEvents(events, {
+      projectId: seededProjects[0]?.id,
+      teamId: seededTeams[0]?.id,
+      ownerUserId: seededUsers[0].id,
+      ...event,
+    });
+
+    this.logger.log(`Seeded ${seededEvents.length} events`);
     this.logger.log(`Seeded ${seededUsers.length} users`);
     this.logger.log(`Seeded ${seededProjects.length} projects`);
     this.logger.log(`Seeded ${seededTasks.length} tasks`);
@@ -76,6 +88,7 @@ export class DatabaseSeeder {
       tickets: seededTickets,
       users: seededUsers,
       teams: seededTeams,
+      events: seededEvents,
     };
   }
 
@@ -164,6 +177,26 @@ export class DatabaseSeeder {
   }
 }
 
+async function createEvents(count = 1, input: Partial<EventEntity> = {}) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const mockEvents = Array.from({ length: count }, (_, index) => {
+    const startsAt = new Date(today);
+    startsAt.setDate(today.getDate() + index); // Each event starts on a different day
+    const endAt = new Date(startsAt);
+    endAt.setDate(startsAt.getDate() + 1); // Each event lasts for 1 day
+    return {
+      ...input,
+      startsAt,
+      endAt,
+    };
+  });
+
+  return eventFactory(mockEvents);
+}
+
+
 type SeedOptions = {
   task?: Partial<TaskEntity>;
   tasks?: number;
@@ -176,6 +209,8 @@ type SeedOptions = {
   projects?: number;
   teams?: number;
   team?: Partial<TeamEntity>;
+  event?: Partial<EventEntity>; // <--- Dùng ở đây
+  events?: number;
 };
 
 type SeedResult = {
@@ -185,4 +220,5 @@ type SeedResult = {
   projects: ProjectEntity[];
   roles: RoleEntity[];
   teams: TeamEntity[];
+  events: EventEntity[];
 };

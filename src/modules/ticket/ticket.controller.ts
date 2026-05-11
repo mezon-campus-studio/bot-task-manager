@@ -7,11 +7,12 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query, // Thêm Query
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { TicketSeverity, TicketStatus } from './enums';
+import { GetTicketQueryDto } from './dto/get-ticket-query.dto'; // Import mới
 import { TicketService } from './ticket.service';
 
 @Controller('tickets')
@@ -24,9 +25,14 @@ export class TicketController {
     return this.ticketService.createTicket(body);
   }
 
+  // Gộp các route filter vào đây bằng Query Params
+  // Ví dụ: /tickets/project/1?status=OPEN&severity=HIGH
   @Get('project/:projectId')
-  async getListTicket(@Param('projectId', ParseIntPipe) projectId: number) {
-    return this.ticketService.getListTicket(projectId);
+  async getListTicket(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Query() query: GetTicketQueryDto, 
+  ) {
+    return this.ticketService.getListTicket(projectId, query);
   }
 
   @Get('project/:projectId/:id')
@@ -52,29 +58,5 @@ export class TicketController {
     @Param('id', ParseIntPipe) id: number,
   ) {
     return this.ticketService.deleteTicket(projectId, id);
-  }
-
-  @Get('project/:projectId/status/:status')
-  async getByStatus(
-    @Param('projectId', ParseIntPipe) projectId: number,
-    @Param('status') status: TicketStatus,
-  ) {
-    return this.ticketService.getByStatus(projectId, status);
-  }
-
-  @Get('project/:projectId/assignee/:userId')
-  async getByAssignee(
-    @Param('projectId', ParseIntPipe) projectId: number,
-    @Param('userId') userId: string,
-  ) {
-    return this.ticketService.getByAssignee(projectId, userId);
-  }
-
-  @Get('project/:projectId/severity/:severity')
-  async getBySeverity(
-    @Param('projectId', ParseIntPipe) projectId: number,
-    @Param('severity') severity: TicketSeverity,
-  ) {
-    return this.ticketService.getBySeverity(projectId, severity);
   }
 }
