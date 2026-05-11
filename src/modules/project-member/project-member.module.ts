@@ -11,4 +11,4 @@ import { ProjectMemberService } from './project-member.service';
   providers: [ProjectMemberRoleSyncService, ProjectMemberService],
   exports: [ProjectMemberService],
 })
-export class ProjectMemberModule { }
+export class ProjectMemberModule {}

@@ -24,4 +24,4 @@ import { ProjectService } from './project.service';
   ],
   exports: [ProjectContextService, ProjectService],
 })
-export class ProjectModule { }
+export class ProjectModule {}
