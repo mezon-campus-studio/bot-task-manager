@@ -5,10 +5,13 @@ import {
   Get,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Post,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { UserRoleAssignmentService } from './user-role-assignment.service';
 
+@ApiTags('User Role Assignments')
 @Controller('user-role-assignments')
 export class UserRoleAssignmentController {
   constructor(
@@ -21,7 +24,7 @@ export class UserRoleAssignmentController {
   }
 
   @Get('user/:userId')
-  async getByUser(@Param('userId') userId: string) {
+  async getByUser(@Param('userId', ParseUUIDPipe) userId: string) {
     return await this.userRoleAssignmentService.findByUserId(userId);
   }
 

@@ -12,7 +12,7 @@ import {
   Post,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
 import { CreateCurrentProjectTeamDto } from './dtos/create-current-project-team.dto';
@@ -31,6 +31,7 @@ export class TeamController {
   ) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new team' })
   async create(@Body() createTeamDto: CreateTeamDto): Promise<TeamResponseDto> {
     const team = await this.teamService.createTeam(createTeamDto);
     return plainToInstance(TeamResponseDto, team, {
@@ -39,6 +40,9 @@ export class TeamController {
   }
 
   @Post('current/:userId')
+  @ApiOperation({
+    summary: "Create a team within the user's current active project",
+  })
   async createInCurrentProject(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Body() body: CreateCurrentProjectTeamDto,
@@ -56,6 +60,9 @@ export class TeamController {
   }
 
   @Get('current/:userId')
+  @ApiOperation({
+    summary: "Get all teams in the user's current active project",
+  })
   async findByCurrentProject(
     @Param('userId', ParseUUIDPipe) userId: string,
   ): Promise<TeamResponseDto[]> {
@@ -69,6 +76,9 @@ export class TeamController {
   }
 
   @Patch('current/:userId/:teamId/assign')
+  @ApiOperation({
+    summary: "Assign an existing team to the user's current active project",
+  })
   async assignToCurrentProject(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('teamId', ParseIntPipe) teamId: number,
@@ -87,6 +97,9 @@ export class TeamController {
 
   @Delete('current/:userId/:teamId')
   @HttpCode(204)
+  @ApiOperation({
+    summary: "Remove a team from the user's current active project",
+  })
   async removeFromCurrentProject(
     @Param('userId', ParseUUIDPipe) userId: string,
     @Param('teamId', ParseIntPipe) teamId: number,
@@ -98,6 +111,7 @@ export class TeamController {
   }
 
   @Get('project/:projectId')
+  @ApiOperation({ summary: 'Get teams by project ID' })
   async findByProject(
     @Param('projectId', ParseIntPipe) projectId: number,
   ): Promise<TeamResponseDto[]> {
@@ -108,6 +122,7 @@ export class TeamController {
   }
 
   @Get('leader/:leaderId')
+  @ApiOperation({ summary: 'Get teams by leader ID' })
   async findByLeader(
     @Param('leaderId', ParseUUIDPipe) leaderId: string,
   ): Promise<TeamResponseDto[]> {
@@ -118,6 +133,7 @@ export class TeamController {
   }
 
   @Get(':id')
+  @ApiOperation({ summary: 'Get team details' })
   async findOne(
     @Param('id', ParseIntPipe) id: number,
   ): Promise<TeamResponseDto> {
@@ -128,6 +144,7 @@ export class TeamController {
   }
 
   @Patch(':id')
+  @ApiOperation({ summary: 'Update team information' })
   async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateTeamDto: UpdateTeamDto,
@@ -140,6 +157,7 @@ export class TeamController {
 
   @Delete(':id')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Soft delete a team' })
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
     await this.teamService.softDelete(id);
   }

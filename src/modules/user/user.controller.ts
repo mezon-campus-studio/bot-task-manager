@@ -1,58 +1,103 @@
 import {
   Body,
+  ClassSerializerInterceptor,
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
+  ParseEnumPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { plainToInstance } from 'class-transformer';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { GetManyUsersDto } from './dtos/get-many-user.dto';
+import { UserResponseDto } from './dtos/user-response.dto';
 import { UserStatus } from './enum/user-status.enum';
 import { UserService } from './user.service';
 
 @Controller('users')
 @ApiTags('Users')
+@UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
-  async createUser(@Body() body: CreateUserDto) {
+  @ApiOperation({ summary: 'Create or update a user by Mezon ID' })
+  async createUser(@Body() body: CreateUserDto): Promise<UserResponseDto> {
     const { mezonId, ...meta } = body;
-    return this.userService.upsertByMezonId(mezonId, meta);
+    const user = await this.userService.upsertByMezonId(mezonId, meta);
+    return plainToInstance(UserResponseDto, user, {
+      excludeExtraneousValues: true,
+    });
   }
+
   @Get('list')
-  async getManyUsers(@Query() query: GetManyUsersDto) {
-    return this.userService.getManyByIdsAndUsernames({
+  @ApiOperation({ summary: 'Get multiple users by their IDs or Mezon IDs' })
+  async getManyUsers(
+    @Query() query: GetManyUsersDto,
+  ): Promise<UserResponseDto[]> {
+    const users = await this.userService.getManyByIdsAndUsernames({
       ids: query.ids,
       mezonIds: query.mezonIds,
     });
+    return plainToInstance(UserResponseDto, users, {
+      excludeExtraneousValues: true,
+    });
   }
+
   @Get('search/:identifier')
-  async findUserByIdentifier(@Param('identifier') identifier: string) {
-    return this.userService.findByIdentifier(identifier, true);
+  @ApiOperation({ summary: 'Find a user by ID or Mezon ID' })
+  async findUserByIdentifier(
+    @Param('identifier') identifier: string,
+  ): Promise<UserResponseDto | null> {
+    const user = await this.userService.findByIdentifier(identifier, true);
+    return user
+      ? plainToInstance(UserResponseDto, user, {
+          excludeExtraneousValues: true,
+        })
+      : null;
   }
 
   @Get('id/:id')
-  async getUserById(@Param('id') id: string) {
-    return this.userService.findById(id);
+  @ApiOperation({ summary: 'Get a user by their unique UUID' })
+  async getUserById(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<UserResponseDto | null> {
+    const user = await this.userService.findById(id);
+    return user
+      ? plainToInstance(UserResponseDto, user, {
+          excludeExtraneousValues: true,
+        })
+      : null;
   }
+
   @Patch('restore/:identifier')
-  async restoreUser(@Param('identifier') identifier: string) {
-    return this.userService.restoreUser(identifier);
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Restore a soft-deleted user' })
+  async restoreUser(@Param('identifier') identifier: string): Promise<void> {
+    await this.userService.restoreUser(identifier);
   }
+
   @Patch('status/:identifier')
+  @HttpCode(204)
+  @ApiOperation({ summary: "Update a user's status (e.g., ACTIVE, INACTIVE)" })
   async updateStatusUser(
     @Param('identifier') identifier: string,
-    @Body('status') status: UserStatus,
-  ) {
-    return this.userService.updateStatusUser(identifier, status);
+    @Body('status', new ParseEnumPipe(UserStatus)) status: UserStatus,
+  ): Promise<void> {
+    await this.userService.updateStatusUser(identifier, status);
   }
+
   @Delete(':identifier')
-  async softDeleteUser(@Param('identifier') identifier: string) {
-    return this.userService.softDeleteUser(identifier);
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Soft delete a user' })
+  async softDeleteUser(@Param('identifier') identifier: string): Promise<void> {
+    await this.userService.softDeleteUser(identifier);
   }
 }
