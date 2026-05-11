@@ -48,6 +48,7 @@ describe(NoteService.name, () => {
       projectId,
       resourceId: String(task.id),
       resourceType: NoteResourceType.TASK,
+      isShared: true,
     });
 
     expect(note).toMatchObject({
@@ -57,6 +58,8 @@ describe(NoteService.name, () => {
       projectId,
       resourceId: String(task.id),
       resourceType: NoteResourceType.TASK,
+      isShared: true,
+      isPinned: false,
     });
 
     await expect(
@@ -68,6 +71,8 @@ describe(NoteService.name, () => {
       projectId,
       resourceId: String(task.id),
       resourceType: NoteResourceType.TASK,
+      isShared: true,
+      isPinned: false,
     });
   });
 
@@ -182,6 +187,67 @@ describe(NoteService.name, () => {
       id: note.id,
       resourceId: 'project-9-final',
       resourceType: NoteResourceType.PROJECT,
+    });
+  });
+
+  //pinned note test
+  it('should return pinned notes first', async () => {
+    const { authorUserId, projectId, task } = await createNoteContext();
+
+    const normalNote = await factory.note({
+      authorUserId,
+      content: 'Normal note',
+      isPinned: false,
+      projectId,
+      resourceId: String(task.id),
+      resourceType: NoteResourceType.TASK,
+    });
+
+    const pinnedNote = await factory.note({
+      authorUserId,
+      content: 'Pinned note',
+      isPinned: true,
+      projectId,
+      resourceId: String(task.id),
+      resourceType: NoteResourceType.TASK,
+    });
+
+    const notes = await noteService.listByResource(
+      projectId,
+      NoteResourceType.TASK,
+      String(task.id),
+    );
+
+    expect(notes).toHaveLength(2);
+
+    expect(notes[0].id).toBe(pinnedNote.id);
+    expect(notes[1].id).toBe(normalNote.id);
+  });
+
+  // shared note test
+  it('should support sharing notes inside current project', async () => {
+    const { authorUserId, projectId } = await createNoteContext();
+
+    const note = await factory.note({
+      authorUserId,
+      content: 'Internal deployment checklist',
+      isShared: false,
+      projectId,
+      resourceId: 'deploy-1',
+      resourceType: NoteResourceType.PROJECT,
+    });
+
+    await noteService.updateEntry(note, {
+      isShared: true,
+    });
+
+    await expect(
+      noteRepository.findOneByOrFail({
+        id: note.id,
+      }),
+    ).resolves.toMatchObject({
+      id: note.id,
+      isShared: true,
     });
   });
 });
