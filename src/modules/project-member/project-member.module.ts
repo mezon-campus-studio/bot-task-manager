@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ProjectMemberRoleSyncService } from './project-member-role-sync.service';
 import { ProjectMemberController } from './project-member.controller';
 import ProjectMemberEntity from './project-member.entity';
-import { ProjectMemberRoleSyncService } from './project-member-role-sync.service';
 import { ProjectMemberService } from './project-member.service';
 
 @Module({
