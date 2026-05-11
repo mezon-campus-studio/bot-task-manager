@@ -15,7 +15,7 @@ import { RoleService } from './role.service';
 @ApiTags('Roles')
 @Controller('roles')
 export class RoleController {
-  constructor(private readonly roleService: RoleService) { }
+  constructor(private readonly roleService: RoleService) {}
 
   @Get()
   findAll() {
