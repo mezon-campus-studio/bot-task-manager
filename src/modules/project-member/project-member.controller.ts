@@ -13,7 +13,7 @@ import { ProjectMemberService } from './project-member.service';
 
 @Controller('projects/:projectId/members')
 @ApiTags('Project Members')
-export class ProjectMemberV1Controller {
+export class ProjectMemberController {
   constructor(private readonly projectMemberService: ProjectMemberService) {}
 
   @Post()

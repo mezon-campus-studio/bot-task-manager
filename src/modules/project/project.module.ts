@@ -7,7 +7,7 @@ import { ProjectContextService } from './project-context.service';
 import { ProjectOnboardingService } from './project-onboarding.service';
 import ProjectEntity from './project.entity';
 import { ProjectService } from './project.service';
-import { ProjectV1Controller } from './project.v1.controller';
+import { ProjectController } from './project.controller';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { ProjectV1Controller } from './project.v1.controller';
     ProjectMemberModule,
     UserModule,
   ],
-  controllers: [ProjectV1Controller],
+  controllers: [ProjectController],
   providers: [
     ProjectCommandHandler,
     ProjectContextService,

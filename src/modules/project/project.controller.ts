@@ -18,7 +18,7 @@ import { ProjectService } from './project.service';
 
 @Controller('projects')
 @ApiTags('Projects')
-export class ProjectV1Controller {
+export class ProjectController {
   constructor(
     private readonly projectContextService: ProjectContextService,
     private readonly projectService: ProjectService,
