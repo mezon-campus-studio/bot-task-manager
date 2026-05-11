@@ -12,7 +12,7 @@ import {
   Post,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketResponseDto } from './dto/ticket-response.dto';
@@ -27,6 +27,7 @@ export class TicketController {
   constructor(private readonly ticketService: TicketService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new ticket' })
   async createTicket(
     @Body() body: CreateTicketDto,
   ): Promise<TicketResponseDto> {
@@ -37,6 +38,7 @@ export class TicketController {
   }
 
   @Get('project/:projectId')
+  @ApiOperation({ summary: 'Get all tickets in a project' })
   async getListTicket(
     @Param('projectId', ParseIntPipe) projectId: number,
   ): Promise<TicketResponseDto[]> {
@@ -47,6 +49,7 @@ export class TicketController {
   }
 
   @Get('project/:projectId/:id')
+  @ApiOperation({ summary: 'Get details of a specific ticket' })
   async getDetailTicket(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('id', ParseIntPipe) id: number,
@@ -58,6 +61,7 @@ export class TicketController {
   }
 
   @Patch('project/:projectId/:id')
+  @ApiOperation({ summary: 'Update ticket information' })
   async updateTicket(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('id', ParseIntPipe) id: number,
@@ -70,6 +74,7 @@ export class TicketController {
   }
 
   @Delete('project/:projectId/:id')
+  @ApiOperation({ summary: 'Delete a ticket' })
   async deleteTicket(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('id', ParseIntPipe) id: number,
@@ -78,6 +83,7 @@ export class TicketController {
   }
 
   @Get('project/:projectId/status/:status')
+  @ApiOperation({ summary: 'Get tickets by status' })
   async getByStatus(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('status', new ParseEnumPipe(TicketStatus)) status: TicketStatus,
@@ -89,6 +95,7 @@ export class TicketController {
   }
 
   @Get('project/:projectId/assignee/:userId')
+  @ApiOperation({ summary: 'Get tickets assigned to a specific user' })
   async getByAssignee(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -100,6 +107,7 @@ export class TicketController {
   }
 
   @Get('project/:projectId/severity/:severity')
+  @ApiOperation({ summary: 'Get tickets by severity level' })
   async getBySeverity(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('severity', new ParseEnumPipe(TicketSeverity))

@@ -11,7 +11,7 @@ import {
   Post,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
@@ -24,6 +24,7 @@ export class TeamMemberController {
   constructor(private readonly teamMemberService: TeamMemberService) {}
 
   @Post('project/:projectId/team/:teamId')
+  @ApiOperation({ summary: 'Add a member to a team' })
   async addMember(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('teamId', ParseIntPipe) teamId: number,
@@ -41,6 +42,7 @@ export class TeamMemberController {
   }
 
   @Get('team/:teamId')
+  @ApiOperation({ summary: 'Get all members of a team' })
   async findByTeam(
     @Param('teamId', ParseIntPipe) teamId: number,
   ): Promise<TeamMemberResponseDto[]> {
@@ -51,6 +53,7 @@ export class TeamMemberController {
   }
 
   @Get('team/:teamId/active')
+  @ApiOperation({ summary: 'Get all active members of a team' })
   async findActiveByTeam(
     @Param('teamId', ParseIntPipe) teamId: number,
   ): Promise<TeamMemberResponseDto[]> {
@@ -62,6 +65,7 @@ export class TeamMemberController {
   }
 
   @Get('team/:teamId/user/:userId')
+  @ApiOperation({ summary: "Get a user's membership details in a team" })
   async findMembership(
     @Param('teamId', ParseIntPipe) teamId: number,
     @Param('userId', ParseUUIDPipe) userId: string,
@@ -76,6 +80,7 @@ export class TeamMemberController {
 
   @Delete('project/:projectId/team/:teamId/user/:userId')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Remove a member from a team' })
   async removeMember(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('teamId', ParseIntPipe) teamId: number,
