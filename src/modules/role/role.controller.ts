@@ -4,37 +4,41 @@ import {
   Delete,
   Get,
   Param,
+  ParseIntPipe,
+  Patch,
   Post,
-  Put,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CreateRoleDto } from './dto/modify-role.dto';
 import { RoleService } from './role.service';
 
+@ApiTags('Roles')
 @Controller('roles')
 export class RoleController {
-  constructor(private readonly roleService: RoleService) {}
+  constructor(private readonly roleService: RoleService) { }
 
   @Get()
   findAll() {
     return this.roleService.findAll();
   }
+
   @Post()
   create(@Body() dto: CreateRoleDto) {
     return this.roleService.createRole(dto);
   }
 
   @Get(':id')
-  findById(@Param('id') id: string) {
-    return this.roleService.findById(Number(id));
+  findById(@Param('id', ParseIntPipe) id: number) {
+    return this.roleService.findById(id);
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.roleService.deleteRole(Number(id));
+  delete(@Param('id', ParseIntPipe) id: number) {
+    return this.roleService.deleteRole(id);
   }
 
-  @Put(':id')
-  update(@Param('id') id: string, @Body() dto: CreateRoleDto) {
-    return this.roleService.updateRole(Number(id), dto);
+  @Patch(':id')
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: CreateRoleDto) {
+    return this.roleService.updateRole(id, dto);
   }
 }

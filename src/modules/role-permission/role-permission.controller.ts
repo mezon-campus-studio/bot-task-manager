@@ -1,6 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+} from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { RolePermissionService } from './role-permission.service';
 
+@ApiTags('Role Permissions')
 @Controller('role-permissions')
 export class RolePermissionController {
   constructor(private readonly rolePermissionService: RolePermissionService) {}
@@ -11,23 +21,23 @@ export class RolePermissionController {
   }
 
   @Get('role/:roleId')
-  findByRole(@Param('roleId') roleId: string) {
-    return this.rolePermissionService.findByRoleId(Number(roleId));
+  findByRole(@Param('roleId', ParseIntPipe) roleId: number) {
+    return this.rolePermissionService.findByRoleId(roleId);
   }
 
   @Get('permission/:permissionId')
-  findByPermission(@Param('permissionId') permissionId: string) {
-    return this.rolePermissionService.findByPermissionId(Number(permissionId));
+  findByPermission(@Param('permissionId', ParseIntPipe) permissionId: number) {
+    return this.rolePermissionService.findByPermissionId(permissionId);
   }
 
-  @Delete(':RoleId/:permissionId')
+  @Delete(':roleId/:permissionId')
   remove(
-    @Param('RoleId') roleId: string,
-    @Param('permissionId') permissionId: string,
+    @Param('roleId', ParseIntPipe) roleId: number,
+    @Param('permissionId', ParseIntPipe) permissionId: number,
   ) {
     return this.rolePermissionService.removeRolePermission(
-      Number(roleId),
-      Number(permissionId),
+      roleId,
+      permissionId,
     );
   }
 }
