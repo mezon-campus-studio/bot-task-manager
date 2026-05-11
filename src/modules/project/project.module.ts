@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ProjectMemberModule } from '@src/modules/project-member/project-member.module';
 import { UserModule } from '@src/modules/user/user.module';
+import { ProjectController } from './project.controller';
+import ProjectEntity from './project.entity';
 import { ProjectCommandHandler } from './project-command.handler';
 import { ProjectContextService } from './project-context.service';
 import { ProjectOnboardingService } from './project-onboarding.service';
-import ProjectEntity from './project.entity';
 import { ProjectService } from './project.service';
-import { ProjectController } from './project.controller';
 
 @Module({
   imports: [
@@ -24,4 +24,4 @@ import { ProjectController } from './project.controller';
   ],
   exports: [ProjectContextService, ProjectService],
 })
-export class ProjectModule {}
+export class ProjectModule { }
