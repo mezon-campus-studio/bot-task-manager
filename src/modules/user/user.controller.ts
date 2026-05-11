@@ -13,7 +13,7 @@ import {
   Query,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { GetManyUsersDto } from './dtos/get-many-user.dto';
@@ -28,6 +28,7 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create or update a user by Mezon ID' })
   async createUser(@Body() body: CreateUserDto): Promise<UserResponseDto> {
     const { mezonId, ...meta } = body;
     const user = await this.userService.upsertByMezonId(mezonId, meta);
@@ -37,6 +38,7 @@ export class UserController {
   }
 
   @Get('list')
+  @ApiOperation({ summary: 'Get multiple users by their IDs or Mezon IDs' })
   async getManyUsers(
     @Query() query: GetManyUsersDto,
   ): Promise<UserResponseDto[]> {
@@ -50,6 +52,7 @@ export class UserController {
   }
 
   @Get('search/:identifier')
+  @ApiOperation({ summary: 'Find a user by ID or Mezon ID' })
   async findUserByIdentifier(
     @Param('identifier') identifier: string,
   ): Promise<UserResponseDto | null> {
@@ -62,6 +65,7 @@ export class UserController {
   }
 
   @Get('id/:id')
+  @ApiOperation({ summary: 'Get a user by their unique UUID' })
   async getUserById(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<UserResponseDto | null> {
@@ -75,12 +79,14 @@ export class UserController {
 
   @Patch('restore/:identifier')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Restore a soft-deleted user' })
   async restoreUser(@Param('identifier') identifier: string): Promise<void> {
     await this.userService.restoreUser(identifier);
   }
 
   @Patch('status/:identifier')
   @HttpCode(204)
+  @ApiOperation({ summary: "Update a user's status (e.g., ACTIVE, INACTIVE)" })
   async updateStatusUser(
     @Param('identifier') identifier: string,
     @Body('status', new ParseEnumPipe(UserStatus)) status: UserStatus,
@@ -90,6 +96,7 @@ export class UserController {
 
   @Delete(':identifier')
   @HttpCode(204)
+  @ApiOperation({ summary: 'Soft delete a user' })
   async softDeleteUser(@Param('identifier') identifier: string): Promise<void> {
     await this.userService.softDeleteUser(identifier);
   }
