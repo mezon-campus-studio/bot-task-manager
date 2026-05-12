@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -21,8 +22,11 @@ import { TeamResponseDto } from './dtos/team-response.dto';
 import { UpdateTeamDto } from './dtos/update-team.dto';
 import { TeamService } from './team.service';
 
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+
 @ApiTags('Teams')
 @Controller('teams')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TeamController {
   constructor(

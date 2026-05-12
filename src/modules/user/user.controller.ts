@@ -11,6 +11,7 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -21,8 +22,11 @@ import { UserResponseDto } from './dtos/user-response.dto';
 import { UserStatus } from './enum/user-status.enum';
 import { UserService } from './user.service';
 
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+
 @Controller('users')
 @ApiTags('Users')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
   constructor(private readonly userService: UserService) {}

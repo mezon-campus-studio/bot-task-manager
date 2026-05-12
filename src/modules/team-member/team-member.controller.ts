@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -16,9 +17,11 @@ import { plainToInstance } from 'class-transformer';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamMemberService } from './team-member.service';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
 
 @ApiTags('Team Members')
 @Controller('team-members')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TeamMemberController {
   constructor(private readonly teamMemberService: TeamMemberService) {}

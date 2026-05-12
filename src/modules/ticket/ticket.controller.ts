@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -19,9 +20,11 @@ import { TicketResponseDto } from './dto/ticket-response.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketSeverity, TicketStatus } from './enums';
 import { TicketService } from './ticket.service';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
 
 @Controller('tickets')
 @ApiTags('Tickets')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TicketController {
   constructor(private readonly ticketService: TicketService) {}

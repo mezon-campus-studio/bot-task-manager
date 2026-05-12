@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import UserEntity from '@src/modules/user/user.entity';
 import { UserService } from '../user/user.service';
@@ -19,9 +20,12 @@ export interface UserInfoData {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private appConfigService: AppConfigService,
     private userService: UserService,
+    private jwtService: JwtService,
   ) {}
 
   async exchangeCode(code: string, state: string): Promise<ExchangeCodeData> {
@@ -43,15 +47,12 @@ export class AuthService {
     });
 
     if (!res.ok) {
+      this.logger.error(`Failed to exchange code: ${await res.text()}`);
       throw new BadRequestException('Failed to exchange code for token');
     }
 
     const data: ExchangeCodeData = await res.json();
     return data;
-  }
-
-  async refreshToken(): Promise<ExchangeCodeData> {
-    throw new BadRequestException('Refresh token flow is not implemented');
   }
 
   async userInfo(accessToken: string): Promise<UserInfoData> {
@@ -62,7 +63,7 @@ export class AuthService {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        access_token: encodeURIComponent(accessToken),
+        access_token: accessToken,
         client_id: oauthConfig.clientId,
         client_secret: oauthConfig.clientSecret,
         redirect_uri: oauthConfig.redirectUri,
@@ -70,6 +71,7 @@ export class AuthService {
     });
 
     if (!userRes.ok) {
+      this.logger.error(`Failed to fetch user info: ${await userRes.text()}`);
       throw new BadRequestException('Failed to fetch user info');
     }
 
@@ -90,15 +92,55 @@ export class AuthService {
     return `${oauthConfig.baseUri}/oauth2/auth?${params.toString()}`;
   }
 
-  async handleOAuthExchange(): Promise<ExchangeCodeData> {
-    throw new BadRequestException('OAuth exchange is not implemented');
+  async handleOAuthExchange(code: string, state: string): Promise<any> {
+    const tokenData = await this.exchangeCode(code, state);
+    const userInfo = await this.userInfo(tokenData.access_token);
+
+    const user = await this.userService.upsertByMezonId(userInfo.user_id, {
+      name: userInfo.display_name,
+      email: userInfo.email,
+    });
+
+    const tokens = await this.signToken(user.id, user.email);
+
+    return {
+      user,
+      ...tokens,
+    };
   }
 
-  async handleRefreshToken(refreshToken: string): Promise<ExchangeCodeData> {
+  async handleRefreshToken(refreshToken: string): Promise<any> {
     if (!refreshToken) {
       throw new BadRequestException('No refresh token provided');
     }
-    throw new BadRequestException('Token refresh is not implemented');
+    // Simple implementation for now: verify and resign
+    try {
+      const payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.appConfigService.jwtConfig.refreshSecret,
+      });
+      return this.signToken(payload.sub, payload.email);
+    } catch (e) {
+      throw new BadRequestException('Invalid refresh token');
+    }
+  }
+
+  async signToken(userId: string, email: string | null) {
+    const payload = { sub: userId, email };
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        expiresIn: '1h',
+        secret: this.appConfigService.jwtConfig.secret,
+      }),
+      this.jwtService.signAsync(payload, {
+        expiresIn: '7d',
+        secret: this.appConfigService.jwtConfig.refreshSecret,
+      }),
+    ]);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
   }
 
   async validateUser(userId: string): Promise<UserEntity | null> {
