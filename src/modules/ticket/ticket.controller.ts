@@ -21,6 +21,8 @@ import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketSeverity, TicketStatus } from './enums';
 import { TicketService } from './ticket.service';
 import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import UserEntity from '@src/modules/user/user.entity';
 
 @Controller('tickets')
 @ApiTags('Tickets')
@@ -32,9 +34,13 @@ export class TicketController {
   @Post()
   @ApiOperation({ summary: 'Create a new ticket' })
   async createTicket(
+    @CurrentUser() user: UserEntity,
     @Body() body: CreateTicketDto,
   ): Promise<TicketResponseDto> {
-    const ticket = await this.ticketService.createTicket(body);
+    const ticket = await this.ticketService.createTicket({
+      ...body,
+      reporterUserId: body.reporterUserId ?? user.id,
+    });
     return plainToInstance(TicketResponseDto, ticket, {
       excludeExtraneousValues: true,
     });
@@ -104,6 +110,18 @@ export class TicketController {
     @Param('userId', ParseUUIDPipe) userId: string,
   ): Promise<TicketResponseDto[]> {
     const tickets = await this.ticketService.getByAssignee(projectId, userId);
+    return plainToInstance(TicketResponseDto, tickets, {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  @Get('project/:projectId/my-tickets')
+  @ApiOperation({ summary: 'Get tickets assigned to the current user' })
+  async getMyTickets(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @CurrentUser() user: UserEntity,
+  ): Promise<TicketResponseDto[]> {
+    const tickets = await this.ticketService.getByAssignee(projectId, user.id);
     return plainToInstance(TicketResponseDto, tickets, {
       excludeExtraneousValues: true,
     });

@@ -18,10 +18,13 @@ export class CreateTicketDto {
   @IsInt()
   projectId!: number;
 
-  @ApiProperty({ description: 'User ID of the reporter', example: 'uuid-v4' })
-  @IsDefined()
+  @ApiPropertyOptional({
+    description: 'User ID of the reporter',
+    example: 'uuid-v4',
+  })
+  @IsOptional()
   @IsUUID()
-  reporterUserId!: string;
+  reporterUserId?: string;
 
   @ApiProperty({
     description: 'Title of the ticket',

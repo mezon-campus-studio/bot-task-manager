@@ -23,6 +23,8 @@ import { UserStatus } from './enum/user-status.enum';
 import { UserService } from './user.service';
 
 import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import UserEntity from '@src/modules/user/user.entity';
 
 @Controller('users')
 @ApiTags('Users')
@@ -30,6 +32,14 @@ import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
 @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @Get('me')
+  @ApiOperation({ summary: 'Get current authenticated user profile' })
+  async getMe(@CurrentUser() user: UserEntity): Promise<UserResponseDto> {
+    return plainToInstance(UserResponseDto, user, {
+      excludeExtraneousValues: true,
+    });
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create or update a user by Mezon ID' })

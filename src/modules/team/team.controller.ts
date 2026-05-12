@@ -23,6 +23,8 @@ import { UpdateTeamDto } from './dtos/update-team.dto';
 import { TeamService } from './team.service';
 
 import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import UserEntity from '@src/modules/user/user.entity';
 
 @ApiTags('Teams')
 @Controller('teams')
@@ -36,23 +38,30 @@ export class TeamController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new team' })
-  async create(@Body() createTeamDto: CreateTeamDto): Promise<TeamResponseDto> {
-    const team = await this.teamService.createTeam(createTeamDto);
+  async create(
+    @CurrentUser() user: UserEntity,
+    @Body() createTeamDto: CreateTeamDto,
+  ): Promise<TeamResponseDto> {
+    const team = await this.teamService.createTeam({
+      ...createTeamDto,
+      leaderId: createTeamDto.leaderId ?? user.id,
+    });
     return plainToInstance(TeamResponseDto, team, {
       excludeExtraneousValues: true,
     });
   }
 
-  @Post('current/:userId')
+  @Post('current')
   @ApiOperation({
     summary: "Create a team within the user's current active project",
   })
   async createInCurrentProject(
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: UserEntity,
     @Body() body: CreateCurrentProjectTeamDto,
   ): Promise<TeamResponseDto> {
-    const context =
-      await this.projectContextService.getRequiredCurrentProject(userId);
+    const context = await this.projectContextService.getRequiredCurrentProject(
+      user.id,
+    );
     const team = await this.teamService.createTeamInProject(context.projectId, {
       ...body,
       leaderId: body.leaderId ?? context.user.id,
@@ -63,15 +72,16 @@ export class TeamController {
     });
   }
 
-  @Get('current/:userId')
+  @Get('current')
   @ApiOperation({
     summary: "Get all teams in the user's current active project",
   })
   async findByCurrentProject(
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: UserEntity,
   ): Promise<TeamResponseDto[]> {
-    const context =
-      await this.projectContextService.getRequiredCurrentProject(userId);
+    const context = await this.projectContextService.getRequiredCurrentProject(
+      user.id,
+    );
     const teams = await this.teamService.findByProjectId(context.projectId);
 
     return plainToInstance(TeamResponseDto, teams, {
@@ -79,16 +89,17 @@ export class TeamController {
     });
   }
 
-  @Patch('current/:userId/:teamId/assign')
+  @Patch('current/:teamId/assign')
   @ApiOperation({
     summary: "Assign an existing team to the user's current active project",
   })
   async assignToCurrentProject(
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: UserEntity,
     @Param('teamId', ParseIntPipe) teamId: number,
   ): Promise<TeamResponseDto> {
-    const context =
-      await this.projectContextService.getRequiredCurrentProject(userId);
+    const context = await this.projectContextService.getRequiredCurrentProject(
+      user.id,
+    );
     const team = await this.teamService.assignTeamToProject(
       context.projectId,
       teamId,
@@ -99,17 +110,18 @@ export class TeamController {
     });
   }
 
-  @Delete('current/:userId/:teamId')
+  @Delete('current/:teamId')
   @HttpCode(204)
   @ApiOperation({
     summary: "Remove a team from the user's current active project",
   })
   async removeFromCurrentProject(
-    @Param('userId', ParseUUIDPipe) userId: string,
+    @CurrentUser() user: UserEntity,
     @Param('teamId', ParseIntPipe) teamId: number,
   ): Promise<void> {
-    const context =
-      await this.projectContextService.getRequiredCurrentProject(userId);
+    const context = await this.projectContextService.getRequiredCurrentProject(
+      user.id,
+    );
 
     await this.teamService.deleteTeamFromProject(context.projectId, teamId);
   }
