@@ -34,13 +34,22 @@ export class ProjectRoleGuard implements CanActivate {
       return false;
     }
 
-    const projectId =
+    let projectId =
       request.params.projectId ||
       request.body.projectId ||
       request.query.projectId;
 
+    // Fallback to current project context if projectId is missing
+    if (!projectId && user.currentProjectId) {
+      projectId = user.currentProjectId;
+    }
+
+    // If no project context can be determined, we cannot validate project roles.
+    // However, if the route explicitly requires project roles, we must fail if no project is selected.
     if (!projectId) {
-      return false;
+      throw new ForbiddenException(
+        'Project context is required for this operation. Please select a project first.',
+      );
     }
 
     const roles = await Promise.all(

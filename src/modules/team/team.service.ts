@@ -69,13 +69,14 @@ export class TeamService extends CRUDService<TeamEntity> {
     );
   }
 
-  async findById(id: number): Promise<TeamEntity | null> {
+  async findById(projectId: number, id: number): Promise<TeamEntity | null> {
     this.logger.log({
       log: 'Attempting to find team by id',
+      projectId,
       teamId: id,
     });
 
-    return this.teamRepository.findOne({ where: { id } });
+    return this.teamRepository.findOne({ where: { id, projectId } });
   }
 
   async findByProjectId(projectId: number): Promise<TeamEntity[]> {
@@ -204,17 +205,21 @@ export class TeamService extends CRUDService<TeamEntity> {
   }
 
   async updateTeam(
+    projectId: number,
     id: number,
     input: Partial<CreateTeamInput>,
   ): Promise<TeamEntity> {
-    this.logger.log(`Attempting to update team ID: ${id}`);
+    this.logger.log(
+      `Attempting to update team ID: ${id} in project: ${projectId}`,
+    );
 
     return await this.teamRepository.manager.transaction(
       async (transactionalEntityManager) => {
         const team = await transactionalEntityManager.findOne(TeamEntity, {
-          where: { id },
+          where: { id, projectId },
         });
-        if (!team) throw new NotFoundException('Team not found');
+        if (!team)
+          throw new NotFoundException('Team not found in this project');
 
         const targetProjectId = input.projectId ?? team.projectId;
 
@@ -261,11 +266,11 @@ export class TeamService extends CRUDService<TeamEntity> {
     );
   }
 
-  async softDelete(id: number): Promise<void> {
-    const result = await this.teamRepository.softDelete(id);
+  async softDelete(projectId: number, id: number): Promise<void> {
+    const result = await this.teamRepository.softDelete({ id, projectId });
     if (result.affected === 0) {
       throw new NotFoundException(
-        `Cannot delete Team with ID ${id} because it does not exist`,
+        `Cannot delete Team with ID ${id} because it does not exist in project ${projectId}`,
       );
     }
   }

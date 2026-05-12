@@ -311,67 +311,78 @@ export class TaskService extends CRUDService<TaskEntity> {
     };
   }
 
-  async findById(id: number): Promise<TaskEntity | null> {
-    this.logger.log({ log: 'Attempting to find task by id', taskId: id });
-
-    const result = await this.taskRepository.findOne({
-      where: { id },
+  async findById(projectId: number, id: number): Promise<TaskEntity | null> {
+    this.logger.log({
+      log: 'Attempting to find task by id',
+      projectId,
+      taskId: id,
     });
 
-    this.logger.log({ log: 'Got task by id result', taskId: id, result });
+    const result = await this.taskRepository.findOne({
+      where: { id, projectId },
+    });
+
+    this.logger.log({
+      log: 'Got task by id result',
+      projectId,
+      taskId: id,
+      result,
+    });
 
     return result;
   }
 
   async updateTask(
+    projectId: number,
     taskId: number,
     input: UpdateTaskInput,
   ): Promise<TaskEntity | null> {
     this.logger.log({
       log: 'Attempting to update task',
+      projectId,
       taskId,
       input,
     });
 
-    const task = await this.taskRepository.findOne({
-      where: { id: taskId },
-    });
-
-    this.logger.log({ log: 'Got task for update', taskId, task });
+    const task = await this.findById(projectId, taskId);
 
     if (!task) {
-      this.logger.log({ log: 'Task not found for update', taskId });
+      this.logger.log({
+        log: 'Task not found for update',
+        projectId,
+        taskId,
+      });
       return null;
     }
 
     Object.assign(task, input);
 
     const result = await this.taskRepository.save(task);
-    this.logger.log({ log: 'Task update result', taskId, result });
+    this.logger.log({ log: 'Task update result', projectId, taskId, result });
 
     return result;
   }
 
   async updateTaskStatus(
+    projectId: number,
     taskId: number,
     input: UpdateTaskStatusInput,
   ): Promise<TaskEntity | null> {
     this.logger.log({
       log: 'Attempting to update task status',
+      projectId,
       taskId,
       input,
     });
 
     const result = await this.taskRepository.manager.transaction(
       async (transactionalEntityManager: EntityManager) => {
-        const task = await this.getTaskForStatusUpdate(
-          taskId,
-          transactionalEntityManager,
-        );
+        const task = await this.findById(projectId, taskId);
 
         if (!task) {
           this.logger.log({
             log: 'Task not found for status update',
+            projectId,
             taskId,
             input,
           });
@@ -415,45 +426,40 @@ export class TaskService extends CRUDService<TaskEntity> {
     return result;
   }
 
-  async deleteTask(taskId: number): Promise<boolean> {
-    this.logger.log({ log: 'Attempting to delete task', taskId });
+  async deleteTask(projectId: number, taskId: number): Promise<boolean> {
+    this.logger.log({ log: 'Attempting to delete task', projectId, taskId });
 
-    const task = await this.taskRepository.findOne({
-      where: { id: taskId },
-    });
-
-    this.logger.log({ log: 'Got task for delete', taskId, task });
+    const task = await this.findById(projectId, taskId);
 
     if (!task) {
-      this.logger.log({ log: 'Task not found for delete', taskId });
+      this.logger.log({ log: 'Task not found for delete', projectId, taskId });
       return false;
     }
 
     await this.taskRepository.softRemove(task);
-    this.logger.log({ log: 'Task delete result', taskId });
+    this.logger.log({ log: 'Task delete result', projectId, taskId });
 
     return true;
   }
 
   async assignTask(
+    projectId: number,
     taskId: number,
     assigneeUserId: string | null,
   ): Promise<TaskEntity | null> {
     this.logger.log({
       log: 'Attempting to assign task',
+      projectId,
       taskId,
       assigneeUserId,
     });
 
-    const task = await this.taskRepository.findOne({
-      where: { id: taskId },
-    });
-
-    this.logger.log({ log: 'Got task for assignment', taskId, task });
+    const task = await this.findById(projectId, taskId);
 
     if (!task) {
       this.logger.log({
         log: 'Task not found for assignment',
+        projectId,
         taskId,
         assigneeUserId,
       });
@@ -478,24 +484,23 @@ export class TaskService extends CRUDService<TaskEntity> {
   }
 
   async reassignTask(
+    projectId: number,
     taskId: number,
     assigneeUserId: string,
   ): Promise<TaskEntity | null> {
     this.logger.log({
       log: 'Attempting to reassign task',
+      projectId,
       taskId,
       assigneeUserId,
     });
 
-    const task = await this.taskRepository.findOne({
-      where: { id: taskId },
-    });
-
-    this.logger.log({ log: 'Got task for reassignment', taskId, task });
+    const task = await this.findById(projectId, taskId);
 
     if (!task) {
       this.logger.log({
         log: 'Task not found for reassignment',
+        projectId,
         taskId,
         assigneeUserId,
       });
@@ -528,21 +533,22 @@ export class TaskService extends CRUDService<TaskEntity> {
     return result;
   }
 
-  async removeTaskAssignee(taskId: number): Promise<TaskEntity | null> {
+  async removeTaskAssignee(
+    projectId: number,
+    taskId: number,
+  ): Promise<TaskEntity | null> {
     this.logger.log({
       log: 'Attempting to remove task assignee',
+      projectId,
       taskId,
     });
 
-    const task = await this.taskRepository.findOne({
-      where: { id: taskId },
-    });
-
-    this.logger.log({ log: 'Got task for assignee removal', taskId, task });
+    const task = await this.findById(projectId, taskId);
 
     if (!task) {
       this.logger.log({
         log: 'Task not found for assignee removal',
+        projectId,
         taskId,
       });
 

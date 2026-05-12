@@ -19,11 +19,19 @@ export class ProjectMemberGuard implements CanActivate {
       return false;
     }
 
-    const projectId =
+    let projectId =
       request.params.projectId ||
       request.body.projectId ||
       request.query.projectId;
 
+    // Fallback to current project context if projectId is missing in the route
+    // This allows routes like /teams/current to pass through if the user has a selected project.
+    if (!projectId && user.currentProjectId) {
+      projectId = user.currentProjectId;
+    }
+
+    // If still no projectId, we allow the request to proceed.
+    // The controller or subsequent services will handle the lack of project context.
     if (!projectId) {
       return true;
     }

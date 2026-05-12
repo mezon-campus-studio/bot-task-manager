@@ -177,7 +177,7 @@ export class TeamController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('teamId', ParseIntPipe) id: number,
   ): Promise<TeamResponseDto> {
-    const team = await this.teamService.findById(id);
+    const team = await this.teamService.findById(projectId, id);
     return plainToInstance(TeamResponseDto, team, {
       excludeExtraneousValues: true,
     });
@@ -195,7 +195,11 @@ export class TeamController {
     @Param('teamId', ParseIntPipe) id: number,
     @Body() updateTeamDto: UpdateTeamDto,
   ): Promise<TeamResponseDto> {
-    const updatedTeam = await this.teamService.updateTeam(id, updateTeamDto);
+    const updatedTeam = await this.teamService.updateTeam(
+      projectId,
+      id,
+      updateTeamDto,
+    );
     return plainToInstance(TeamResponseDto, updatedTeam, {
       excludeExtraneousValues: true,
     });
@@ -213,6 +217,6 @@ export class TeamController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('teamId', ParseIntPipe) id: number,
   ): Promise<void> {
-    await this.teamService.softDelete(id);
+    await this.teamService.softDelete(projectId, id);
   }
 }

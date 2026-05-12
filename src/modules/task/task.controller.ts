@@ -50,7 +50,7 @@ export class TaskController {
     @Param('taskId', ParseIntPipe) id: number,
     @Body() body: AssignTaskDto,
   ) {
-    return this.taskService.assignTask(id, body.assigneeUserId);
+    return this.taskService.assignTask(projectId, id, body.assigneeUserId);
   }
 
   @Patch('project/:projectId/task/:taskId/assignee')
@@ -65,7 +65,7 @@ export class TaskController {
     @Param('taskId', ParseIntPipe) id: number,
     @Body() body: AssignTaskDto,
   ) {
-    return this.taskService.reassignTask(id, body.assigneeUserId);
+    return this.taskService.reassignTask(projectId, id, body.assigneeUserId);
   }
 
   @Get('project/:projectId')
@@ -83,7 +83,7 @@ export class TaskController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('taskId', ParseIntPipe) id: number,
   ) {
-    return this.taskService.findById(id);
+    return this.taskService.findById(projectId, id);
   }
 
   @Delete('project/:projectId/task/:taskId/assignee')
@@ -97,7 +97,7 @@ export class TaskController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('taskId', ParseIntPipe) id: number,
   ) {
-    return this.taskService.removeTaskAssignee(id);
+    return this.taskService.removeTaskAssignee(projectId, id);
   }
 
   @Delete('project/:projectId/task/:taskId')
@@ -111,7 +111,7 @@ export class TaskController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('taskId', ParseIntPipe) id: number,
   ) {
-    return this.taskService.deleteTask(id);
+    return this.taskService.deleteTask(projectId, id);
   }
 
   @Patch('project/:projectId/task/:taskId/status')
@@ -121,7 +121,7 @@ export class TaskController {
     @Param('taskId', ParseIntPipe) id: number,
     @Body() body: UpdateTaskStatusDto,
   ) {
-    return this.taskService.updateTaskStatus(id, body);
+    return this.taskService.updateTaskStatus(projectId, id, body);
   }
 
   @Patch('project/:projectId/task/:taskId')
