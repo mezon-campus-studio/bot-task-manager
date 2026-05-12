@@ -1,5 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
 import { createTestingApp, http, testingModule } from '#jest';
+import { UserService } from '../user/user.service';
 
 describe('AuthController (e2e)', () => {
   beforeAll(createTestingApp);
@@ -17,7 +18,7 @@ describe('AuthController (e2e)', () => {
   });
 
   it('returns the JWT payload for an authenticated request', async () => {
-    const userService = testingModule!.get('UserService');
+    const userService = testingModule!.get(UserService);
     const user = await userService.upsertByMezonId('test-mezon-id', {
       name: 'Tester',
       email: 'tester@example.com',
