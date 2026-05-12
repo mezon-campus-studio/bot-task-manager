@@ -5,7 +5,6 @@ export class UpdateNoteTable1778607247114 implements MigrationInterface {
 
     public async up(queryRunner: QueryRunner): Promise<void> {
         await queryRunner.query(`ALTER TABLE "team_members" ADD "deleted_at" TIMESTAMP WITH TIME ZONE`);
-        await queryRunner.query(`ALTER TABLE "teams" ADD "leader_id" uuid`);
         await queryRunner.query(`CREATE TYPE "public"."teams_status_enum" AS ENUM('active', 'inactive')`);
         await queryRunner.query(`ALTER TABLE "teams" ADD "status" "public"."teams_status_enum" NOT NULL DEFAULT 'active'`);
         await queryRunner.query(`CREATE TYPE "public"."users_role_enum" AS ENUM('0', '1', '2', '3')`);
