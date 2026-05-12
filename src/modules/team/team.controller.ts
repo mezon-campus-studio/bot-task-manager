@@ -171,10 +171,11 @@ export class TeamController {
     });
   }
 
-  @Get(':id')
+  @Get('project/:projectId/team/:teamId')
   @ApiOperation({ summary: 'Get team details' })
   async findOne(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('teamId', ParseIntPipe) id: number,
   ): Promise<TeamResponseDto> {
     const team = await this.teamService.findById(id);
     return plainToInstance(TeamResponseDto, team, {
@@ -182,26 +183,20 @@ export class TeamController {
     });
   }
 
-  @Patch(':id')
+  @Patch('project/:projectId/team/:teamId')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({ summary: 'Update team information' })
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('teamId', ParseIntPipe) id: number,
     @Body() updateTeamDto: UpdateTeamDto,
   ): Promise<TeamResponseDto> {
     const updatedTeam = await this.teamService.updateTeam(id, updateTeamDto);
     return plainToInstance(TeamResponseDto, updatedTeam, {
-      excludeExtraneousValues: true,
-    });
-  }
-
-  @Delete(':id')
-  @HttpCode(204)
-  @ApiOperation({ summary: 'Soft delete a team' })
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    await this.teamService.softDelete(id);
-  }
-}
- plainToInstance(TeamResponseDto, updatedTeam, {
       excludeExtraneousValues: true,
     });
   }
