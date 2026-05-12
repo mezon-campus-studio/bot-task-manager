@@ -3,10 +3,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import TeamMemberEntity from '@src/modules/team-member/team-member.entity';
 import { TeamMemberController } from './team-member.controller';
 import { TeamMemberService } from './team-member.service';
+import { AuthModule } from '../auth/auth.module';
 import { ProjectModule } from '../project/project.module';
 import { TeamModule } from '../team/team.module';
 import { UserModule } from '../user/user.module';
-import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [

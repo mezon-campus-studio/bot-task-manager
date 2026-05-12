@@ -1,9 +1,9 @@
 import {
   BadRequestException,
-  forwardRef,
   Inject,
   Injectable,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';

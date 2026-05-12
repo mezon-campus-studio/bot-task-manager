@@ -15,16 +15,15 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
+import UserEntity from '@src/modules/user/user.entity';
 import { CreateCurrentProjectTeamDto } from './dtos/create-current-project-team.dto';
 import { CreateTeamDto } from './dtos/create-team.dto';
 import { TeamResponseDto } from './dtos/team-response.dto';
 import { UpdateTeamDto } from './dtos/update-team.dto';
 import { TeamService } from './team.service';
-
-import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@src/common/decorators/current-user.decorator';
-import UserEntity from '@src/modules/user/user.entity';
 
 @ApiTags('Teams')
 @Controller('teams')

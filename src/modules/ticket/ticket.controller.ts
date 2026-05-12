@@ -15,14 +15,14 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import UserEntity from '@src/modules/user/user.entity';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketResponseDto } from './dto/ticket-response.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketSeverity, TicketStatus } from './enums';
 import { TicketService } from './ticket.service';
-import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@src/common/decorators/current-user.decorator';
-import UserEntity from '@src/modules/user/user.entity';
 
 @Controller('tickets')
 @ApiTags('Tickets')

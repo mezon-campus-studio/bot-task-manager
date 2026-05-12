@@ -14,12 +14,12 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import UserEntity from '@src/modules/user/user.entity';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamMemberService } from './team-member.service';
-import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
-import { CurrentUser } from '@src/common/decorators/current-user.decorator';
-import UserEntity from '@src/modules/user/user.entity';
 
 @ApiTags('Team Members')
 @Controller('team-members')
