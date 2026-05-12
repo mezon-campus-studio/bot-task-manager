@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import UserEntity from '@src/modules/user/user.entity';
@@ -24,6 +30,7 @@ export class AuthService {
 
   constructor(
     private appConfigService: AppConfigService,
+    @Inject(forwardRef(() => UserService))
     private userService: UserService,
     private jwtService: JwtService,
   ) {}
