@@ -17,6 +17,10 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CurrentUser } from '@src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { PROJECT_DEFAULT_ROLE_KEYS } from '@src/modules/project/constants/project-default-roles.constant';
+import { ProjectRoles } from '@src/modules/project/decorators/project-roles.decorator';
+import { ProjectMemberGuard } from '@src/modules/project/guards/project-member.guard';
+import { ProjectRoleGuard } from '@src/modules/project/guards/project-role.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
 import UserEntity from '@src/modules/user/user.entity';
 import { CreateCurrentProjectTeamDto } from './dtos/create-current-project-team.dto';
@@ -27,7 +31,7 @@ import { TeamService } from './team.service';
 
 @ApiTags('Teams')
 @Controller('teams')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProjectMemberGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TeamController {
   constructor(
@@ -36,6 +40,11 @@ export class TeamController {
   ) {}
 
   @Post()
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({ summary: 'Create a new team' })
   async create(
     @CurrentUser() user: UserEntity,
@@ -51,6 +60,11 @@ export class TeamController {
   }
 
   @Post('current')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({
     summary: "Create a team within the user's current active project",
   })
@@ -89,6 +103,11 @@ export class TeamController {
   }
 
   @Patch('current/:teamId/assign')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({
     summary: "Assign an existing team to the user's current active project",
   })
@@ -111,6 +130,11 @@ export class TeamController {
 
   @Delete('current/:teamId')
   @HttpCode(204)
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({
     summary: "Remove a team from the user's current active project",
   })
@@ -174,6 +198,26 @@ export class TeamController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Soft delete a team' })
   async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    await this.teamService.softDelete(id);
+  }
+}
+ plainToInstance(TeamResponseDto, updatedTeam, {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  @Delete('project/:projectId/team/:teamId')
+  @HttpCode(204)
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
+  @ApiOperation({ summary: 'Soft delete a team' })
+  async remove(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('teamId', ParseIntPipe) id: number,
+  ): Promise<void> {
     await this.teamService.softDelete(id);
   }
 }

@@ -16,6 +16,10 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CurrentUser } from '@src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { PROJECT_DEFAULT_ROLE_KEYS } from '@src/modules/project/constants/project-default-roles.constant';
+import { ProjectRoles } from '@src/modules/project/decorators/project-roles.decorator';
+import { ProjectMemberGuard } from '@src/modules/project/guards/project-member.guard';
+import { ProjectRoleGuard } from '@src/modules/project/guards/project-role.guard';
 import UserEntity from '@src/modules/user/user.entity';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
@@ -23,12 +27,17 @@ import { TeamMemberService } from './team-member.service';
 
 @ApiTags('Team Members')
 @Controller('team-members')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProjectMemberGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TeamMemberController {
   constructor(private readonly teamMemberService: TeamMemberService) {}
 
   @Post('project/:projectId/team/:teamId')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({ summary: 'Add a member to a team' })
   async addMember(
     @Param('projectId', ParseIntPipe) projectId: number,
@@ -86,6 +95,11 @@ export class TeamMemberController {
 
   @Delete('project/:projectId/team/:teamId/user/:userId')
   @HttpCode(204)
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
   @ApiOperation({ summary: 'Remove a member from a team' })
   async removeMember(
     @Param('projectId', ParseIntPipe) projectId: number,

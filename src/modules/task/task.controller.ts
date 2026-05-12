@@ -8,8 +8,16 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
+  UseInterceptors,
+  ClassSerializerInterceptor,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { ProjectMemberGuard } from '@src/modules/project/guards/project-member.guard';
+import { ProjectRoleGuard } from '@src/modules/project/guards/project-role.guard';
+import { ProjectRoles } from '@src/modules/project/decorators/project-roles.decorator';
+import { PROJECT_DEFAULT_ROLE_KEYS } from '@src/modules/project/constants/project-default-roles.constant';
 import { AssignTaskDto } from './dto/assign-task.dto';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { QueryTasksDto } from './dto/query-tasks.dto';
@@ -19,31 +27,49 @@ import { TaskService } from './task.service';
 
 @Controller('tasks')
 @ApiTags('Tasks')
+@UseGuards(JwtAuthGuard, ProjectMemberGuard)
+@UseInterceptors(ClassSerializerInterceptor)
 export class TaskController {
   constructor(private readonly taskService: TaskService) {}
 
   @Post()
+  @ApiOperation({ summary: 'Create a new task' })
   async createTask(@Body() body: CreateTaskDto) {
     return this.taskService.createTask(body);
   }
 
-  @Post(':id/assignee')
+  @Post('project/:projectId/task/:taskId/assignee')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
+  @ApiOperation({ summary: 'Assign task to a user' })
   async assignTask(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
     @Body() body: AssignTaskDto,
   ) {
     return this.taskService.assignTask(id, body.assigneeUserId);
   }
 
-  @Patch(':id/assignee')
+  @Patch('project/:projectId/task/:taskId/assignee')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
+  @ApiOperation({ summary: 'Reassign task to another user' })
   async reassignTask(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
     @Body() body: AssignTaskDto,
   ) {
     return this.taskService.reassignTask(id, body.assigneeUserId);
   }
 
   @Get('project/:projectId')
+  @ApiOperation({ summary: 'Get all tasks in a project' })
   async getTasksByProject(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Query() query: QueryTasksDto,
@@ -51,32 +77,58 @@ export class TaskController {
     return this.taskService.queryTasks(projectId, query);
   }
 
-  @Get(':id')
-  async getTaskById(@Param('id', ParseIntPipe) id: number) {
+  @Get('project/:projectId/task/:taskId')
+  @ApiOperation({ summary: 'Get task details' })
+  async getTaskById(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
+  ) {
     return this.taskService.findById(id);
   }
 
-  @Delete(':id/assignee')
-  async removeTaskAssignee(@Param('id', ParseIntPipe) id: number) {
+  @Delete('project/:projectId/task/:taskId/assignee')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
+  @ApiOperation({ summary: 'Remove assignee from task' })
+  async removeTaskAssignee(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
+  ) {
     return this.taskService.removeTaskAssignee(id);
   }
 
-  @Delete(':id')
-  async deleteTask(@Param('id', ParseIntPipe) id: number) {
+  @Delete('project/:projectId/task/:taskId')
+  @UseGuards(ProjectRoleGuard)
+  @ProjectRoles(
+    PROJECT_DEFAULT_ROLE_KEYS.owner,
+    PROJECT_DEFAULT_ROLE_KEYS.admin,
+  )
+  @ApiOperation({ summary: 'Delete a task' })
+  async deleteTask(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
+  ) {
     return this.taskService.deleteTask(id);
   }
 
-  @Patch(':id/status')
+  @Patch('project/:projectId/task/:taskId/status')
+  @ApiOperation({ summary: 'Update task status' })
   async updateTaskStatus(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
     @Body() body: UpdateTaskStatusDto,
   ) {
     return this.taskService.updateTaskStatus(id, body);
   }
 
-  @Patch(':id')
+  @Patch('project/:projectId/task/:taskId')
+  @ApiOperation({ summary: 'Update task details' })
   async updateTask(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @Param('taskId', ParseIntPipe) id: number,
     @Body() body: UpdateTaskDto,
   ) {
     return this.taskService.updateTask(id, body);

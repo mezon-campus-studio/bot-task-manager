@@ -17,6 +17,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
 import { CurrentUser } from '@src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import { ProjectMemberGuard } from '@src/modules/project/guards/project-member.guard';
 import UserEntity from '@src/modules/user/user.entity';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketResponseDto } from './dto/ticket-response.dto';
@@ -26,7 +27,7 @@ import { TicketService } from './ticket.service';
 
 @Controller('tickets')
 @ApiTags('Tickets')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, ProjectMemberGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TicketController {
   constructor(private readonly ticketService: TicketService) {}
