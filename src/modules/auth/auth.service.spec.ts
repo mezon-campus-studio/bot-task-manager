@@ -127,7 +127,7 @@ describe(AuthService.name, () => {
 
     expect(body.toString()).toBe(
       new URLSearchParams({
-        access_token: encodeURIComponent('token with spaces/+'),
+        access_token: 'token with spaces/+',
         client_id: 'test-client-id',
         client_secret: 'test-client-secret',
         redirect_uri: 'http://localhost:3000/auth/callback',
