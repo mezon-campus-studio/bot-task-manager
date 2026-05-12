@@ -60,28 +60,28 @@ export class EventService extends CRUDService<EventEntity> {
   
 
  async createEvent(dto: CreateEventInput): Promise<EventEntity> {
-    this.logger.log({ log: 'Attempting to create event', dto });
+  this.logger.log({ log: 'Attempting to create event', dto });
 
-    const result = await this.eventRepo.createEvent(dto);
-    // FIX LỖI: Chuyển logic validate và tính toán lên TRƯỚC khi save/return
-    const { startsAt, endsAt, reminder } = dto;
-    
-    // Xử lý giá trị null/undefined để tránh lỗi Overload
-    const start = startsAt ? new Date(startsAt) : new Date();
-    const end = endsAt ? new Date(endsAt) : new Date();
-    const offset = reminder ?? 0;
+  // --- BƯỚC 1: VALIDATE TRƯỚC 
+  const start = dto.startsAt ? new Date(dto.startsAt) : new Date();
+  const end = dto.endsAt ? new Date(dto.endsAt) : new Date();
+  
+  // Chặn ngay lập tức nếu dữ liệu sai
+  this.validateEventPolicy(start, end, dto.reminder);
 
-    this.scheduleReminder(result.id, this.calculateReminderTime(start, offset));
-    // 1. Validate policy
-    this.validateEventPolicy(start, end, offset);
-    // 2. Tính toán thời gian reminder (Nếu cần lưu vào DB thì gán vào dto)
-    const reminderTime = this.calculateReminderTime(start, offset);
-    this.logger.log({ log: 'Calculated reminder time', reminderTime });
+  // --- BƯỚC 2: SAU KHI SẠCH DỮ LIỆU MỚI LƯU DB ---
+  const result = await this.eventRepo.createEvent(dto); 
+  
+  this.logger.log({ log: 'Event created successfully', eventId: result.id });
+
+  // --- BƯỚC 3: ĐĂNG KÝ REMINDER ---
+  if (result.reminder && result.startsAt) {
+    const reminderTime = this.calculateReminderTime(new Date(result.startsAt), result.reminder);
     this.scheduleReminder(result.id, reminderTime);
-    // 3. Thực hiện lưu vào database
-    this.logger.log({ log: 'Event creation result', eventId: result.id });
-    return result;
   }
+
+  return result;
+}
 
 
   async listByProject(projectId: number): Promise<EventEntity[]> {
@@ -166,22 +166,28 @@ export class EventService extends CRUDService<EventEntity> {
   }
 
   private scheduleReminder(eventId: number, executeAt: Date) {
-    const delay = executeAt.getTime() - Date.now();
+  const name = `event_reminder_${eventId}`;
 
-    // Nếu thời điểm nhắc nhở chưa trôi qua
-    if (delay > 0) {
-      const callback = () => {
-        this.logger.log(`[REMINDER] Đang gửi thông báo cho sự kiện ID: ${eventId}`);
-        this.sendNotification(eventId); // Gọi hàm gửi tin nhắn của bạn
-      };
-
-      const timeout = setTimeout(callback, delay);
-      
-      // Lưu vào registry để có thể quản lý (ví dụ: hủy nếu event bị xóa)
-      const name = `event_reminder_${eventId}`;
-      this.schedulerRegistry.addTimeout(name, timeout);
+  // 1. Kiểm tra và xóa timeout cũ nếu đã tồn tại
+  try {
+    if (this.schedulerRegistry.getTimeout(name)) {
+      this.schedulerRegistry.deleteTimeout(name);
+      this.logger.log(`Deleted existing timeout: ${name}`);
     }
+  } catch (error) {
+    // Tránh crash nếu hasTimeout không hoạt động như ý
   }
+
+  const delay = executeAt.getTime() - Date.now();
+  if (delay <= 0) return;
+
+  const timeout = setTimeout(() => {
+    this.sendNotification(eventId);
+  }, delay);
+
+  // 2. Bây giờ mới add cái mới vào
+  this.schedulerRegistry.addTimeout(name, timeout);
+}
 
   private async sendNotification(eventId: number) {
     // Logic gửi tin nhắn cho người dùng (vào Mezon, Email, v.v.)

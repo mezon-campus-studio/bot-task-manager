@@ -5,7 +5,7 @@ import {
   Param,
   Post,
   Query,
-  ParseUUIDPipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { CreateEventInput } from './event.service';
@@ -28,12 +28,11 @@ export class EventController {
   }
 
   @Get('project/:projectId')
-  async getEventsByProject(
-    @Param('projectId', ParseUUIDPipe) projectId: string,
-    @Query() query: GetEventQueryDto,
-  ) {
-    return this.eventService.findEvents({ ...query, projectId });
-  }
+async getEventsByProject(
+  @Param('projectId', ParseIntPipe) projectId: number, // Đổi Pipe và kiểu dữ liệu sang number
+) {
+  return this.eventService.listByProject(projectId);
+}
 
   @Get()
 async findAll(@Query() query: GetEventQueryDto) {

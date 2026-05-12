@@ -22,7 +22,6 @@ export class EventRepository extends Repository<EventEntity> {
 
   // 2. Filter logic
   qb.where('event.projectId = :projectId', { projectId });
-
   if (type) qb.andWhere('event.type = :type', { type });
   if (status) qb.andWhere('event.status = :status', { status });
 
