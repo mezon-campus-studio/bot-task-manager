@@ -23,6 +23,11 @@ import { JwtStrategy } from './strategies/jwt.strategy';
   ],
   providers: [AuthService, JwtStrategy, NezonAuthGuard, NezonRolesGuard],
   controllers: [AuthController],
-  exports: [AuthService, NezonAuthGuard, NezonRolesGuard, UserModule],
+  exports: [
+    AuthService,
+    NezonAuthGuard,
+    NezonRolesGuard,
+    forwardRef(() => UserModule),
+  ],
 })
 export class AuthModule {}

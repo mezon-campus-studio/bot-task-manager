@@ -25,6 +25,7 @@ export default class ChannelMessageHandler {
 
   @On(Events.ChannelMessage)
   async onChannelMessage(message: ChannelMessage): Promise<void> {
+    console.log('DEBUG MESSAGE:', JSON.stringify(message, null, 2));
     // Ignore bot messages or empty content
     if (!message?.content) return;
 
