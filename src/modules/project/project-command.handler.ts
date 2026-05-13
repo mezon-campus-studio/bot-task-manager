@@ -1,4 +1,4 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import {
   Args,
   AutoContext,
@@ -6,9 +6,11 @@ import {
   ManagedMessage,
   SmartMessage,
 } from '@src/libs/nezon';
+import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from './project-context.service';
 
 @Injectable()
+@UseGuards(NezonAuthGuard)
 export class ProjectCommandHandler {
   private readonly logger = new Logger(ProjectCommandHandler.name);
 

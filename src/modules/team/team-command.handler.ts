@@ -1,4 +1,4 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import {
   Args,
   AutoContext,
@@ -6,10 +6,21 @@ import {
   ManagedMessage,
   SmartMessage,
 } from '@src/libs/nezon';
+import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
 import { TeamService } from './team.service';
 
+/**
+ * Team command handler for the Mezon bot.
+ *
+ * Supported commands (prefix: *):
+ *   *team list                         – List all teams in current project
+ *   *team create <slug> <name...>      – Create a team in current project
+ *   *team detail <teamId>              – View team detail
+ *   *team delete <teamId>              – Remove a team from current project
+ */
 @Injectable()
+@UseGuards(NezonAuthGuard)
 export class TeamCommandHandler {
   private readonly logger = new Logger(TeamCommandHandler.name);
 
@@ -33,11 +44,14 @@ export class TeamCommandHandler {
 
     try {
       switch (action) {
+        case 'list':
+          await this.listTeams(senderId, message);
+          return;
         case 'create':
           await this.createTeam(args, senderId, message);
           return;
-        case 'assign':
-          await this.assignTeam(args, senderId, message);
+        case 'detail':
+          await this.detailTeam(args, senderId, message);
           return;
         case 'delete':
           await this.deleteTeam(args, senderId, message);
@@ -45,13 +59,51 @@ export class TeamCommandHandler {
         default:
           await this.reply(
             message,
-            'Usage: *team create <slug> <name>, *team assign <teamId>, *team delete <teamId>',
+            [
+              '🏷️ **Team Commands:**',
+              '  `*team list` – List all teams in current project',
+              '  `*team create <slug> <name>` – Create a new team',
+              '  `*team detail <teamId>` – View team detail',
+              '  `*team delete <teamId>` – Delete a team from current project',
+            ].join('\n'),
           );
       }
     } catch (error) {
       this.logger.warn('Team command failed', (error as Error)?.stack);
       await this.reply(message, this.getErrorMessage(error));
     }
+  }
+
+  // ─── actions ────────────────────────────────────────────────────────────────
+
+  private async listTeams(
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const teams = await this.teamService.findByProjectId(context.projectId);
+
+    if (!teams.length) {
+      await this.reply(
+        message,
+        `No teams found in project **${context.project.name}**.`,
+      );
+      return;
+    }
+
+    const lines = teams.map(
+      (t) =>
+        `  [#${t.id}] ${t.name} (${t.slug})${t.isDefault ? ' ⭐ default' : ''}`,
+    );
+
+    await this.reply(
+      message,
+      [`🏷️ Teams in **${context.project.name}**:`, ...lines].join('\n'),
+    );
   }
 
   private async createTeam(
@@ -63,7 +115,10 @@ export class TeamCommandHandler {
     const name = args.slice(2).join(' ').trim();
 
     if (!slug || !name) {
-      await this.reply(message, 'Team slug and name are required.');
+      await this.reply(
+        message,
+        'Team slug and name are required.\nUsage: `*team create <slug> <name>`',
+      );
       return;
     }
 
@@ -71,6 +126,7 @@ export class TeamCommandHandler {
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
+
     const team = await this.teamService.createTeamInProject(context.projectId, {
       leaderId: context.user.id,
       name,
@@ -79,34 +135,54 @@ export class TeamCommandHandler {
 
     await this.reply(
       message,
-      `Created team ${team.name} (${team.slug}) in project ${context.project.slug}.`,
+      `✅ Created team **${team.name}** (\`${team.slug}\`) in project **${context.project.name}**.`,
     );
   }
 
-  private async assignTeam(
+  private async detailTeam(
     args: string[],
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const teamId = this.parseTeamId(args[1]);
+    const teamId = this.parseId(args[1]);
 
     if (teamId == null) {
-      await this.reply(message, 'Team id is required.');
+      await this.reply(message, 'Usage: `*team detail <teamId>`');
       return;
     }
 
+    // Get current project context — validates membership
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
-    const team = await this.teamService.assignTeamToProject(
-      context.projectId,
-      teamId,
-    );
+
+    const team = await this.teamService.findById(teamId);
+
+    if (!team) {
+      await this.reply(message, `Team #${teamId} not found.`);
+      return;
+    }
+
+    // Validate team belongs to the current project (prevents cross-project data leaks)
+    if (team.projectId !== context.projectId) {
+      await this.reply(
+        message,
+        `Team #${teamId} does not belong to your current project **${context.project.name}**.`,
+      );
+      return;
+    }
 
     await this.reply(
       message,
-      `Assigned team ${team.name} (${team.slug}) to project ${context.project.slug}.`,
+      [
+        `🏷️ **Team #${team.id}**`,
+        `  Name: ${team.name}`,
+        `  Slug: ${team.slug}`,
+        `  Default: ${team.isDefault ? 'Yes ⭐' : 'No'}`,
+        `  Leader ID: ${team.leaderId ?? 'none'}`,
+        `  Project: ${context.project.name} (${context.project.slug})`,
+      ].join('\n'),
     );
   }
 
@@ -115,10 +191,10 @@ export class TeamCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const teamId = this.parseTeamId(args[1]);
+    const teamId = this.parseId(args[1]);
 
     if (teamId == null) {
-      await this.reply(message, 'Team id is required.');
+      await this.reply(message, 'Usage: `*team delete <teamId>`');
       return;
     }
 
@@ -128,48 +204,35 @@ export class TeamCommandHandler {
       );
 
     await this.teamService.deleteTeamFromProject(context.projectId, teamId);
-    await this.reply(message, `Deleted team ${teamId} from current project.`);
+
+    await this.reply(
+      message,
+      `🗑️ Team #${teamId} has been removed from project **${context.project.name}**.`,
+    );
   }
 
-  private parseTeamId(value: string | undefined): number | null {
-    if (!value) {
-      return null;
-    }
+  // ─── helpers ────────────────────────────────────────────────────────────────
 
-    const teamId = Number(value);
-
-    if (!Number.isInteger(teamId) || teamId <= 0) {
-      return null;
-    }
-
-    return teamId;
+  private parseId(value: string | undefined): number | null {
+    if (!value) return null;
+    const id = Number(value);
+    return Number.isInteger(id) && id > 0 ? id : null;
   }
 
   private getErrorMessage(error: unknown): string {
     if (error instanceof HttpException) {
       const response = error.getResponse();
-
-      if (typeof response === 'string') {
-        return response;
-      }
-
+      if (typeof response === 'string') return response;
       if (
         response != null &&
         typeof response === 'object' &&
         'message' in response
       ) {
-        const message = response.message;
-
-        if (Array.isArray(message)) {
-          return message.join(', ');
-        }
-
-        if (typeof message === 'string') {
-          return message;
-        }
+        const msg = (response as any).message;
+        if (Array.isArray(msg)) return msg.join(', ');
+        if (typeof msg === 'string') return msg;
       }
     }
-
     return 'Team command failed.';
   }
 

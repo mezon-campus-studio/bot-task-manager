@@ -7,7 +7,9 @@ import { AppConfigService } from '@src/common/shared/services/app-config.service
 import { SharedModule } from '@src/common/shared/shared.module';
 import { NezonModule } from '@src/libs/nezon';
 import { ProjectModule } from '@src/modules/project/project.module';
+import { TeamMemberModule } from '@src/modules/team-member/team-member.module';
 import { TeamModule } from '@src/modules/team/team.module';
+import { TicketModule } from '@src/modules/ticket/ticket.module';
 
 @Module({
   imports: [
@@ -19,6 +21,8 @@ import { TeamModule } from '@src/modules/team/team.module';
     DatabaseModule,
     ProjectModule,
     TeamModule,
+    TeamMemberModule,
+    TicketModule,
     BotCronModule,
   ],
   providers: [ChannelMessageHandler],

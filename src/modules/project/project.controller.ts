@@ -1,5 +1,6 @@
 import {
   Body,
+  ClassSerializerInterceptor,
   Controller,
   Delete,
   Get,
@@ -8,8 +9,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
 import { CreateProjectDto } from './dtos/create-project.dto';
 import { UpdateProjectDto } from './dtos/update-project.dto';
 import { UseProjectDto } from './dtos/use-project.dto';
@@ -18,6 +22,8 @@ import { ProjectService } from './project.service';
 
 @Controller('projects')
 @ApiTags('Projects')
+@UseGuards(JwtAuthGuard)
+@UseInterceptors(ClassSerializerInterceptor)
 export class ProjectController {
   constructor(
     private readonly projectContextService: ProjectContextService,
