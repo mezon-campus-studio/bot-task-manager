@@ -10,6 +10,7 @@ import { ProjectModule } from '@src/modules/project/project.module';
 import { TeamModule } from '@src/modules/team/team.module';
 import { TeamMemberModule } from '@src/modules/team-member/team-member.module';
 import { TicketModule } from '@src/modules/ticket/ticket.module';
+import { UserModule } from '@src/modules/user/user.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TicketModule } from '@src/modules/ticket/ticket.module';
     TeamModule,
     TeamMemberModule,
     TicketModule,
+    UserModule,
     BotCronModule,
   ],
   providers: [ChannelMessageHandler],

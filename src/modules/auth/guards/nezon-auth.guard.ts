@@ -28,11 +28,15 @@ export class NezonAuthGuard implements CanActivate {
 
     const user = await this.userService.findByMezonId(senderId);
     if (!user) {
-      this.logger.warn(
-        `NezonAuthGuard: User with mezonId ${senderId} not found in database`,
+      this.logger.log(
+        `NezonAuthGuard: User with mezonId ${senderId} not found, creating new user`,
       );
-      // You might want to reply to the user here that they need to register/login
-      return false;
+      // Create a basic user record for new users
+      const newUser = await this.userService.upsertByMezonId(senderId, {
+        name: `User_${senderId.slice(-8)}`, // Temporary name based on ID
+      });
+      (nezonContext as any).dbUser = newUser;
+      return true;
     }
 
     // Attach the database user entity to the context for use in handlers

@@ -83,7 +83,9 @@ export default class ChannelMessageHandler {
           '',
           '**👤 User**',
           '  `*user me` — View your profile',
-          '  `*user info <mezonId>` — Look up a user',
+          '  `*user search <mezonId|userId>` — Search for a user',
+          '  `*user create @username` — Create user from clan member',
+          '  `*user info <mezonId|userId>` — Look up a user (admin/PM only)',
           '',
           '**📁 Project**',
           '  `*project use <slug>` — Switch active project',
@@ -130,7 +132,9 @@ export default class ChannelMessageHandler {
       user: [
         '👤 **User Commands:**',
         '  `*user me` — View your own profile',
-        '  `*user info <mezonId|userId>` — Look up another user',
+        '  `*user search <mezonId|userId>` — Search for a user',
+        '  `*user create @username` — Create user from clan member',
+        '  `*user info <mezonId|userId>` — Look up another user (admin/PM only)',
       ].join('\n'),
       project: [
         '📁 **Project Commands:**',

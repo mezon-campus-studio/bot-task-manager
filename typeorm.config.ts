@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import path from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import 'dotenv/config';
