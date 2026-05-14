@@ -25,7 +25,6 @@ export default class ChannelMessageHandler {
 
   @On(Events.ChannelMessage)
   async onChannelMessage(message: ChannelMessage): Promise<void> {
-    console.log('DEBUG MESSAGE:', JSON.stringify(message, null, 2));
     // Ignore bot messages or empty content
     if (!message?.content) return;
 
@@ -88,6 +87,7 @@ export default class ChannelMessageHandler {
           '  `*user info <mezonId|userId>` — Look up a user (admin/PM only)',
           '',
           '**📁 Project**',
+          '  `*project list` — List projects',
           '  `*project use <slug>` — Switch active project',
           '  `*project current` — Show current project',
           '  `*project exit` — Exit current project',
@@ -102,6 +102,14 @@ export default class ChannelMessageHandler {
           '  `*member list <teamId>` — List team members',
           '  `*member add <teamId> <userId>` — Add user to team',
           '  `*member remove <teamId> <userId>` — Remove user from team',
+          '',
+          '**🧩 Task**',
+          '  `*task list` — List tasks in current project',
+          '  `*task create <title>` — Create a task',
+          '  `*task detail <id>` — View task info',
+          '  `*task status <id> <todo|in_progress|done|cancelled>` — Update status',
+          '  `*task assign <id> <userId>` — Assign task',
+          '  `*task delete <id>` — Delete a task',
           '',
           '**🎫 Ticket**',
           '  `*ticket list` — List tickets in current project',
@@ -165,6 +173,7 @@ export default class ChannelMessageHandler {
       ].join('\n'),
       project: [
         '📁 **Project Commands:**',
+        '  `*project list` — List available projects',
         '  `*project use <slug>` — Set your active project',
         '  `*project current` — Show the active project info',
         '  `*project exit` — Deselect the current project',
@@ -181,6 +190,15 @@ export default class ChannelMessageHandler {
         '  `*member list <teamId>` — List active members of a team',
         '  `*member add <teamId> <userId>` — Add user to team',
         '  `*member remove <teamId> <userId>` — Remove user from team',
+      ].join('\n'),
+      task: [
+        '🧩 **Task Commands:**',
+        '  `*task list` — List tasks in current project',
+        '  `*task create <title>` — Create a new task',
+        '  `*task detail <id>` — View task detail',
+        '  `*task status <id> <todo|in_progress|done|cancelled>` — Update status',
+        '  `*task assign <id> <userId>` — Assign task to a user',
+        '  `*task delete <id>` — Delete a task',
       ].join('\n'),
       ticket: [
         '🎫 **Ticket Commands:**',
