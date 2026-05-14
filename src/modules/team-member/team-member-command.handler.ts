@@ -323,7 +323,7 @@ export class TeamMemberCommandHandler {
       return candidateValues.includes(mentionName);
     });
 
-    return matched?.user_id ?? null;
+    return matched?.user_id || matched?.id || null;
   }
 
   private isProjectManager(ctx: any): boolean {
