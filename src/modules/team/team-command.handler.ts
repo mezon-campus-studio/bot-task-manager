@@ -1,13 +1,17 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '@src/common/enums/user.enum';
 import {
   Args,
   AutoContext,
   Command,
+  Context,
   ManagedMessage,
+  NezonCommandContext,
   SmartMessage,
 } from '@src/libs/nezon';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
+import { UserService } from '@src/modules/user/user.service';
 import { TeamService } from './team.service';
 
 /**
@@ -27,11 +31,13 @@ export class TeamCommandHandler {
   constructor(
     private readonly projectContextService: ProjectContextService,
     private readonly teamService: TeamService,
+    private readonly userService: UserService,
   ) {}
 
   @Command('team')
   async handleTeamCommand(
     @Args() args: string[],
+    @Context() ctx: NezonCommandContext,
     @AutoContext('message') message: ManagedMessage,
   ): Promise<void> {
     const action = args[0]?.toLowerCase();
@@ -48,13 +54,17 @@ export class TeamCommandHandler {
           await this.listTeams(senderId, message);
           return;
         case 'create':
-          await this.createTeam(args, senderId, message);
+          await this.createTeam(args, senderId, message, ctx);
           return;
+        case 'info':
         case 'detail':
           await this.detailTeam(args, senderId, message);
           return;
         case 'delete':
-          await this.deleteTeam(args, senderId, message);
+          await this.deleteTeam(args, senderId, message, ctx);
+          return;
+        case 'confirm':
+          await this.confirmTeamCommand(args, senderId, message, ctx);
           return;
         default:
           await this.reply(
@@ -62,9 +72,10 @@ export class TeamCommandHandler {
             [
               '🏷️ **Team Commands:**',
               '  `*team list` – List all teams in current project',
-              '  `*team create <slug> <name>` – Create a new team',
-              '  `*team detail <teamId>` – View team detail',
-              '  `*team delete <teamId>` – Delete a team from current project',
+              '  `*team create <slug> <name> [@leader]` – Create a new team',
+              '  `*team info <teamId|slug|@slug>` – View team detail',
+              '  `*team delete <teamId|slug|@slug>` – Prepare delete confirmation',
+              '  `*team confirm delete <teamId|slug|@slug>` – Confirm delete',
             ].join('\n'),
           );
       }
@@ -110,14 +121,33 @@ export class TeamCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
     const slug = args[1];
-    const name = args.slice(2).join(' ').trim();
+    const rawNameParts = args.slice(2);
 
-    if (!slug || !name) {
+    if (!slug || rawNameParts.length === 0) {
       await this.reply(
         message,
-        'Team slug and name are required.\nUsage: `*team create <slug> <name>`',
+        'Team slug and name are required.\nUsage: `*team create <slug> <name> [@leader]`,\nfor example: `*team create backend Backend Team @alice`',
+      );
+      return;
+    }
+
+    let leaderIdentifier: string | null = null;
+    if (rawNameParts.length > 1) {
+      const lastPart = rawNameParts[rawNameParts.length - 1];
+      if (lastPart.startsWith('@')) {
+        leaderIdentifier = lastPart;
+        rawNameParts.pop();
+      }
+    }
+
+    const name = rawNameParts.join(' ').trim();
+    if (!name) {
+      await this.reply(
+        message,
+        'Team name is required.\nUsage: `*team create <slug> <name> [@leader]`',
       );
       return;
     }
@@ -127,8 +157,31 @@ export class TeamCommandHandler {
         senderId,
       );
 
+    if (!this.isProjectManager(ctx)) {
+      await this.reply(message, 'Only project managers can create teams.');
+      return;
+    }
+
+    let leaderId = context.user.id;
+
+    if (leaderIdentifier) {
+      const resolvedLeaderIdentifier =
+        this.getMentionedUserIdentifier(leaderIdentifier, message) ??
+        leaderIdentifier.replace(/^@/, '').trim();
+
+      if (resolvedLeaderIdentifier) {
+        const leader = await this.userService.findByIdentifier(
+          resolvedLeaderIdentifier,
+          true,
+        );
+        if (leader) {
+          leaderId = leader.id;
+        }
+      }
+    }
+
     const team = await this.teamService.createTeamInProject(context.projectId, {
-      leaderId: context.user.id,
+      leaderId,
       name,
       slug,
     });
@@ -144,31 +197,27 @@ export class TeamCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const teamId = this.parseId(args[1]);
+    const identifier = args[1];
 
-    if (teamId == null) {
-      await this.reply(message, 'Usage: `*team detail <teamId>`');
+    if (!identifier) {
+      await this.reply(message, 'Usage: `*team detail <teamId|slug|@slug>`');
       return;
     }
 
-    // Get current project context — validates membership
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
-    const team = await this.teamService.findById(teamId);
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      identifier,
+    );
 
     if (!team) {
-      await this.reply(message, `Team #${teamId} not found.`);
-      return;
-    }
-
-    // Validate team belongs to the current project (prevents cross-project data leaks)
-    if (team.projectId !== context.projectId) {
       await this.reply(
         message,
-        `Team #${teamId} does not belong to your current project **${context.project.name}**.`,
+        `Team **${identifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -190,11 +239,20 @@ export class TeamCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
-    const teamId = this.parseId(args[1]);
+    const identifier = args[1];
 
-    if (teamId == null) {
-      await this.reply(message, 'Usage: `*team delete <teamId>`');
+    if (!identifier) {
+      await this.reply(
+        message,
+        'Usage: `*team delete <teamId|slug|@slug>`. To confirm deletion, run `*team confirm delete <team>`.',
+      );
+      return;
+    }
+
+    if (!this.isProjectManager(ctx)) {
+      await this.reply(message, 'Only project managers can delete teams.');
       return;
     }
 
@@ -203,20 +261,133 @@ export class TeamCommandHandler {
         senderId,
       );
 
-    await this.teamService.deleteTeamFromProject(context.projectId, teamId);
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      identifier,
+    );
+
+    if (!team) {
+      await this.reply(
+        message,
+        `Team **${identifier}** not found in project **${context.project.name}**.`,
+      );
+      return;
+    }
 
     await this.reply(
       message,
-      `🗑️ Team #${teamId} has been removed from project **${context.project.name}**.`,
+      [
+        `🗑️ Are you sure you want to delete team **${team.name}** (\`${team.slug}\`)?`,
+        `Run: \`*team confirm delete ${team.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmTeamCommand(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const confirmAction = args[1]?.toLowerCase();
+    const identifier = args[2];
+
+    if (confirmAction !== 'delete' || !identifier) {
+      await this.reply(
+        message,
+        'Usage: `*team confirm delete <teamId|slug|@slug>`',
+      );
+      return;
+    }
+
+    if (!this.isProjectManager(ctx)) {
+      await this.reply(message, 'Only project managers can delete teams.');
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      identifier,
+    );
+
+    if (!team) {
+      await this.reply(
+        message,
+        `Team **${identifier}** not found in project **${context.project.name}**.`,
+      );
+      return;
+    }
+
+    await this.teamService.deleteTeamFromProject(context.projectId, team.id);
+
+    await this.reply(
+      message,
+      `🗑️ Team **${team.name}** (\`${team.slug}\`) was deleted from project **${context.project.name}**.`,
     );
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
-  private parseId(value: string | undefined): number | null {
-    if (!value) return null;
-    const id = Number(value);
-    return Number.isInteger(id) && id > 0 ? id : null;
+  private getMentionedUserIdentifier(
+    identifier: string,
+    message: ManagedMessage,
+  ): string | null {
+    const normalized = identifier.trim();
+    if (!normalized.startsWith('@')) {
+      return null;
+    }
+
+    const mentionName = normalized.slice(1).trim().toLowerCase();
+    if (!mentionName) return null;
+
+    const raw = message.raw as any;
+    const mentions = Array.isArray(raw?.mentions) ? raw.mentions : [];
+    const contentText = String(raw?.content?.t || '').trim();
+
+    const matched = mentions.find((item: any) => {
+      const candidateValues = [
+        item.user_id,
+        item.id,
+        item.username,
+        item.display_name,
+        item.name,
+        item.user_name,
+      ]
+        .filter(Boolean)
+        .map((value: any) => String(value).trim().toLowerCase())
+        .map((value: string) =>
+          value.startsWith('@') ? value.slice(1) : value,
+        );
+
+      if (
+        typeof item.s === 'number' &&
+        typeof item.e === 'number' &&
+        contentText.length >= item.e
+      ) {
+        const rangeText = String(contentText.slice(item.s, item.e))
+          .trim()
+          .toLowerCase();
+        if (rangeText) {
+          candidateValues.push(
+            rangeText.startsWith('@') ? rangeText.slice(1) : rangeText,
+          );
+        }
+      }
+
+      return candidateValues.includes(mentionName);
+    });
+
+    return matched?.user_id ?? null;
+  }
+
+  private isProjectManager(ctx: NezonCommandContext): boolean {
+    const dbUser = (ctx as any).dbUser;
+    return dbUser?.role === UserRole.PM;
   }
 
   private getErrorMessage(error: unknown): string {
