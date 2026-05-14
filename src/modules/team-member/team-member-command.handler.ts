@@ -1,9 +1,12 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '@src/common/enums/user.enum';
 import {
   Args,
   AutoContext,
   Command,
+  Context,
   ManagedMessage,
+  NezonCommandContext,
   SmartMessage,
 } from '@src/libs/nezon';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
@@ -36,6 +39,7 @@ export class TeamMemberCommandHandler {
   async handleMemberCommand(
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
+    @Context() ctx: NezonCommandContext,
   ): Promise<void> {
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
@@ -51,19 +55,19 @@ export class TeamMemberCommandHandler {
           await this.listMembers(args, senderId, message);
           return;
         case 'add':
-          await this.addMember(args, senderId, message);
+          await this.addMember(args, senderId, message, ctx);
           return;
         case 'remove':
-          await this.removeMember(args, senderId, message);
+          await this.removeMember(args, senderId, message, ctx);
           return;
         default:
           await this.reply(
             message,
             [
               '👥 **Member Commands:**',
-              '  `*member list <teamId>` – List members of a team',
-              '  `*member add <teamId> <userId>` – Add user to team',
-              '  `*member remove <teamId> <userId>` – Remove user from team',
+              '  `*member list <teamId|slug|@slug>` – List members of a team',
+              '  `*member add <teamId|slug|@slug> <userId|@username>` – Add user to team',
+              '  `*member remove <teamId|slug|@slug> <userId|@username>` – Remove user from team',
             ].join('\n'),
           );
       }
@@ -78,28 +82,32 @@ export class TeamMemberCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const teamId = this.parseId(args[1]);
+    const teamIdentifier = args[1];
 
-    if (teamId == null) {
-      await this.reply(message, 'Usage: `*member list <teamId>`');
+    if (!teamIdentifier) {
+      await this.reply(message, 'Usage: `*member list <teamId|slug|@slug>`');
       return;
     }
 
-    // Validate user has a current project and is an active member
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
-    // Validate team belongs to current project
-    const team = await this.teamService.findById(teamId);
-    if (!team || team.projectId !== context.projectId) {
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      teamIdentifier,
+    );
+
+    if (!team) {
       await this.reply(
         message,
-        `Team #${teamId} does not belong to your current project **${context.project.name}**.`,
+        `Team **${teamIdentifier}** not found in your current project **${context.project.name}**.`,
       );
       return;
     }
+
+    const teamId = team.id;
 
     const members =
       await this.teamMemberService.findActiveMembersByTeamId(teamId);
@@ -128,25 +136,21 @@ export class TeamMemberCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
-    const teamId = this.parseId(args[1]);
-    const targetUserId = args[2];
+    const teamIdentifier = args[1];
+    const targetUserIdRaw = args[2];
 
-    if (teamId == null || !targetUserId) {
-      await this.reply(message, 'Usage: `*member add <teamId> <userId>`');
+    if (!teamIdentifier || !targetUserIdRaw) {
+      await this.reply(
+        message,
+        'Usage: `*member add <teamId|slug|@slug> <userId|@username>`',
+      );
       return;
     }
 
-    // Resolve the target user by mezonId or internal id
-    const targetUser =
-      (await this.userService.findByMezonId(targetUserId)) ??
-      (await this.userService.findById(targetUserId));
-
-    if (!targetUser) {
-      await this.reply(
-        message,
-        `User **${targetUserId}** not found in the system.`,
-      );
+    if (!this.isProjectManager(ctx)) {
+      await this.reply(message, 'Only project managers can add team members.');
       return;
     }
 
@@ -155,16 +159,45 @@ export class TeamMemberCommandHandler {
         senderId,
       );
 
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      teamIdentifier,
+    );
+
+    if (!team) {
+      await this.reply(
+        message,
+        `Team **${teamIdentifier}** not found in your current project **${context.project.name}**.`,
+      );
+      return;
+    }
+
+    const resolvedTargetUserId =
+      this.getMentionedUserIdentifier(targetUserIdRaw, message) ??
+      targetUserIdRaw.replace(/^@/, '').trim();
+
+    // Resolve the target user
+    const targetUser =
+      await this.userService.findByIdentifier(resolvedTargetUserId);
+
+    if (!targetUser) {
+      await this.reply(
+        message,
+        `User **${targetUserIdRaw}** not found in the system.`,
+      );
+      return;
+    }
+
     await this.teamMemberService.addMember(
       context.projectId,
-      teamId,
+      team.id,
       targetUser.id,
       context.user.id,
     );
 
     await this.reply(
       message,
-      `✅ User **${targetUser.name ?? targetUser.mezonId}** added to team #${teamId} in project **${context.project.name}**.`,
+      `✅ User **${targetUser.name ?? targetUser.mezonId}** added to team **${team.name}** in project **${context.project.name}**.`,
     );
   }
 
@@ -172,24 +205,23 @@ export class TeamMemberCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
-    const teamId = this.parseId(args[1]);
-    const targetUserId = args[2];
+    const teamIdentifier = args[1];
+    const targetUserIdRaw = args[2];
 
-    if (teamId == null || !targetUserId) {
-      await this.reply(message, 'Usage: `*member remove <teamId> <userId>`');
+    if (!teamIdentifier || !targetUserIdRaw) {
+      await this.reply(
+        message,
+        'Usage: `*member remove <teamId|slug|@slug> <userId|@username>`',
+      );
       return;
     }
 
-    // Resolve the target user
-    const targetUser =
-      (await this.userService.findByMezonId(targetUserId)) ??
-      (await this.userService.findById(targetUserId));
-
-    if (!targetUser) {
+    if (!this.isProjectManager(ctx)) {
       await this.reply(
         message,
-        `User **${targetUserId}** not found in the system.`,
+        'Only project managers can remove team members.',
       );
       return;
     }
@@ -199,24 +231,104 @@ export class TeamMemberCommandHandler {
         senderId,
       );
 
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      teamIdentifier,
+    );
+
+    if (!team) {
+      await this.reply(
+        message,
+        `Team **${teamIdentifier}** not found in your current project **${context.project.name}**.`,
+      );
+      return;
+    }
+
+    const resolvedTargetUserId =
+      this.getMentionedUserIdentifier(targetUserIdRaw, message) ??
+      targetUserIdRaw.replace(/^@/, '').trim();
+
+    // Resolve the target user
+    const targetUser =
+      await this.userService.findByIdentifier(resolvedTargetUserId);
+
+    if (!targetUser) {
+      await this.reply(
+        message,
+        `User **${targetUserIdRaw}** not found in the system.`,
+      );
+      return;
+    }
+
     await this.teamMemberService.removeMember(
       context.projectId,
-      teamId,
+      team.id,
       targetUser.id,
     );
 
     await this.reply(
       message,
-      `🗑️ User **${targetUser.name ?? targetUser.mezonId}** removed from team #${teamId}.`,
+      `🗑️ User **${targetUser.name ?? targetUser.mezonId}** removed from team **${team.name}**.`,
     );
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
-  private parseId(value: string | undefined): number | null {
-    if (!value) return null;
-    const id = Number(value);
-    return Number.isInteger(id) && id > 0 ? id : null;
+  private getMentionedUserIdentifier(
+    identifier: string,
+    message: ManagedMessage,
+  ): string | null {
+    const normalized = identifier.trim();
+    if (!normalized.startsWith('@')) {
+      return null;
+    }
+
+    const mentionName = normalized.slice(1).trim().toLowerCase();
+    if (!mentionName) return null;
+
+    const raw = message.raw as any;
+    const mentions = Array.isArray(raw?.mentions) ? raw.mentions : [];
+    const contentText = String(raw?.content?.t || '').trim();
+
+    const matched = mentions.find((item: any) => {
+      const candidateValues = [
+        item.user_id,
+        item.id,
+        item.username,
+        item.display_name,
+        item.name,
+        item.user_name,
+      ]
+        .filter(Boolean)
+        .map((value: any) => String(value).trim().toLowerCase())
+        .map((value: string) =>
+          value.startsWith('@') ? value.slice(1) : value,
+        );
+
+      if (
+        typeof item.s === 'number' &&
+        typeof item.e === 'number' &&
+        contentText.length >= item.e
+      ) {
+        const rangeText = String(contentText.slice(item.s, item.e))
+          .trim()
+          .toLowerCase();
+        if (rangeText) {
+          candidateValues.push(
+            rangeText.startsWith('@') ? rangeText.slice(1) : rangeText,
+          );
+        }
+      }
+
+      return candidateValues.includes(mentionName);
+    });
+
+    return matched?.user_id || matched?.id || null;
+  }
+
+  private isProjectManager(ctx: any): boolean {
+    const dbUser = ctx.dbUser;
+    return dbUser?.role === UserRole.PM;
   }
 
   private getErrorMessage(error: unknown): string {
