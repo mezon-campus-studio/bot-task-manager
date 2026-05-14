@@ -29,13 +29,13 @@ export class CreateTeamDto {
   @MaxLength(100)
   slug: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'User ID of the team leader',
     example: 'uuid-v4-string',
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  leaderId: string;
+  leaderId?: string;
 
   @ApiPropertyOptional({
     description: 'Description of the team',

@@ -10,10 +10,14 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import UserEntity from '@src/modules/user/user.entity';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketResponseDto } from './dto/ticket-response.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
@@ -22,6 +26,7 @@ import { TicketService } from './ticket.service';
 
 @Controller('tickets')
 @ApiTags('Tickets')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TicketController {
   constructor(private readonly ticketService: TicketService) {}
@@ -29,9 +34,13 @@ export class TicketController {
   @Post()
   @ApiOperation({ summary: 'Create a new ticket' })
   async createTicket(
+    @CurrentUser() user: UserEntity,
     @Body() body: CreateTicketDto,
   ): Promise<TicketResponseDto> {
-    const ticket = await this.ticketService.createTicket(body);
+    const ticket = await this.ticketService.createTicket({
+      ...body,
+      reporterUserId: body.reporterUserId ?? user.id,
+    });
     return plainToInstance(TicketResponseDto, ticket, {
       excludeExtraneousValues: true,
     });
@@ -101,6 +110,18 @@ export class TicketController {
     @Param('userId', ParseUUIDPipe) userId: string,
   ): Promise<TicketResponseDto[]> {
     const tickets = await this.ticketService.getByAssignee(projectId, userId);
+    return plainToInstance(TicketResponseDto, tickets, {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  @Get('project/:projectId/my-tickets')
+  @ApiOperation({ summary: 'Get tickets assigned to the current user' })
+  async getMyTickets(
+    @Param('projectId', ParseIntPipe) projectId: number,
+    @CurrentUser() user: UserEntity,
+  ): Promise<TicketResponseDto[]> {
+    const tickets = await this.ticketService.getByAssignee(projectId, user.id);
     return plainToInstance(TicketResponseDto, tickets, {
       excludeExtraneousValues: true,
     });

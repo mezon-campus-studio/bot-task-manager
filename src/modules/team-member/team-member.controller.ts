@@ -9,16 +9,21 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import UserEntity from '@src/modules/user/user.entity';
 import { AddTeamMemberDto } from './dtos/add-team-member.dto';
 import { TeamMemberResponseDto } from './dtos/team-member-response.dto';
 import { TeamMemberService } from './team-member.service';
 
 @ApiTags('Team Members')
 @Controller('team-members')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class TeamMemberController {
   constructor(private readonly teamMemberService: TeamMemberService) {}
@@ -28,13 +33,14 @@ export class TeamMemberController {
   async addMember(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('teamId', ParseIntPipe) teamId: number,
+    @CurrentUser() user: UserEntity,
     @Body() addTeamMemberDto: AddTeamMemberDto,
   ): Promise<TeamMemberResponseDto> {
     const member = await this.teamMemberService.addMember(
       projectId,
       teamId,
       addTeamMemberDto.userId,
-      addTeamMemberDto.invitedBy,
+      addTeamMemberDto.invitedBy ?? user.id,
     );
     return plainToInstance(TeamMemberResponseDto, member, {
       excludeExtraneousValues: true,

@@ -11,21 +11,33 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { plainToInstance } from 'class-transformer';
+import { CurrentUser } from '@src/common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '@src/modules/auth/guards/jwt-auth.guard';
+import UserEntity from '@src/modules/user/user.entity';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { GetManyUsersDto } from './dtos/get-many-user.dto';
 import { UserResponseDto } from './dtos/user-response.dto';
 import { UserStatus } from './enum/user-status.enum';
 import { UserService } from './user.service';
-
 @Controller('users')
 @ApiTags('Users')
+@UseGuards(JwtAuthGuard)
 @UseInterceptors(ClassSerializerInterceptor)
 export class UserController {
   constructor(private readonly userService: UserService) {}
+
+  @Get('me')
+  @ApiOperation({ summary: 'Get current authenticated user profile' })
+  async getMe(@CurrentUser() user: UserEntity): Promise<UserResponseDto> {
+    return plainToInstance(UserResponseDto, user, {
+      excludeExtraneousValues: true,
+    });
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create or update a user by Mezon ID' })
