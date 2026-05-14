@@ -39,6 +39,5 @@ export class BotModule {
     this.mezonClient.on('ready', async () => {
       this.logger.log('🤖 Mezon Client is ready!');
     });
-    void this.mezonClient.login()
   }
 }
