@@ -38,5 +38,5 @@ async getEventsByProject(
 async findAll(@Query() query: GetEventQueryDto) {
   return this.eventService.findEvents(query);
   }
-  
+ 
 }
