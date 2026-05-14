@@ -8,18 +8,27 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { NoteResourceType } from './enums';
 import { NoteService } from './note.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthUser } from '../auth/decorators/auth-user.decorator';
 
+@ApiTags('Notes')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('notes')
 export class NoteController {
   constructor(private noteService: NoteService) {}
 
   @Post()
-  async createNote(@Body() body: any) {
+  async createNote(
+    @AuthUser() userId: string,
+    @Body() body: any,
+  ) {
     const {
-      authorUserId,
       content,
       projectId,
       resourceId,
@@ -27,7 +36,7 @@ export class NoteController {
       isShared,
     } = body;
     return await this.noteService.createNote({
-      authorUserId,
+      authorUserId: userId,
       content,
       projectId,
       resourceId,
@@ -38,10 +47,11 @@ export class NoteController {
 
   @Patch(':id')
   async updateNote(
+    @AuthUser() userId: string,
     @Param('id', ParseIntPipe) noteId: number,
     @Body() body: any,
   ) {
-    const { userId, content, isShared, isPinned } = body;
+    const { content, isShared, isPinned } = body;
     return await this.noteService.updateNote(noteId, userId, {
       content,
       isShared,
@@ -51,8 +61,8 @@ export class NoteController {
 
   @Delete(':id')
   async deleteNote(
+    @AuthUser() userId: string,
     @Param('id', ParseIntPipe) noteId: number,
-    @Body('userId') userId: string,
   ) {
     await this.noteService.deleteNote(noteId, userId);
     return { success: true };
@@ -60,28 +70,22 @@ export class NoteController {
 
   @Patch(':id/pin')
   async pinNote(
+    @AuthUser() userId: string,
     @Param('id', ParseIntPipe) noteId: number,
-    @Body()
-    body: {
-      userId: string;
-      isPinned: boolean;
-    },
+    @Body() body: { isPinned: boolean },
   ) {
-    return await this.noteService.updateNote(noteId, body.userId, {
+    return await this.noteService.updateNote(noteId, userId, {
       isPinned: body.isPinned,
     });
   }
 
   @Patch(':id/share')
   async shareNote(
+    @AuthUser() userId: string,
     @Param('id', ParseIntPipe) noteId: number,
-    @Body()
-    body: {
-      userId: string;
-      isShared: boolean;
-    },
+    @Body() body: { isShared: boolean },
   ) {
-    return await this.noteService.updateNote(noteId, body.userId, {
+    return await this.noteService.updateNote(noteId, userId, {
       isShared: body.isShared,
     });
   }

@@ -7,11 +7,16 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  UseGuards,
 } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PermissionService } from './permission.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthUser } from '../auth/decorators/auth-user.decorator';
 
 @ApiTags('Permissions')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('permissions')
 export class PermissionController {
   constructor(private readonly permissionService: PermissionService) {}
