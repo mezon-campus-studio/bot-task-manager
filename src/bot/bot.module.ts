@@ -6,7 +6,11 @@ import { DatabaseModule } from '@src/common/database/database.module';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import { SharedModule } from '@src/common/shared/shared.module';
 import { NezonModule } from '@src/libs/nezon';
+import { NoteModule } from '@src/modules/note/note.module';
+import { PermissionModule } from '@src/modules/permission/permission.module';
 import { ProjectModule } from '@src/modules/project/project.module';
+import { RoleModule } from '@src/modules/role/role.module';
+import { RolePermissionModule } from '@src/modules/role-permission/role-permission.module';
 import { TeamModule } from '@src/modules/team/team.module';
 import { TeamMemberModule } from '@src/modules/team-member/team-member.module';
 import { TicketModule } from '@src/modules/ticket/ticket.module';
@@ -21,6 +25,10 @@ import { UserModule } from '@src/modules/user/user.module';
     }),
     DatabaseModule,
     ProjectModule,
+    NoteModule,
+    RoleModule,
+    PermissionModule,
+    RolePermissionModule,
     TeamModule,
     TeamMemberModule,
     TicketModule,
