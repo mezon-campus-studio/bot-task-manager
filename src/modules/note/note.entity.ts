@@ -21,10 +21,16 @@ export default class NoteEntity extends AbstractEntity {
   })
   authorUserId!: string;
 
-  @Column({ default: false })
+  @Column({
+    type: 'boolean',
+    default: false,
+  })
   isPinned: boolean;
 
-  @Column({ default: true })
+  @Column({
+    type: 'boolean',
+    default: true,
+  })
   isShared: boolean;
 
   @Column({
