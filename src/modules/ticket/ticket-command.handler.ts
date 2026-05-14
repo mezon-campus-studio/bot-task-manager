@@ -335,12 +335,19 @@ export class TicketCommandHandler {
         senderId,
       );
 
-    const ticket = await this.ticketService.updateTicket(context.projectId, ticketId, {
-      status: TicketStatus.RESOLVED,
-    });
+    const ticket = await this.ticketService.updateTicket(
+      context.projectId,
+      ticketId,
+      {
+        status: TicketStatus.RESOLVED,
+      },
+    );
 
     if (!ticket) {
-      await this.reply(message, `Ticket #${ticketId} not found in current project.`);
+      await this.reply(
+        message,
+        `Ticket #${ticketId} not found in current project.`,
+      );
       return;
     }
 
