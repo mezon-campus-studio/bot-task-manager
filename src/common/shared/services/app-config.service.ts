@@ -110,8 +110,8 @@ export class AppConfigService {
 
   get botConfig(): { botId: string; token: string; wsUrl: string } {
     return {
-      botId: this.getString('MEZON_BOT_ID'),
-      token: this.getString('MEZON_BOT_TOKEN'),
+      botId: this.getString('MEZON_BOT_ID').trim(),
+      token: this.getString('MEZON_BOT_TOKEN').trim(),
       wsUrl: 'gw.mezon.ai',
     };
   }

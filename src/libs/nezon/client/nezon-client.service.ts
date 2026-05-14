@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { MezonClient } from 'mezon-sdk';
 import { setClientService } from './get-mezon-client';
 import { NEZON_MODULE_OPTIONS } from '../nezon-configurable';
@@ -6,6 +6,7 @@ import { NezonModuleOptions } from '../nezon.module-interface';
 
 @Injectable()
 export class NezonClientService {
+  private readonly logger = new Logger(NezonClientService.name);
   private client: MezonClient | null = null;
   private isLoggedIn = false;
 
@@ -18,7 +19,6 @@ export class NezonClientService {
 
   getClient(): MezonClient {
     if (!this.client) {
-      console.log('Bot config options:', JSON.stringify(this.options));
       this.client = new MezonClient(this.options);
     }
     return this.client;
@@ -27,8 +27,6 @@ export class NezonClientService {
   async login() {
     if (this.isLoggedIn) return;
     const client = this.getClient();
-
-    console.log('Attempting login with botId:', this.options.botId);
 
     try {
       await client.login();
@@ -48,8 +46,18 @@ export class NezonClientService {
     if (!this.client) {
       return;
     }
-    this.client.closeSocket();
-    this.client.removeAllListeners();
+
+    try {
+      this.client.closeSocket();
+    } catch (error) {
+      this.logger.warn(
+        'Failed to close Mezon socket during disconnect',
+        (error as Error | undefined)?.stack,
+      );
+    } finally {
+      this.client.removeAllListeners();
+    }
+
     this.client = null;
     this.isLoggedIn = false;
   }

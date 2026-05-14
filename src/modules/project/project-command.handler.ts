@@ -41,6 +41,9 @@ export class ProjectCommandHandler {
         case 'create':
           await this.createProject(args, message, ctx);
           return;
+        case 'list':
+          await this.listProjects(message);
+          return;
         case 'use':
           await this.useProject(args, senderId, message);
           return;
@@ -53,7 +56,7 @@ export class ProjectCommandHandler {
         default:
           await this.reply(
             message,
-            'Usage: *project create <slug> <name...>, *project use <projectId|projectSlug>, *project current, *project exit',
+            'Usage: *project create <slug> <name...>, *project list, *project use <projectId|projectSlug>, *project current, *project exit',
           );
       }
     } catch (error) {
@@ -109,6 +112,21 @@ export class ProjectCommandHandler {
       message,
       `✅ Created project **${project.name}** (\`${project.slug}\`). Use \`*project use ${project.slug}\` to select it.`,
     );
+  }
+
+  private async listProjects(message: ManagedMessage): Promise<void> {
+    const projects = await this.projectService.listProjects();
+
+    if (!projects.length) {
+      await this.reply(message, 'No projects found.');
+      return;
+    }
+
+    const lines = projects.map(
+      (project) => `  [#${project.id}] ${project.name} (\`${project.slug}\`)`,
+    );
+
+    await this.reply(message, ['📁 Projects:', ...lines].join('\n'));
   }
 
   private async useProject(
