@@ -203,7 +203,8 @@ export class TicketCommandHandler {
     message: ManagedMessage,
   ): Promise<void> {
     const ticketId = this.parseId(args[1]);
-    const status = args[2]?.toLowerCase() as TicketStatus | undefined;
+    const rawStatus = args[2]?.trim();
+    const status = rawStatus?.toUpperCase() as TicketStatus | undefined;
 
     if (ticketId == null || !status) {
       await this.reply(
@@ -323,10 +324,23 @@ export class TicketCommandHandler {
       return;
     }
 
-    const ticket = await this.ticketService.markResolved(ticketId);
+    const senderId = message.senderId;
+    if (!senderId) {
+      await this.reply(message, 'Cannot resolve command sender.');
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const ticket = await this.ticketService.updateTicket(context.projectId, ticketId, {
+      status: TicketStatus.RESOLVED,
+    });
 
     if (!ticket) {
-      await this.reply(message, `Ticket #${ticketId} not found.`);
+      await this.reply(message, `Ticket #${ticketId} not found in current project.`);
       return;
     }
 
