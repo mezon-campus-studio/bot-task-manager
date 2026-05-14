@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
+import { UserRole } from '@src/common/enums/user.enum';
 import { CRUDService } from '@src/common/utils/crud';
 import { UserStatus } from './enum/user-status.enum';
 import UserEntity from './user.entity';
@@ -8,6 +9,7 @@ import UserEntity from './user.entity';
 type UpsertUserMeta = {
   name?: string;
   email?: string;
+  role?: UserRole;
 };
 
 @Injectable()
@@ -265,14 +267,29 @@ export class UserService extends CRUDService<UserEntity> {
     const statusFilter = includeDeleted
       ? {}
       : { status: Not(UserStatus.DELETED) };
+
+    const whereConditions: Array<
+      import('typeorm').FindOptionsWhere<UserEntity>
+    > = [
+      { mezonId: identifier, ...statusFilter },
+      { name: identifier, ...statusFilter },
+      { email: identifier, ...statusFilter },
+    ];
+
+    if (this.isUuid(identifier)) {
+      whereConditions.unshift({ id: identifier, ...statusFilter });
+    }
+
     return await this.userRepository.findOne({
-      where: [
-        { mezonId: identifier, ...statusFilter },
-        { name: identifier, ...statusFilter },
-        { email: identifier, ...statusFilter },
-      ],
+      where: whereConditions,
       withDeleted: includeDeleted,
     });
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 
   async softDeleteUser(identifier: string): Promise<void> {

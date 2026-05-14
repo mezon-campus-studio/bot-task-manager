@@ -46,6 +46,7 @@ export class NezonCommandService {
     definition: NezonCommandDefinition;
   }> = [];
   private isInitialized = false;
+  private readonly processedMessages = new Map<string, number>();
   private readonly cacheKeys = {
     channel: Symbol('nezon:command:channel'),
     clan: Symbol('nezon:command:clan'),
@@ -115,6 +116,14 @@ export class NezonCommandService {
     if (!message) {
       return;
     }
+
+    const messageId = String(
+      (message as any).message_id || (message as any).id || '',
+    ).trim();
+    if (messageId && this.isDuplicateMessage(messageId)) {
+      return;
+    }
+
     const rawContent = this.extractMessageContent(message);
     if (!rawContent) {
       return;
@@ -369,6 +378,24 @@ export class NezonCommandService {
       return (payload as { t: string }).t;
     }
     return '';
+  }
+
+  private isDuplicateMessage(messageId: string): boolean {
+    const now = Date.now();
+    const windowMs = 60_000;
+
+    if (this.processedMessages.has(messageId)) {
+      return true;
+    }
+
+    this.processedMessages.set(messageId, now);
+    for (const [key, timestamp] of this.processedMessages.entries()) {
+      if (now - timestamp > windowMs) {
+        this.processedMessages.delete(key);
+      }
+    }
+
+    return false;
   }
 
   private ensureCache(context: NezonCommandContext) {

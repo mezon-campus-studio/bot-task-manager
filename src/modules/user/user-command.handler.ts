@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '@src/common/enums/user.enum';
 import {
   Args,
   AutoContext,
@@ -9,6 +10,7 @@ import {
 } from '@src/libs/nezon';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import UserEntity from './user.entity';
 import { UserService } from './user.service';
 
 /**
@@ -50,10 +52,10 @@ export class UserCommandHandler {
           await this.showUserInfo(args, message, ctx);
           return;
         case 'search':
-          await this.searchUser(args, message);
+          await this.searchUser(args, message, ctx);
           return;
         case 'create':
-          await this.createUserFromMention(args, message);
+          await this.createUserFromMention(message, ctx);
           return;
         default:
           await this.reply(
@@ -99,7 +101,7 @@ export class UserCommandHandler {
         `👤 **Your Profile:**`,
         `  Name: ${user.name ?? '—'}`,
         `  Email: ${user.email ?? '—'}`,
-        `  Role: ${user.role ?? 'UK'}`,
+        `  Role: ${this.getRoleLabel(user.role ?? UserRole.UK)}`,
         `  Status: ${user.status ?? '—'}`,
         `  Current Project ID: ${user.currentProjectId ?? 'none'}`,
         `  Mezon ID: ${user.mezonId}`,
@@ -116,9 +118,8 @@ export class UserCommandHandler {
     message: ManagedMessage,
     ctx: NezonCommandContext,
   ): Promise<void> {
-    // Check if sender has admin or PM role
     const senderUser = (ctx as any).dbUser;
-    if (!senderUser || !['AD', 'PM'].includes(senderUser.role)) {
+    if (senderUser?.role !== UserRole.PM) {
       await this.reply(
         message,
         '❌ This command is only available to administrators and project managers.',
@@ -126,22 +127,24 @@ export class UserCommandHandler {
       return;
     }
 
-    const identifier = args[1];
-
-    if (!identifier) {
-      await this.reply(message, 'Usage: `*user info <mezonId|userId>`');
+    const rawIdentifier = args[1];
+    if (!rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*user info <mezonId|userId|@username>`',
+      );
       return;
     }
 
-    // Try mezonId first, then internal UUID
-    const user =
-      (await this.userService.findByMezonId(identifier)) ??
-      (await this.userService.findById(identifier));
+    const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+    let user = await this.userService.findByIdentifier(identifier, true);
 
     if (!user) {
-      await this.reply(message, `❌ User **${identifier}** not found.`);
+      await this.reply(message, `❌ User **${rawIdentifier}** not found.`);
       return;
     }
+
+    user = await this.refreshUserRoleFromClan(user, ctx);
 
     await this.reply(
       message,
@@ -149,7 +152,7 @@ export class UserCommandHandler {
         `👤 **User Info:**`,
         `  Name: ${user.name ?? '—'}`,
         `  Email: ${user.email ?? '—'}`,
-        `  Role: ${user.role ?? 'UK'}`,
+        `  Role: ${this.getRoleLabel(user.role ?? UserRole.UK)}`,
         `  Status: ${user.status ?? '—'}`,
         `  Mezon ID: ${user.mezonId}`,
       ].join('\n'),
@@ -163,28 +166,34 @@ export class UserCommandHandler {
   private async searchUser(
     args: string[],
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
-    const identifier = args[1];
+    const rawIdentifier = args[1];
 
-    if (!identifier) {
-      await this.reply(message, 'Usage: `*user search <mezonId|userId>`');
+    if (!rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*user search <mezonId|userId|@username>`',
+      );
       return;
     }
 
-    // Use findByIdentifier which tries both mezonId and UUID
-    const user = await this.userService.findByIdentifier(identifier, true);
+    const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+    let user = await this.userService.findByIdentifier(identifier, true);
 
     if (!user) {
       await this.reply(message, `❌ User **${identifier}** not found.`);
       return;
     }
 
+    user = await this.refreshUserRoleFromClan(user, ctx);
+
     await this.reply(
       message,
       [
         `👤 **User Found:**`,
         `  Name: ${user.name ?? '—'}`,
-        `  Role: ${user.role ?? 'UK'}`,
+        `  Role: ${this.getRoleLabel(user.role ?? UserRole.UK)}`,
         `  Status: ${user.status ?? '—'}`,
         `  Mezon ID: ${user.mezonId}`,
       ].join('\n'),
@@ -196,83 +205,27 @@ export class UserCommandHandler {
    * Attempts to pull role information from the clan structure.
    */
   private async createUserFromMention(
-    args: string[],
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
-    const mentionStr = args[1];
-
-    if (!mentionStr) {
-      await this.reply(message, 'Usage: `*user create @username`');
-      return;
-    }
-
-    // Parse mention (remove @ if present)
-    const username = mentionStr.replace(/^@/, '').trim();
-
-    if (!username) {
-      await this.reply(message, 'Please provide a valid username.');
-      return;
-    }
-
     try {
-      // Get clan from channel
-      const channel = (message as any).channel;
-      const clan = channel?.clan;
+      // Get mentions from the raw channel message payload
+      const mentions = (message.raw as any).mentions || [];
 
-      if (!clan) {
-        await this.reply(message, '❌ Could not resolve clan information.');
-        return;
-      }
-
-      // List members in clan to find matching username
-      // Note: This assumes Mezon SDK provides a way to list members
-      // If not available, we'll need to use an alternative approach
-      let targetMember: any = null;
-      let memberRole: any = null;
-
-      try {
-        // Try to get members (this is SDK-dependent)
-        const membersData = await (clan as any).listMembers?.();
-        const members = membersData?.members || [];
-
-        targetMember = members.find(
-          (m: any) =>
-            m.user?.username === username ||
-            m.user?.display_name === username ||
-            m.user?.user_id === username,
-        );
-
-        if (targetMember) {
-          // Get roles from clan
-          const rolesData = await (clan as any).listRoles?.();
-          const roles = rolesData?.roles?.roles || [];
-
-          // Find the role of this member
-          const roleId = targetMember.role_ids?.[0];
-          if (roleId) {
-            memberRole = roles.find((r: any) => r.id === roleId);
-          }
-        }
-      } catch (e) {
-        this.logger.debug(
-          `Could not fetch members list from clan: ${(e as Error).message}`,
-        );
-      }
-
-      if (!targetMember) {
+      if (mentions.length === 0) {
         await this.reply(
           message,
-          `❌ Member **${username}** not found in this clan.`,
+          '❌ Please mention a user: `*user create @username`',
         );
         return;
       }
 
-      const mezonId = targetMember.user?.user_id || targetMember.user_id;
+      // Use the first mention
+      const mention = mentions[0];
+      const mezonId = mention.user_id;
+
       if (!mezonId) {
-        await this.reply(
-          message,
-          '❌ Could not determine Mezon ID for this user.',
-        );
+        await this.reply(message, '❌ Could not extract user ID from mention.');
         return;
       }
 
@@ -281,43 +234,76 @@ export class UserCommandHandler {
       if (existingUser) {
         await this.reply(
           message,
-          `ℹ️ User **${targetMember.user?.username}** already exists in the system.`,
+          `ℹ️ User already exists in the system (Mezon ID: ${mezonId}).`,
         );
         return;
       }
 
-      // Map clan role to internal role (Owner -> AD, Bot -> UK, etc.)
-      let internalRole = 'UK'; // Default unknown
-      const roleName = memberRole?.name?.toUpperCase() || '';
-      if (roleName.includes('OWNER') || roleName.includes('ADMIN')) {
-        internalRole = 'AD';
-      } else if (
-        roleName.includes('MANAGER') ||
-        roleName.includes('PROJECT') ||
-        roleName.includes('PM')
-      ) {
-        internalRole = 'PM';
+      const clan = await ctx.getClan();
+      if (!clan) {
+        await this.reply(message, '❌ Could not resolve clan information.');
+        return;
       }
 
-      // Create user with role from clan
+      let internalRole = UserRole.UK; // Default unknown
+      let memberName = `User_${mezonId.slice(-8)}`;
+
+      const mentionRoleName = String((mention as any).rolename || '').trim();
+      const mentionRoleId = String((mention as any).role_id || '').trim();
+
+      if (mentionRoleName) {
+        internalRole = this.mapMezonRoleToUserRole(mentionRoleName);
+      } else if (mentionRoleId && mentionRoleId !== '0') {
+        try {
+          const rolesData = await (clan as any).listRoles?.();
+          const roles = rolesData?.roles || rolesData || [];
+          const memberRole = Array.isArray(roles)
+            ? roles.find((r: any) => String(r.id) === mentionRoleId)
+            : undefined;
+          const roleName = String(
+            memberRole?.name || memberRole?.rolename || '',
+          ).trim();
+          if (roleName) {
+            internalRole = this.mapMezonRoleToUserRole(roleName);
+          }
+        } catch (e) {
+          this.logger.debug(
+            `Could not resolve clan role metadata: ${(e as Error).message}`,
+          );
+        }
+      }
+
+      if ((mention as any).username) {
+        memberName = (mention as any).username;
+      } else if ((mention as any).display_name) {
+        memberName = (mention as any).display_name;
+      }
+
       const newUser = await this.userService.upsertByMezonId(mezonId, {
-        name: targetMember.user?.username || targetMember.user?.display_name,
+        name: memberName,
+        role: internalRole,
       });
 
-      // Update the role in database
-      if (internalRole !== 'UK' && newUser.id) {
-        await (this.userService as any).userRepository.update(
-          { id: newUser.id },
-          { role: internalRole },
-        );
+      // Update the role in database if not default
+      if (internalRole !== UserRole.UK && newUser.id) {
+        try {
+          await (this.userService as any).userRepository.update(
+            { id: newUser.id },
+            { role: internalRole },
+          );
+        } catch (e) {
+          this.logger.warn(
+            `Could not update user role: ${(e as Error).message}`,
+          );
+        }
       }
 
       await this.reply(
         message,
         [
           `✅ **User Created:**`,
-          `  Name: ${targetMember.user?.username || targetMember.user?.display_name}`,
-          `  Role: ${internalRole}`,
+          `  Name: ${memberName}`,
+          `  Role: ${this.getRoleLabel(internalRole)}`,
           `  Mezon ID: ${mezonId}`,
         ].join('\n'),
       );
@@ -328,6 +314,166 @@ export class UserCommandHandler {
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
+
+  private async refreshUserRoleFromClan(
+    user: UserEntity,
+    ctx: NezonCommandContext,
+  ): Promise<UserEntity> {
+    if (!user?.mezonId) {
+      return user;
+    }
+
+    try {
+      const clan = await ctx.getClan();
+      if (!clan) {
+        return user;
+      }
+
+      const rolesData = await (clan as any).listRoles?.();
+      const roles =
+        rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
+      if (!Array.isArray(roles)) {
+        return user;
+      }
+
+      let hasRoleInClan = false;
+      let resolvedRole = UserRole.UK;
+
+      for (const role of roles) {
+        const roleUsers =
+          role?.role_user_list?.role_users ?? role?.role_users ?? [];
+        if (!Array.isArray(roleUsers)) {
+          continue;
+        }
+
+        const isMember = roleUsers.some((member: any) => {
+          const userId = String(member?.id || member?.user_id || '').trim();
+          return userId === user.mezonId;
+        });
+
+        if (!isMember) {
+          continue;
+        }
+
+        hasRoleInClan = true;
+        const roleName = String(
+          role?.title || role?.name || role?.rolename || role?.role_label || '',
+        ).trim();
+        resolvedRole = this.mapMezonRoleToUserRole(roleName);
+        break;
+      }
+
+      if (user.role !== resolvedRole) {
+        return await this.userService.upsertByMezonId(user.mezonId, {
+          role: resolvedRole,
+        });
+      }
+
+      if (!hasRoleInClan && user.role !== UserRole.UK) {
+        return await this.userService.upsertByMezonId(user.mezonId, {
+          role: UserRole.UK,
+        });
+      }
+    } catch (error) {
+      this.logger.debug(
+        `Could not refresh role for ${user.mezonId}: ${(error as Error).message}`,
+      );
+    }
+
+    return user;
+  }
+
+  private getRoleLabel(role: UserRole): string {
+    switch (role) {
+      case UserRole.PM:
+        return 'Project Manager';
+      case UserRole.DEV:
+        return 'Developer';
+      case UserRole.QA:
+        return 'QA';
+      default:
+        return 'Member';
+    }
+  }
+
+  private mapMezonRoleToUserRole(roleName: string): UserRole {
+    const normalized = roleName.trim().toUpperCase();
+
+    if (
+      normalized.includes('OWNER') ||
+      normalized.includes('ADMIN') ||
+      normalized.includes('ADMINISTRATOR')
+    ) {
+      return UserRole.PM;
+    }
+
+    if (
+      normalized.includes('MANAGER') ||
+      normalized.includes('PROJECT') ||
+      normalized.includes('PM') ||
+      normalized.includes('PR')
+    ) {
+      return UserRole.PM;
+    }
+
+    if (normalized.includes('DEV') || normalized.includes('DEVELOPER')) {
+      return UserRole.DEV;
+    }
+
+    if (normalized.includes('QA')) {
+      return UserRole.QA;
+    }
+
+    return UserRole.UK;
+  }
+
+  private normalizeUserIdentifier(
+    identifier: string,
+    message: ManagedMessage,
+  ): string {
+    const trimmed = identifier.trim();
+    if (!trimmed.startsWith('@')) {
+      return trimmed;
+    }
+
+    const mentionName = trimmed.slice(1).trim().toLowerCase();
+    const mentions = (message.raw as any).mentions || [];
+    const contentText = String((message.raw as any).content?.t || '').trim();
+
+    const mention = (mentions as any[]).find((item: any) => {
+      const candidateValues = [
+        item.user_id,
+        item.id,
+        item.username,
+        item.display_name,
+        item.rolename,
+      ]
+        .filter(Boolean)
+        .map((value: any) => String(value).trim().toLowerCase())
+        .map((value: string) =>
+          value.startsWith('@') ? value.slice(1) : value,
+        );
+
+      if (
+        typeof item.s === 'number' &&
+        typeof item.e === 'number' &&
+        contentText.length >= item.e
+      ) {
+        const rangeText = String(contentText.slice(item.s, item.e))
+          .trim()
+          .toLowerCase();
+        if (rangeText) {
+          candidateValues.push(
+            rangeText.startsWith('@') ? rangeText.slice(1) : rangeText,
+          );
+        }
+      }
+
+      return candidateValues.includes(mentionName);
+    });
+
+    return mention?.user_id || mentionName;
+  }
 
   private getErrorMessage(error: unknown): string {
     if (error instanceof HttpException) {
