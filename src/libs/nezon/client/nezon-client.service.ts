@@ -18,17 +18,26 @@ export class NezonClientService {
 
   getClient(): MezonClient {
     if (!this.client) {
+      console.log('Bot config options:', JSON.stringify(this.options));
       this.client = new MezonClient(this.options);
     }
     return this.client;
   }
 
   async login() {
-    if (this.isLoggedIn) {
-      return;
-    }
+    if (this.isLoggedIn) return;
     const client = this.getClient();
-    await client.login();
+
+    console.log('Attempting login with botId:', this.options.botId);
+
+    try {
+      await client.login();
+      console.log('Login successful!');
+    } catch (err) {
+      console.error('Login failed:', err);
+      throw err;
+    }
+
     client.on('close', () => {
       this.isLoggedIn = false;
     });

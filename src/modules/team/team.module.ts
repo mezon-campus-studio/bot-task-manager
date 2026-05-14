@@ -6,9 +6,15 @@ import TeamEntity from '@src/modules/team/team.entity';
 import { TeamCommandHandler } from './team-command.handler';
 import { TeamController } from './team.controller';
 import { TeamService } from './team.service';
+import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TeamEntity]), ProjectModule, AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([TeamEntity]),
+    ProjectModule,
+    AuthModule,
+    UserModule,
+  ],
   controllers: [TeamController],
   providers: [TeamCommandHandler, TeamService],
   exports: [TeamService],

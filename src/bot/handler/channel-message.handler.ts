@@ -2,6 +2,12 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Events } from 'mezon-sdk';
 import { AutoContext, On } from '#src/libs/nezon/index.js';
 
+/**
+ * Main channel message handler.
+ *
+ * - Handles raw channel messages (non-command)
+ * - Provides *ping and *help commands for testing/discovery
+ */
 @Injectable()
 export default class ChannelMessageHandler {
   private readonly logger = new Logger(ChannelMessageHandler.name);

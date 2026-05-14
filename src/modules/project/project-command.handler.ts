@@ -1,23 +1,32 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import {
   Args,
   AutoContext,
   Command,
+  Context,
   ManagedMessage,
+  NezonCommandContext,
   SmartMessage,
 } from '@src/libs/nezon';
+import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from './project-context.service';
+import { ProjectService } from './project.service';
 
 @Injectable()
+@UseGuards(NezonAuthGuard)
 export class ProjectCommandHandler {
   private readonly logger = new Logger(ProjectCommandHandler.name);
 
-  constructor(private readonly projectContextService: ProjectContextService) {}
+  constructor(
+    private readonly projectContextService: ProjectContextService,
+    private readonly projectService: ProjectService,
+  ) {}
 
   @Command('project')
   async handleProjectCommand(
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
+    @Context() ctx: NezonCommandContext,
   ): Promise<void> {
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
@@ -29,6 +38,9 @@ export class ProjectCommandHandler {
 
     try {
       switch (action) {
+        case 'create':
+          await this.createProject(args, message, ctx);
+          return;
         case 'use':
           await this.useProject(args, senderId, message);
           return;
@@ -41,7 +53,7 @@ export class ProjectCommandHandler {
         default:
           await this.reply(
             message,
-            'Usage: *project use <projectId|projectSlug>, *project current, *project exit',
+            'Usage: *project create <slug> <name...>, *project use <projectId|projectSlug>, *project current, *project exit',
           );
       }
     } catch (error) {
@@ -52,6 +64,51 @@ export class ProjectCommandHandler {
 
       await this.reply(message, this.getErrorMessage(error));
     }
+  }
+
+  private async createProject(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const slug = args[1];
+    const rawNameParts = args.slice(2);
+    if (!slug || rawNameParts.length === 0) {
+      await this.reply(
+        message,
+        'Project slug and name are required.\nUsage: `*project create <slug> <name...>`',
+      );
+      return;
+    }
+
+    const name = rawNameParts.join(' ').trim();
+    if (!name) {
+      await this.reply(
+        message,
+        'Project name is required.\nUsage: `*project create <slug> <name...>`',
+      );
+      return;
+    }
+
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser) {
+      await this.reply(
+        message,
+        'User not found in database. Please log in once via portal.',
+      );
+      return;
+    }
+
+    const project = await this.projectService.createProject({
+      name,
+      slug,
+      ownerUserId: dbUser.id,
+    });
+
+    await this.reply(
+      message,
+      `✅ Created project **${project.name}** (\`${project.slug}\`). Use \`*project use ${project.slug}\` to select it.`,
+    );
   }
 
   private async useProject(

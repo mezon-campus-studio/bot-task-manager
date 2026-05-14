@@ -1,4 +1,5 @@
 import { Logger, Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
 import { MezonClient } from 'mezon-sdk';
@@ -8,6 +9,7 @@ import { SharedModule } from '@src/common/shared/shared.module';
 import { NezonModule } from '@src/libs/nezon';
 import { HealthController } from './health.controller';
 import { AuthModule } from './modules/auth/auth.module';
+import { NezonAuthGuard } from './modules/auth/guards/nezon-auth.guard';
 import { EventModule } from './modules/event/event.module';
 import { NoteModule } from './modules/note/note.module';
 import { PermissionModule } from './modules/permission/permission.module';
@@ -21,7 +23,6 @@ import { TeamMemberModule } from './modules/team-member/team-member.module';
 import { TicketModule } from './modules/ticket/ticket.module';
 import { UserModule } from './modules/user/user.module';
 import { UserRoleAssignmentModule } from './modules/user-role-assignment/user-role-assignment.module';
-
 @Module({
   imports: [
     SharedModule,
@@ -48,7 +49,12 @@ import { UserRoleAssignmentModule } from './modules/user-role-assignment/user-ro
     NoteModule,
   ],
   controllers: [HealthController],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: NezonAuthGuard,
+    },
+  ],
 })
 export class AppModule {
   constructor(private mezonClient: MezonClient) {

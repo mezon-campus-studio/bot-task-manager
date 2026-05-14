@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from '@src/modules/auth/auth.module';
 import { ProjectMemberModule } from '@src/modules/project-member/project-member.module';
 import { UserModule } from '@src/modules/user/user.module';
 import { ProjectCommandHandler } from './project-command.handler';
@@ -14,6 +15,7 @@ import { ProjectService } from './project.service';
     TypeOrmModule.forFeature([ProjectEntity]),
     ProjectMemberModule,
     UserModule,
+    AuthModule,
   ],
   controllers: [ProjectController],
   providers: [
