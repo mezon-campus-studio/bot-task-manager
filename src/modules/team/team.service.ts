@@ -359,4 +359,35 @@ export class TeamService extends CRUDService<TeamEntity> {
       },
     );
   }
+
+  async setDefaultTeam(projectId: number, teamId: number): Promise<TeamEntity> {
+    this.logger.log({
+      log: 'Attempting to set default team for project',
+      projectId,
+      teamId,
+    });
+
+    return this.teamRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        // Unset current default
+        await transactionalEntityManager.update(
+          TeamEntity,
+          { projectId, isDefault: true },
+          { isDefault: false },
+        );
+
+        // Set new default
+        const team = await transactionalEntityManager.findOne(TeamEntity, {
+          where: { id: teamId, projectId },
+        });
+
+        if (!team) {
+          throw new NotFoundException('Team not found in project');
+        }
+
+        team.isDefault = true;
+        return transactionalEntityManager.save(team);
+      },
+    );
+  }
 }

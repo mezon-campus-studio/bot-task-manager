@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '@src/common/enums/user.enum';
 import {
   Args,
   AutoContext,
@@ -38,6 +39,9 @@ export class ProjectCommandHandler {
 
     try {
       switch (action) {
+        case 'list':
+          await this.listProjects(senderId, message, ctx);
+          return;
         case 'create':
           await this.createProject(args, message, ctx);
           return;
@@ -53,7 +57,14 @@ export class ProjectCommandHandler {
         default:
           await this.reply(
             message,
-            'Usage: *project create <slug> <name...>, *project use <projectId|projectSlug>, *project current, *project exit',
+            [
+              '📁 **Project Commands:**',
+              '  `*project list` – List all projects you own',
+              '  `*project create <slug> <name...>` – Create a new project',
+              '  `*project use <projectId|projectSlug>` – Select a project to work with',
+              '  `*project current` – Show current selected project',
+              '  `*project exit` – Exit current project',
+            ].join('\n'),
           );
       }
     } catch (error) {
@@ -66,11 +77,75 @@ export class ProjectCommandHandler {
     }
   }
 
+  private async listProjects(
+    _senderId: string,
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser) {
+      await this.reply(message, 'User not found in database.');
+      return;
+    }
+
+    // Get user's own projects
+    const ownedProjects = await this.projectService.findByOwnerUserId(
+      dbUser.id,
+    );
+
+    // Get all projects
+    const allProjects = await this.projectService.listProjects();
+
+    let response = '📁 **Your Projects:**';
+    if (ownedProjects.length > 0) {
+      const ownedLines = ownedProjects.map(
+        (p) => `  [#${p.id}] ${p.name} (${p.slug}) ⭐`,
+      );
+      response += '\n' + ownedLines.join('\n');
+    } else {
+      response += '\n  You have no projects yet.';
+    }
+
+    // Show all projects if there are any besides user's own
+    const otherProjects = allProjects.filter(
+      (p) => !ownedProjects.some((op) => op.id === p.id),
+    );
+    if (otherProjects.length > 0) {
+      response += '\n\n📁 **All Projects:**';
+      const allLines = otherProjects.map(
+        (p) => `  [#${p.id}] ${p.name} (${p.slug})`,
+      );
+      response += '\n' + allLines.join('\n');
+    }
+
+    await this.reply(message, response);
+  }
+
   private async createProject(
     args: string[],
     message: ManagedMessage,
     ctx: NezonCommandContext,
   ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser) {
+      await this.reply(
+        message,
+        'User not found in database. Please log in once via portal.',
+      );
+      return;
+    }
+
+    if (
+      Number(dbUser.role) !== UserRole.PM &&
+      Number(dbUser.role) !== UserRole.ADMIN
+    ) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can create projects.',
+      );
+      return;
+    }
+
     const slug = args[1];
     const rawNameParts = args.slice(2);
     if (!slug || rawNameParts.length === 0) {
@@ -86,15 +161,6 @@ export class ProjectCommandHandler {
       await this.reply(
         message,
         'Project name is required.\nUsage: `*project create <slug> <name...>`',
-      );
-      return;
-    }
-
-    const dbUser = (ctx as any).dbUser;
-    if (!dbUser) {
-      await this.reply(
-        message,
-        'User not found in database. Please log in once via portal.',
       );
       return;
     }

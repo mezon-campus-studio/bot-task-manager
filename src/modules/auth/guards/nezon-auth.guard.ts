@@ -31,15 +31,10 @@ export class NezonAuthGuard implements CanActivate {
     const user = await this.userService.findByMezonId(senderId);
 
     if (!user) {
-      this.logger.log(
-        `NezonAuthGuard: User with mezonId ${senderId} not found, creating new user`,
+      this.logger.warn(
+        `NezonAuthGuard: User with mezonId ${senderId} not found. Access denied. Use *user create @mention to add users.`,
       );
-      const newUser = await this.userService.upsertByMezonId(senderId, {
-        name: `User_${senderId.slice(-8)}`,
-        role,
-      });
-      (nezonContext as any).dbUser = newUser;
-      return true;
+      return false;
     }
 
     if (user.role !== role) {
@@ -114,7 +109,7 @@ export class NezonAuthGuard implements CanActivate {
       normalized.includes('ADMIN') ||
       normalized.includes('ADMINISTRATOR')
     ) {
-      return UserRole.PM;
+      return UserRole.ADMIN;
     }
 
     if (

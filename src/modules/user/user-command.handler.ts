@@ -111,7 +111,7 @@ export class UserCommandHandler {
 
   /**
    * Look up any user by mezonId or internal UUID.
-   * Only available to admins and project managers.
+   * Only available to admins.
    */
   private async showUserInfo(
     args: string[],
@@ -119,10 +119,10 @@ export class UserCommandHandler {
     ctx: NezonCommandContext,
   ): Promise<void> {
     const senderUser = (ctx as any).dbUser;
-    if (senderUser?.role !== UserRole.PM) {
+    if (Number(senderUser?.role) !== UserRole.ADMIN) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators and project managers.',
+        '❌ This command is only available to administrators.',
       );
       return;
     }
@@ -203,12 +203,23 @@ export class UserCommandHandler {
   /**
    * Create a user from a clan member mention.
    * Attempts to pull role information from the clan structure.
+   * Only PM and Admin can create users.
    */
   private async createUserFromMention(
     message: ManagedMessage,
     ctx: NezonCommandContext,
   ): Promise<void> {
     try {
+      const senderUser = (ctx as any).dbUser;
+      const userRole = Number(senderUser?.role);
+      if (userRole !== UserRole.PM && userRole !== UserRole.ADMIN) {
+        await this.reply(
+          message,
+          '❌ Only project managers and administrators can create users.',
+        );
+        return;
+      }
+
       // Get mentions from the raw channel message payload
       const mentions = (message.raw as any).mentions || [];
 

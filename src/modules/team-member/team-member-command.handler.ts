@@ -150,7 +150,10 @@ export class TeamMemberCommandHandler {
     }
 
     if (!this.isProjectManager(ctx)) {
-      await this.reply(message, 'Only project managers can add team members.');
+      await this.reply(
+        message,
+        'Only project managers and administrators can add team members.',
+      );
       return;
     }
 
@@ -221,7 +224,7 @@ export class TeamMemberCommandHandler {
     if (!this.isProjectManager(ctx)) {
       await this.reply(
         message,
-        'Only project managers can remove team members.',
+        'Only project managers and administrators can remove team members.',
       );
       return;
     }
@@ -328,7 +331,7 @@ export class TeamMemberCommandHandler {
 
   private isProjectManager(ctx: any): boolean {
     const dbUser = ctx.dbUser;
-    return dbUser?.role === UserRole.PM;
+    return dbUser?.role === UserRole.PM || dbUser?.role === UserRole.ADMIN;
   }
 
   private getErrorMessage(error: unknown): string {
