@@ -39,14 +39,11 @@ export class ProjectCommandHandler {
 
     try {
       switch (action) {
-        case 'list':
-          await this.listProjects(senderId, message, ctx);
-          return;
         case 'create':
           await this.createProject(args, message, ctx);
           return;
         case 'list':
-          await this.listProjects(message);
+          await this.listProjects(senderId, message, ctx);
           return;
         case 'use':
           await this.useProject(args, senderId, message);
@@ -178,21 +175,6 @@ export class ProjectCommandHandler {
       message,
       `✅ Created project **${project.name}** (\`${project.slug}\`). Use \`*project use ${project.slug}\` to select it.`,
     );
-  }
-
-  private async listProjects(message: ManagedMessage): Promise<void> {
-    const projects = await this.projectService.listProjects();
-
-    if (!projects.length) {
-      await this.reply(message, 'No projects found.');
-      return;
-    }
-
-    const lines = projects.map(
-      (project) => `  [#${project.id}] ${project.name} (\`${project.slug}\`)`,
-    );
-
-    await this.reply(message, ['📁 Projects:', ...lines].join('\n'));
   }
 
   private async useProject(
