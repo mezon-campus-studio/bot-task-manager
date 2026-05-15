@@ -32,6 +32,7 @@
     "seed": "ts-node -r tsconfig-paths/register ./src/seed.ts",
     "seed:users": "tsx scripts/seed-users.mts",
     "seed:reset": "tsx scripts/reset-database.mts",
+    "smoke:bot": "tsx scripts/bot-smoke.mts",
     "schema:drop": "yarn typeorm schema:drop -d typeorm.config.ts",
     "test": "node --expose-gc ./node_modules/jest/bin/jest -c jest.config.ts",
     "test:watch": "yarn test --watch",
