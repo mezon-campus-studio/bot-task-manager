@@ -61,6 +61,18 @@ export class EventService extends CRUDService<EventEntity> {
     return result;
   }
 
+  async findById(id: number): Promise<EventEntity | null> {
+    this.logger.log({ log: 'Attempting to find event by id', eventId: id });
+
+    const result = await this.eventRepository.findOne({
+      where: { id },
+    });
+
+    this.logger.log({ log: 'Got event by id result', eventId: id, result });
+
+    return result;
+  }
+
   async cancelEvent(eventId: number): Promise<EventEntity | null> {
     this.logger.log({ log: 'Attempting to cancel event', eventId });
 

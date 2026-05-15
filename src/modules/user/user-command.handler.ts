@@ -10,6 +10,7 @@ import {
 } from '@src/libs/nezon';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import { ProjectContextService } from '@src/modules/project/project-context.service';
 import UserEntity from './user.entity';
 import { UserService } from './user.service';
 
@@ -19,7 +20,7 @@ import { UserService } from './user.service';
  * Supported commands (prefix: *):
  *   *user me               – Show your own profile (name, role, current project)
  *   *user search <userId>  – Search for a user by mezonId or internal UUID
- *   *user info <userId>    – Look up a user by mezonId or internal UUID (admin/PM only)
+ *   *user info <userId>    – Look up a user by mezonId or internal UUID (admin/project owner only)
  *   *user create @username – Create user from clan member (pulls role from clan)
  */
 @Injectable()
@@ -27,7 +28,10 @@ import { UserService } from './user.service';
 export class UserCommandHandler {
   private readonly logger = new Logger(UserCommandHandler.name);
 
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly projectContextService: ProjectContextService,
+  ) {}
 
   @Command('user')
   async handleUserCommand(
@@ -64,7 +68,7 @@ export class UserCommandHandler {
               '👤 **User Commands:**',
               '  `*user me` – View your own profile',
               '  `*user search <mezonId|userId>` – Search for a user',
-              '  `*user info <mezonId|userId>` – Look up another user (admin/PM only)',
+              '  `*user info <mezonId|userId>` – Look up another user (admin/project owner only)',
               '  `*user create @username` – Create user from clan member',
             ].join('\n'),
           );
@@ -111,18 +115,17 @@ export class UserCommandHandler {
 
   /**
    * Look up any user by mezonId or internal UUID.
-   * Only available to admins and project managers.
+   * Only available to administrators and the current project owner.
    */
   private async showUserInfo(
     args: string[],
     message: ManagedMessage,
     ctx: NezonCommandContext,
   ): Promise<void> {
-    const senderUser = (ctx as any).dbUser;
-    if (senderUser?.role !== UserRole.PM) {
+    if (!(await this.canViewDetailedUserInfo(message.senderId, ctx))) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators and project managers.',
+        '❌ This command is only available to administrators and current project owners.',
       );
       return;
     }
@@ -425,6 +428,35 @@ export class UserCommandHandler {
     }
 
     return UserRole.UK;
+  }
+
+  private async canViewDetailedUserInfo(
+    senderId: string | undefined,
+    ctx: NezonCommandContext,
+  ): Promise<boolean> {
+    const senderUser = (ctx as any).dbUser;
+
+    if (senderUser?.role === UserRole.PM) {
+      return true;
+    }
+
+    if (!senderId) {
+      return false;
+    }
+
+    try {
+      const projectContext =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
+
+      return projectContext.project.ownerUserId === projectContext.user.id;
+    } catch (error) {
+      this.logger.debug(
+        `Could not resolve project owner authorization for user info: ${(error as Error).message}`,
+      );
+      return false;
+    }
   }
 
   private normalizeUserIdentifier(

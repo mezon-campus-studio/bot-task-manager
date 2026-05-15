@@ -121,6 +121,26 @@ describe(EventService.name, () => {
     expect(events.every((event) => event.projectId === projectId)).toBe(true);
   });
 
+  it('should find an event by id', async () => {
+    const { ownerUserId, projectId, teamId } = createEventContext();
+    const event = await factory.event({
+      ownerUserId,
+      projectId,
+      teamId,
+      title: 'Find event by id',
+    });
+
+    await expect(eventService.findById(event.id)).resolves.toMatchObject({
+      id: event.id,
+      projectId,
+      title: 'Find event by id',
+    });
+  });
+
+  it('should return null when an event id does not exist', async () => {
+    await expect(eventService.findById(999_999)).resolves.toBeNull();
+  });
+
   it('should cancel an existing project event when the plan changes', async () => {
     const { ownerUserId, projectId, teamId } = createEventContext();
     const event = await factory.event({

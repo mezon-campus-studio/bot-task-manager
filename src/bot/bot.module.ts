@@ -6,6 +6,7 @@ import { DatabaseModule } from '@src/common/database/database.module';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import { SharedModule } from '@src/common/shared/shared.module';
 import { NezonModule } from '@src/libs/nezon';
+import { EventModule } from '@src/modules/event/event.module';
 import { NoteModule } from '@src/modules/note/note.module';
 import { PermissionModule } from '@src/modules/permission/permission.module';
 import { ProjectModule } from '@src/modules/project/project.module';
@@ -25,6 +26,7 @@ import { UserModule } from '@src/modules/user/user.module';
       useFactory: async (config: AppConfigService) => config.botConfig,
     }),
     DatabaseModule,
+    EventModule,
     ProjectModule,
     NoteModule,
     RoleModule,

@@ -88,6 +88,49 @@ describe(ProjectMemberService.name, () => {
     ).resolves.toBeNull();
   });
 
+  it('lists non-removed project memberships with user details', async () => {
+    const project = await factory.project();
+    const activeUser = await factory.user({
+      mezonId: 'project-member-list-active-user',
+      name: 'Active Member',
+    });
+    const invitedUser = await factory.user({
+      mezonId: 'project-member-list-invited-user',
+      name: 'Invited Member',
+    });
+    const removedUser = await factory.user({
+      mezonId: 'project-member-list-removed-user',
+      name: 'Removed Member',
+    });
+
+    const activeMembership = await factory.projectMember({
+      projectId: project.id,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: activeUser.id,
+    });
+    const invitedMembership = await factory.projectMember({
+      projectId: project.id,
+      status: ProjectMemberStatus.INVITED,
+      userId: invitedUser.id,
+    });
+    await factory.projectMember({
+      projectId: project.id,
+      status: ProjectMemberStatus.REMOVED,
+      userId: removedUser.id,
+    });
+
+    const memberships = await projectMemberService.listByProject(project.id);
+
+    expect(memberships.map(({ id }) => id)).toEqual([
+      activeMembership.id,
+      invitedMembership.id,
+    ]);
+    expect(memberships.map(({ user }) => user.name)).toEqual([
+      'Active Member',
+      'Invited Member',
+    ]);
+  });
+
   it('upserts a project membership with invited defaults when optional fields are omitted', async () => {
     const project = await factory.project();
     const user = await factory.user();

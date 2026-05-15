@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from '@src/modules/auth/auth.module';
+import { ProjectMemberCommandHandler } from '@src/modules/project-member/project-member-command.handler';
 import { ProjectMemberModule } from '@src/modules/project-member/project-member.module';
+import { UserCommandHandler } from '@src/modules/user/user-command.handler';
 import { UserModule } from '@src/modules/user/user.module';
 import { ProjectCommandHandler } from './project-command.handler';
 import { ProjectContextService } from './project-context.service';
@@ -21,8 +23,10 @@ import { ProjectService } from './project.service';
   providers: [
     ProjectCommandHandler,
     ProjectContextService,
+    ProjectMemberCommandHandler,
     ProjectOnboardingService,
     ProjectService,
+    UserCommandHandler,
   ],
   exports: [ProjectContextService, ProjectService],
 })

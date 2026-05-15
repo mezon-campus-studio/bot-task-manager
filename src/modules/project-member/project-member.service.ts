@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import ProjectEntity from '@src/modules/project/project.entity';
 import UserEntity from '@src/modules/user/user.entity';
@@ -101,6 +101,35 @@ export class ProjectMemberService extends CRUDService<ProjectMemberEntity> {
         id: result.id,
         status: result.status,
       },
+    });
+
+    return result;
+  }
+
+  async listByProject(projectId: number): Promise<ProjectMemberEntity[]> {
+    this.logger.log({
+      log: 'Attempting to list project memberships by project',
+      projectId,
+    });
+
+    const result = await this.projectMemberRepository.find({
+      order: {
+        id: 'ASC',
+      },
+      relations: {
+        user: true,
+      },
+      where: {
+        projectId,
+        status: Not(ProjectMemberStatus.REMOVED),
+      },
+    });
+
+    this.logger.log({
+      count: result.length,
+      log: 'Got project memberships by project result',
+      membershipIds: result.map(({ id }) => id),
+      projectId,
     });
 
     return result;
