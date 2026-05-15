@@ -39,11 +39,11 @@ export class ProjectCommandHandler {
 
     try {
       switch (action) {
-        case 'list':
-          await this.listProjects(senderId, message, ctx);
-          return;
         case 'create':
           await this.createProject(args, message, ctx);
+          return;
+        case 'list':
+          await this.listProjects(senderId, message, ctx);
           return;
         case 'use':
           await this.useProject(args, senderId, message);
