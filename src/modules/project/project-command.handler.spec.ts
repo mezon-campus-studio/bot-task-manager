@@ -30,6 +30,7 @@ describe(ProjectCommandHandler.name, () => {
     };
     const projectService = {
       createProject: jest.fn(),
+      findByOwnerUserId: jest.fn().mockResolvedValue([]),
       listProjects: jest.fn(),
       ...overrides?.projectService,
     };
@@ -52,13 +53,21 @@ describe(ProjectCommandHandler.name, () => {
           { id: 10, name: 'Backend Campus', slug: 'backend' },
           { id: 11, name: 'Frontend Campus', slug: 'frontend' },
         ]),
+        findByOwnerUserId: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 10, name: 'Backend Campus', slug: 'backend' },
+          ]),
       },
     });
 
-    await handler.handleProjectCommand(['list'], message, {} as never);
+    await handler.handleProjectCommand(['list'], message, {
+      dbUser: { id: 'user-1' },
+    } as never);
 
+    expect(projectService.findByOwnerUserId).toHaveBeenCalledWith('user-1');
     expect(projectService.listProjects).toHaveBeenCalledTimes(1);
-    expectReplyText(message as never, '[#10] Backend Campus (`backend`)');
+    expectReplyText(message as never, '[#10] Backend Campus (backend) ⭐');
   });
 
   it('prints an empty-state message when no projects exist', async () => {
@@ -69,8 +78,10 @@ describe(ProjectCommandHandler.name, () => {
       },
     });
 
-    await handler.handleProjectCommand(['list'], message, {} as never);
+    await handler.handleProjectCommand(['list'], message, {
+      dbUser: { id: 'user-1' },
+    } as never);
 
-    expectReplyText(message as never, 'No projects found.');
+    expectReplyText(message as never, 'You have no projects yet.');
   });
 });

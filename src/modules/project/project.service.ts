@@ -109,6 +109,18 @@ export class ProjectService extends CRUDService<ProjectEntity> {
     return result;
   }
 
+  async findByOwnerUserId(ownerUserId: string): Promise<ProjectEntity[]> {
+    this.logger.log({
+      log: 'Attempting to find projects by owner user id',
+      ownerUserId,
+    });
+
+    return this.projectRepository.find({
+      where: { ownerUserId },
+      order: { id: 'DESC' },
+    });
+  }
+
   async findById(id: number): Promise<ProjectEntity | null> {
     this.logger.log({
       log: 'Attempting to find project by id',

@@ -2,6 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { MezonClient } from 'mezon-sdk';
 import { BotCronModule } from '@src/bot/cron/bot-cron.module';
 import ChannelMessageHandler from '@src/bot/handler/channel-message.handler';
+import { HelpCommandHandler } from '@src/bot/handler/help-command.handler';
 import { DatabaseModule } from '@src/common/database/database.module';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import { SharedModule } from '@src/common/shared/shared.module';
@@ -37,7 +38,7 @@ import { UserModule } from '@src/modules/user/user.module';
     UserModule,
     BotCronModule,
   ],
-  providers: [ChannelMessageHandler],
+  providers: [ChannelMessageHandler, HelpCommandHandler],
 })
 export class BotModule {
   private readonly logger = new Logger('BotModule');

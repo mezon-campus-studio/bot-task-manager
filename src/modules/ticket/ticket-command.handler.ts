@@ -1,9 +1,12 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '@src/common/enums/user.enum';
 import {
   Args,
   AutoContext,
   Command,
+  Context,
   ManagedMessage,
+  NezonCommandContext,
   SmartMessage,
 } from '@src/libs/nezon';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
@@ -37,6 +40,7 @@ export class TicketCommandHandler {
   async handleTicketCommand(
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
+    @Context() ctx: NezonCommandContext,
   ): Promise<void> {
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
@@ -67,7 +71,7 @@ export class TicketCommandHandler {
           await this.deleteTicket(args, senderId, message);
           return;
         case 'resolve':
-          await this.resolveTicket(args, message);
+          await this.resolveTicket(args, message, ctx);
           return;
         default:
           await this.reply(
@@ -316,11 +320,25 @@ export class TicketCommandHandler {
   private async resolveTicket(
     args: string[],
     message: ManagedMessage,
+    ctx: NezonCommandContext,
   ): Promise<void> {
     const ticketId = this.parseId(args[1]);
 
     if (ticketId == null) {
       await this.reply(message, 'Usage: `*ticket resolve <id>`');
+      return;
+    }
+
+    const dbUser = (ctx as any).dbUser;
+    if (
+      !dbUser ||
+      (Number(dbUser.role) !== UserRole.PM &&
+        Number(dbUser.role) !== UserRole.ADMIN)
+    ) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can resolve tickets.',
+      );
       return;
     }
 
