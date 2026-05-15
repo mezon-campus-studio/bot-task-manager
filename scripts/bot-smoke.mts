@@ -67,8 +67,10 @@ async function main(): Promise<void> {
   });
 
   try {
+    const ready = waitForReady(client);
+
     await withTimeout(client.login(), 'Bot login');
-    await withTimeout(waitForReady(client), 'Bot ready wait');
+    await withTimeout(ready, 'Bot ready wait');
     console.log('Bot smoke test passed: Mezon client reached ready state.');
   } finally {
     try {
