@@ -62,12 +62,16 @@ export class UserCommandHandler {
         case 'create':
           await this.createUserFromMention(message, ctx);
           return;
+        case 'list':
+          await this.listUsers(message);
+          return;
         default:
           await this.reply(
             message,
             [
               '👤 **User Commands:**',
               '  `*user me` – View your own profile',
+              '  `*user list` – List all users',
               '  `*user search <mezonId|userId>` – Search for a user',
               '  `*user info <mezonId|userId>` – Look up another user (admin/PM only)',
               '  `*user create @username` – Create user from clan member',
@@ -89,7 +93,6 @@ export class UserCommandHandler {
     ctx: NezonCommandContext,
     message: ManagedMessage,
   ): Promise<void> {
-    // NezonAuthGuard already resolved and attached the DB user
     const user = (ctx as any).dbUser;
 
     if (!user) {
@@ -225,7 +228,6 @@ export class UserCommandHandler {
         return;
       }
 
-      // Get mentions from the raw channel message payload
       const mentions = (message.raw as any).mentions || [];
 
       if (mentions.length === 0) {
@@ -236,7 +238,6 @@ export class UserCommandHandler {
         return;
       }
 
-      // Use the first mention
       const mention = mentions[0];
       const mezonId = mention.user_id;
 
@@ -245,7 +246,6 @@ export class UserCommandHandler {
         return;
       }
 
-      // Check if user already exists
       const existingUser = await this.userService.findByMezonId(mezonId);
       if (existingUser) {
         await this.reply(
@@ -261,7 +261,7 @@ export class UserCommandHandler {
         return;
       }
 
-      let internalRole = UserRole.UK; // Default unknown
+      let internalRole = UserRole.UK;
       let memberName = `User_${mezonId.slice(-8)}`;
 
       const mentionRoleName = String((mention as any).rolename || '').trim();
@@ -300,7 +300,6 @@ export class UserCommandHandler {
         role: internalRole,
       });
 
-      // Update the role in database if not default
       if (internalRole !== UserRole.UK && newUser.id) {
         try {
           await (this.userService as any).userRepository.update(
@@ -330,6 +329,22 @@ export class UserCommandHandler {
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
+
+  private async listUsers(message: ManagedMessage): Promise<void> {
+    const users = await this.userService.listAll();
+
+    if (users.length === 0) {
+      await this.reply(message, 'ℹ️ No users found.');
+      return;
+    }
+    const lines = users.map((u) => {
+      const roleLabel = this.getRoleLabel(u.role ?? UserRole.UK);
+      const status = u.status ?? '—';
+      return `  - ${u.name ?? '—'} (${u.mezonId}) | ${roleLabel} | ${status}`;
+    });
+
+    await this.reply(message, ['👤 **User List:**', ...lines].join('\n'));
+  }
 
   private async refreshUserRoleFromClan(
     user: UserEntity,

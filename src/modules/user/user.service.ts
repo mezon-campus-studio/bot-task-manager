@@ -437,4 +437,22 @@ export class UserService extends CRUDService<UserEntity> {
 
     return result;
   }
+
+  async listAll(): Promise<UserEntity[]> {
+    this.logger.log({
+      log: 'Attempting to list all users',
+    });
+
+    const users = await this.userRepository.find({
+      where: { status: Not(UserStatus.DELETED) },
+      order: { createdAt: 'DESC' },
+    });
+
+    this.logger.log({
+      log: 'Listed users',
+      resultCount: users.length,
+    });
+
+    return users;
+  }
 }
