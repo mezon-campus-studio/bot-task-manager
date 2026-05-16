@@ -255,7 +255,7 @@ export class UserCommandHandler {
       }
 
       const mention = mentions[0];
-      const mezonId = mention.user_id;
+      const mezonId = mention.user_id != null ? String(mention.user_id) : '';
 
       if (!mezonId) {
         await this.reply(message, '❌ Could not extract user ID from mention.');
@@ -303,12 +303,6 @@ export class UserCommandHandler {
             `Could not resolve clan role metadata: ${(e as Error).message}`,
           );
         }
-      }
-
-      if ((mention as any).username) {
-        memberName = (mention as any).username;
-      } else if ((mention as any).display_name) {
-        memberName = (mention as any).display_name;
       }
 
       const newUser = await this.userService.upsertByMezonId(mezonId, {
