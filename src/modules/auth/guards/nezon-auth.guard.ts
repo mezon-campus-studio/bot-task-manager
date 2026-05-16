@@ -34,7 +34,24 @@ export class NezonAuthGuard implements CanActivate {
     const role = await this.resolveRoleFromClan(nezonContext, senderId);
     const user = await this.userService.findByMezonId(senderId, true);
 
+    const rawText = String((nezonContext.message as any)?.content?.t ?? '');
+    const isUserCreateCommand = /\*user\s+create\b/i.test(rawText);
+
+    const isAdminAllowed = role === UserRole.ADMIN;
+
     if (!user) {
+      if (isUserCreateCommand && isAdminAllowed) {
+        this.logger.log(
+          `NezonAuthGuard: Bypassing missing-user check for *user create (mezonId=${senderId}, resolvedRole=${role}). Creating user in DB.`,
+        );
+
+        const createdUser = await this.userService.upsertByMezonId(senderId, {
+          role,
+        });
+        (nezonContext as any).dbUser = createdUser;
+        return true;
+      }
+
       this.logger.warn(
         `NezonAuthGuard: User with mezonId ${senderId} not found. Access denied. Use *user create @mention to add users.`,
       );
@@ -42,6 +59,20 @@ export class NezonAuthGuard implements CanActivate {
     }
 
     if (user.deletedAt != null) {
+      const isAdminAllowed = Number(user.role) === UserRole.ADMIN;
+
+      if (isUserCreateCommand && isAdminAllowed) {
+        this.logger.log(
+          `NezonAuthGuard: Recovering soft-deleted user for *user create (mezonId=${senderId}, resolvedRole=${role}).`,
+        );
+
+        const recoveredUser = await this.userService.upsertByMezonId(senderId, {
+          role: role as UserRole,
+        });
+        (nezonContext as any).dbUser = recoveredUser;
+        return true;
+      }
+
       this.logger.warn(
         `NezonAuthGuard: Denying access for soft-deleted user mezonId ${senderId}`,
       );
@@ -52,6 +83,7 @@ export class NezonAuthGuard implements CanActivate {
       this.logger.log(
         `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
       );
+
       const updatedUser = await this.userService.upsertByMezonId(senderId, {
         role,
       });
@@ -76,6 +108,7 @@ export class NezonAuthGuard implements CanActivate {
       const rolesData = await (clan as any).listRoles?.();
       const roles =
         rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
+
       if (!Array.isArray(roles)) {
         return null;
       }
