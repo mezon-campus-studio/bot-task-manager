@@ -142,4 +142,38 @@ describe(UserCommandHandler.name, () => {
     );
     expectReplyText(message as never, 'Role: Administrator');
   });
+
+  it('does not downgrade an existing Administrator when clan search cannot resolve a role', async () => {
+    const message = createMessage();
+    const user = {
+      email: 'admin@example.com',
+      id: 'admin-id',
+      mezonId: 'mezon-admin-search',
+      name: 'Admin Search',
+      role: UserRole.ADMIN,
+      status: 'ACTIVE',
+    };
+    const { handler, userService } = createHandler({
+      findByIdentifier: jest.fn().mockResolvedValue(user),
+      upsertByMezonId: jest.fn(),
+    });
+
+    await handler.handleUserCommand(['search', 'mezon-admin-search'], message, {
+      getClan: jest.fn().mockResolvedValue({
+        listRoles: jest.fn().mockResolvedValue({
+          roles: [
+            {
+              role_user_list: {
+                role_users: [{ id: 'someone-else' }],
+              },
+              title: 'Administrator',
+            },
+          ],
+        }),
+      }),
+    } as never);
+
+    expect(userService.upsertByMezonId).not.toHaveBeenCalled();
+    expectReplyText(message as never, 'Role: Administrator');
+  });
 });

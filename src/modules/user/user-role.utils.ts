@@ -84,6 +84,20 @@ export function getHigherPriorityUserRole(
     : current;
 }
 
+export function shouldSyncResolvedUserRole(
+  currentRole: UserRole | string | number | null | undefined,
+  resolvedRole: UserRole | string | number | null | undefined,
+): boolean {
+  const current = normalizeUserRole(currentRole);
+  const resolved = normalizeUserRole(resolvedRole);
+
+  if (resolved === UserRole.UK && current !== UserRole.UK) {
+    return false;
+  }
+
+  return current !== resolved;
+}
+
 export function resolveBestMezonRoleForUser(
   roles: unknown[],
   mezonId: string,

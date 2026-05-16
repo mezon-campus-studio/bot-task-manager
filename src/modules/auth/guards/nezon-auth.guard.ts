@@ -7,8 +7,8 @@ import {
 import { UserRole } from '@src/common/enums/user.enum';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import {
-  normalizeUserRole,
   resolveBestMezonRoleForUser,
+  shouldSyncResolvedUserRole,
 } from '@src/modules/user/user-role.utils';
 import { UserService } from '@src/modules/user/user.service';
 
@@ -41,7 +41,7 @@ export class NezonAuthGuard implements CanActivate {
       return false;
     }
 
-    if (normalizeUserRole(user.role) !== role) {
+    if (shouldSyncResolvedUserRole(user.role, role)) {
       this.logger.log(
         `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
       );

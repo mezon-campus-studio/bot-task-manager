@@ -12,8 +12,8 @@ import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import {
   mapMezonRoleToUserRole,
-  normalizeUserRole,
   resolveBestMezonRoleForUser,
+  shouldSyncResolvedUserRole,
 } from './user-role.utils';
 import UserEntity from './user.entity';
 import { UserService } from './user.service';
@@ -369,7 +369,7 @@ export class UserCommandHandler {
 
       const resolvedRole = resolveBestMezonRoleForUser(roles, user.mezonId);
 
-      if (normalizeUserRole(user.role) !== resolvedRole) {
+      if (shouldSyncResolvedUserRole(user.role, resolvedRole)) {
         return await this.userService.upsertByMezonId(user.mezonId, {
           role: resolvedRole,
         });
