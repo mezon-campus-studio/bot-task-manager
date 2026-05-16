@@ -10,6 +10,7 @@ import {
 } from '@src/libs/nezon';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import { UserStatus } from './enum/user-status.enum';
 import {
   mapMezonRoleToUserRole,
   resolveBestMezonRoleForUser,
@@ -100,10 +101,6 @@ export class UserCommandHandler {
   }
 
   // ─── actions ────────────────────────────────────────────────────────────────
-
-  /**
-   * Show the current sender's profile using the dbUser attached by NezonAuthGuard.
-   */
   private async showMe(
     ctx: NezonCommandContext,
     message: ManagedMessage,
@@ -255,18 +252,22 @@ export class UserCommandHandler {
       }
 
       const mention = mentions[0];
-      const mezonId = mention.user_id;
+      const mezonId = mention.user_id != null ? String(mention.user_id) : '';
 
       if (!mezonId) {
         await this.reply(message, '❌ Could not extract user ID from mention.');
         return;
       }
 
-      const existingUser = await this.userService.findByMezonId(mezonId);
-      if (existingUser) {
+      const existingUser = await this.userService.findByMezonId(mezonId, true);
+      if (
+        existingUser &&
+        existingUser.status !== null &&
+        existingUser.status !== UserStatus.DELETED
+      ) {
         await this.reply(
           message,
-          `ℹ️ User already exists in the system (Mezon ID: ${mezonId}).`,
+          `ℹ️ Create Administrator user (Mezon ID: ${mezonId}).`,
         );
         return;
       }
@@ -303,12 +304,6 @@ export class UserCommandHandler {
             `Could not resolve clan role metadata: ${(e as Error).message}`,
           );
         }
-      }
-
-      if ((mention as any).username) {
-        memberName = (mention as any).username;
-      } else if ((mention as any).display_name) {
-        memberName = (mention as any).display_name;
       }
 
       const newUser = await this.userService.upsertByMezonId(mezonId, {

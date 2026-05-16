@@ -34,24 +34,68 @@ export class NezonAuthGuard implements CanActivate {
     const role = await this.resolveRoleFromClan(nezonContext, senderId);
     const user = await this.userService.findByMezonId(senderId, true);
 
+    const rawText = String((nezonContext.message as any)?.content?.t ?? '');
+    // SỬA TẠI ĐÂY: Thêm ^ để bắt buộc lệnh phải nằm ở ĐẦU TIN NHẮN (đã trim khoảng trắng đầu câu)
+    const isUserCreateCommand = /^\s*\*user\s+create\b/i.test(rawText);
+
+    const isAdminAllowed = role === UserRole.ADMIN;
+
+    // --- TRƯỜNG HỢP 1: USER CHƯA TỪNG CÓ TRONG DATABASE (Bot chạy lần đầu) ---
     if (!user) {
+      if (isUserCreateCommand && isAdminAllowed) {
+        this.logger.log(
+          `NezonAuthGuard: Bypassing missing-user check for *user create (mezonId=${senderId}, resolvedRole=${role}). Creating user in DB.`,
+        );
+
+        const createdUser = await this.userService.upsertByMezonId(senderId, {
+          role,
+        });
+        (nezonContext as any).dbUser = createdUser;
+        return true;
+      }
+
       this.logger.warn(
         `NezonAuthGuard: User with mezonId ${senderId} not found. Access denied. Use *user create @mention to add users.`,
       );
       return false;
     }
 
+    // --- TRƯỜNG HỢP 2: USER ĐÃ BỊ XÓA MỀM (Soft-deleted) ---
     if (user.deletedAt != null) {
+      // Chỉ cho phép khôi phục nếu ĐÚNG là lệnh tạo user và người gọi là Admin thực tế trên Clan
+      if (isUserCreateCommand && isAdminAllowed) {
+        this.logger.log(
+          `NezonAuthGuard: Recovering soft-deleted user for *user create (mezonId=${senderId}, resolvedRole=${role}).`,
+        );
+
+        const recoveredUser = await this.userService.upsertByMezonId(senderId, {
+          role: role as UserRole,
+        });
+        (nezonContext as any).dbUser = recoveredUser;
+        return true;
+      }
+
       this.logger.warn(
         `NezonAuthGuard: Denying access for soft-deleted user mezonId ${senderId}`,
       );
       return false;
     }
 
+    // --- TRƯỜNG HỢP 3: CÁC LỆNH KHÁC KHÔNG PHẢI *user create ---
+    // Ngăn chặn triệt để nếu có kẻ cố tình gọi lệnh *user create nhưng không phải Admin thực tế trên Clan
+    if (isUserCreateCommand && !isAdminAllowed) {
+      this.logger.warn(
+        `NezonAuthGuard: Non-admin mezonId ${senderId} attempted to execute *user create. Denied.`,
+      );
+      return false;
+    }
+
+    // Tự động đồng bộ lại Role nếu có sự thay đổi từ phía Clan Mezon
     if (role != null && shouldSyncResolvedUserRole(user.role, role)) {
       this.logger.log(
         `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
       );
+
       const updatedUser = await this.userService.upsertByMezonId(senderId, {
         role,
       });
@@ -76,6 +120,7 @@ export class NezonAuthGuard implements CanActivate {
       const rolesData = await (clan as any).listRoles?.();
       const roles =
         rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
+
       if (!Array.isArray(roles)) {
         return null;
       }

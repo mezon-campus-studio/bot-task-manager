@@ -232,8 +232,6 @@ export class UserService extends CRUDService<UserEntity> {
       return result;
     }
 
-    // If the row is soft-deleted (deletedAt not null), it will be hidden from default queries.
-    // Recover it regardless of whether status is DELETED or ACTIVE to keep the system idempotent.
     if (existingUser.deletedAt != null) {
       this.logger.log({
         log: 'Existing user has deletedAt; recovering soft-delete',
@@ -246,7 +244,6 @@ export class UserService extends CRUDService<UserEntity> {
 
       await this.userRepository.recover(existingUser);
     } else if (existingUser.status === UserStatus.DELETED) {
-      // Extra safety: if status is DELETED but deletedAt is somehow null, still activate.
       this.logger.log({
         log: 'Existing user status is DELETED; setting ACTIVE to avoid duplicate create',
         mezonId,

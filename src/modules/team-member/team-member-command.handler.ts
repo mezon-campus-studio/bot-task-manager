@@ -18,7 +18,6 @@ import { TeamMemberService } from './team-member.service';
 /**
  * Team-Member command handler for the Mezon bot.
  *
- * Supported commands (prefix: *):
  *   *member list <teamId>                  – List all members of a team
  *   *member add <teamId> <userId>          – Add a member to team in current project
  *   *member remove <teamId> <userId>       – Remove a member from team in current project

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import ProjectEntity from '@src/modules/project/project.entity';
 import TaskEntity from '@src/modules/task/task.entity';
@@ -23,7 +24,7 @@ import type { MessageButtonClicked } from 'mezon-sdk/dist/cjs/rtapi/realtime';
 export class DatabaseSeeder {
   private readonly logger = new Logger(DatabaseSeeder.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   async seed(options: SeedOptions = {}): Promise<SeedResult> {
     const {

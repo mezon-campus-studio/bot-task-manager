@@ -369,14 +369,12 @@ export class TeamService extends CRUDService<TeamEntity> {
 
     return this.teamRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        // Unset current default
         await transactionalEntityManager.update(
           TeamEntity,
           { projectId, isDefault: true },
           { isDefault: false },
         );
 
-        // Set new default
         const team = await transactionalEntityManager.findOne(TeamEntity, {
           where: { id: teamId, projectId },
         });
