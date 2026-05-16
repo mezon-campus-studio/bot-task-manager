@@ -59,8 +59,6 @@ export class NezonAuthGuard implements CanActivate {
     }
 
     if (user.deletedAt != null) {
-      // Important: use the resolved clan role for permission decision.
-      // The persisted user.role might be null/outdated when soft-deleted.
       const isAdminAllowed = role === UserRole.ADMIN;
 
       if (isUserCreateCommand && isAdminAllowed) {

@@ -18,7 +18,6 @@ import { TicketService } from './ticket.service';
 /**
  * Ticket command handler for the Mezon bot.
  *
- * Supported commands (prefix: *):
  *   *ticket list                         – List all tickets in current project
  *   *ticket create <title>               – Create a new ticket
  *   *ticket detail <ticketId>            – Get ticket detail

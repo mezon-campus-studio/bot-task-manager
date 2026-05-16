@@ -133,12 +133,9 @@ export class NoteCommandHandler {
     }
 
     const lines = notes.map((note) => {
-      // Khi không truyền resourceType/resourceId: chỉ show id + resourceType + resourceId, không show content
       if (!isFiltered) {
         return `  [#${note.id}] ${this.formatNoteFlags(note)} ${note.resourceType} **${note.resourceId}**`;
       }
-
-      // Khi truyền đủ: show content (giữ yêu cầu của bạn) và vẫn có resourceType/resourceId/id
       return `  [#${note.id}] ${this.formatNoteFlags(note)} ${note.resourceType} **${note.resourceId}** ${this.truncate(note.content, 80)}`;
     });
 

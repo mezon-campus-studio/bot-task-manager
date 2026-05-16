@@ -17,7 +17,6 @@ import { TeamService } from './team.service';
 /**
  * Team command handler for the Mezon bot.
  *
- * Supported commands (prefix: *):
  *   *team list                         – List all teams in current project
  *   *team create <slug> <name...>      – Create a team in current project
  *   *team detail <teamId>              – View team detail

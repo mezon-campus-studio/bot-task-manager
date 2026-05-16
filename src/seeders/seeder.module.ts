@@ -9,8 +9,6 @@ import { DatabaseSeeder } from './database.seeder';
 
 @Module({
   imports: [
-    // Ensure ConfigService injection works even when the seed script creates
-    // the Nest context outside the normal app bootstrap path.
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',

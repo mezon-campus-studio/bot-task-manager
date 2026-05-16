@@ -101,10 +101,6 @@ export class UserCommandHandler {
   }
 
   // ─── actions ────────────────────────────────────────────────────────────────
-
-  /**
-   * Show the current sender's profile using the dbUser attached by NezonAuthGuard.
-   */
   private async showMe(
     ctx: NezonCommandContext,
     message: ManagedMessage,
