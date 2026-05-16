@@ -24,7 +24,7 @@ import { UserService } from './user.service';
  * Supported commands (prefix: *):
  *   *user me               – Show your own profile (name, role, current project)
  *   *user search <userId>  – Search for a user by mezonId or internal UUID
- *   *user info <userId>    – Look up a user by mezonId or internal UUID (admin/PM only)
+ *   *user info <userId>    – Look up a user by mezonId or internal UUID (ADMIN/PM only)
  *   *user create @username – Create user from clan member (pulls role from clan)
  */
 @Injectable()
@@ -142,10 +142,11 @@ export class UserCommandHandler {
     ctx: NezonCommandContext,
   ): Promise<void> {
     const senderUser = (ctx as any).dbUser;
-    if (Number(senderUser?.role) !== UserRole.ADMIN) {
+    const senderRole = Number(senderUser?.role);
+    if (senderRole !== UserRole.ADMIN && senderRole !== UserRole.PM) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators.',
+        '❌ This command is only available to administrators and project managers.',
       );
       return;
     }

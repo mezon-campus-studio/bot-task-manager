@@ -32,11 +32,18 @@ export class NezonAuthGuard implements CanActivate {
     }
 
     const role = await this.resolveRoleFromClan(nezonContext, senderId);
-    const user = await this.userService.findByMezonId(senderId);
+    const user = await this.userService.findByMezonId(senderId, true);
 
     if (!user) {
       this.logger.warn(
         `NezonAuthGuard: User with mezonId ${senderId} not found. Access denied. Use *user create @mention to add users.`,
+      );
+      return false;
+    }
+
+    if (user.deletedAt != null) {
+      this.logger.warn(
+        `NezonAuthGuard: Denying access for soft-deleted user mezonId ${senderId}`,
       );
       return false;
     }

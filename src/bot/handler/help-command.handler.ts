@@ -65,6 +65,7 @@ export class HelpCommandHandler {
         '🤖 **Mezon Bot Commands**',
         '',
         '**User Management:**',
+        '  `*user me` – Show your profile and current project',
         '  `*user create @username` – Add a user from clan mention',
         '  `*user info @username|userId` – View user details (only Admin,PM can see roles)',
         '  `*user search @username|userId` – Search for a user by username or ID (all users can search)',
@@ -131,11 +132,13 @@ export class HelpCommandHandler {
       message,
       [
         '👤 **User Commands:**',
-        '  `*user create @username` – Add a user from clan mention (PM only)',
-        '  `*user info @username|userId` – View user details and role',
-        '  `*user list` – List all users in the system',
-        '  `*user delete @username|userId` – Prepare delete confirmation (Admin only)',
-        '  `*user confirm delete @username|userId` – Confirm user deletion (Admin only)',
+        '  `*user me` – Show your profile and current project',
+        '  `*user create @username` – Add a user from clan mention',
+        '  `*user info @username|userId` – View user details (only Admin,PM can see roles)',
+        '  `*user search @username|userId` – Search for a user by username or ID (all users can search)',
+        '  `*user list` – List all users',
+        '  `*user delete @username|userId` – Prepare delete confirmation',
+        '  `*user confirm delete @username|userId` – Confirm user deletion',
       ].join('\n'),
     );
   }
