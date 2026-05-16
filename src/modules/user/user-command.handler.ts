@@ -65,6 +65,19 @@ export class UserCommandHandler {
         case 'list':
           await this.listUsers(message);
           return;
+        case 'delete':
+          await this.deleteUser(args, message, ctx);
+          return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteUser(args, message, ctx);
+            return;
+          }
+          await this.reply(
+            message,
+            'Usage: `*user confirm delete <mezonId|userId|@username>`',
+          );
+          return;
         default:
           await this.reply(
             message,
@@ -75,6 +88,8 @@ export class UserCommandHandler {
               '  `*user search <mezonId|userId>` – Search for a user',
               '  `*user info <mezonId|userId>` – Look up another user (admin/PM only)',
               '  `*user create @username` – Create user from clan member',
+              '  `*user delete <mezonId|userId|@username>` – Prepare delete confirmation',
+              '  `*user confirm delete <mezonId|userId|@username>` – Confirm user deletion',
             ].join('\n'),
           );
       }
@@ -346,6 +361,76 @@ export class UserCommandHandler {
     await this.reply(message, ['👤 **User List:**', ...lines].join('\n'));
   }
 
+  private async deleteUser(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    if (!this.isAdministrator(ctx)) {
+      await this.reply(message, '❌ Only administrators can delete users.');
+      return;
+    }
+
+    const rawIdentifier = args[1];
+    if (!rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*user delete <mezonId|userId|@username>`',
+      );
+      return;
+    }
+
+    const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+    const user = await this.userService.findByIdentifier(identifier);
+
+    if (!user) {
+      await this.reply(message, `❌ User **${rawIdentifier}** not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete user **${user.name ?? user.mezonId}**?`,
+        `Run: \`*user confirm delete ${identifier}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteUser(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    if (!this.isAdministrator(ctx)) {
+      await this.reply(message, '❌ Only administrators can delete users.');
+      return;
+    }
+
+    const rawIdentifier = args[2];
+    if (!rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*user confirm delete <mezonId|userId|@username>`',
+      );
+      return;
+    }
+
+    const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+    const user = await this.userService.findByIdentifier(identifier);
+
+    if (!user) {
+      await this.reply(message, `❌ User **${rawIdentifier}** not found.`);
+      return;
+    }
+
+    await this.userService.softDeleteUser(identifier);
+    await this.reply(
+      message,
+      `🗑️ User **${user.name ?? user.mezonId}** was deleted.`,
+    );
+  }
+
   private async refreshUserRoleFromClan(
     user: UserEntity,
     ctx: NezonCommandContext,
@@ -381,6 +466,11 @@ export class UserCommandHandler {
     }
 
     return user;
+  }
+
+  private isAdministrator(ctx: NezonCommandContext): boolean {
+    const senderUser = (ctx as any).dbUser;
+    return Number(senderUser?.role) === UserRole.ADMIN;
   }
 
   private getRoleLabel(

@@ -29,6 +29,7 @@ describe(UserCommandHandler.name, () => {
     const userService = {
       findByIdentifier: jest.fn(),
       findByMezonId: jest.fn(),
+      softDeleteUser: jest.fn(),
       upsertByMezonId: jest.fn(),
       ...overrides,
     };
@@ -143,7 +144,7 @@ describe(UserCommandHandler.name, () => {
     expectReplyText(message as never, 'Role: Administrator');
   });
 
-  it('does not downgrade an existing Administrator when clan search cannot resolve a role', async () => {
+  it('downgrades an existing Administrator when clan search no longer finds a role for the user', async () => {
     const message = createMessage();
     const user = {
       email: 'admin@example.com',
@@ -155,7 +156,10 @@ describe(UserCommandHandler.name, () => {
     };
     const { handler, userService } = createHandler({
       findByIdentifier: jest.fn().mockResolvedValue(user),
-      upsertByMezonId: jest.fn(),
+      upsertByMezonId: jest.fn().mockResolvedValue({
+        ...user,
+        role: UserRole.UK,
+      }),
     });
 
     await handler.handleUserCommand(['search', 'mezon-admin-search'], message, {
@@ -173,7 +177,89 @@ describe(UserCommandHandler.name, () => {
       }),
     } as never);
 
+    expect(userService.upsertByMezonId).toHaveBeenCalledWith(
+      'mezon-admin-search',
+      { role: UserRole.UK },
+    );
+    expectReplyText(message as never, 'Role: Member');
+  });
+
+  it('keeps an existing Administrator when clan search fails', async () => {
+    const message = createMessage();
+    const user = {
+      email: 'admin@example.com',
+      id: 'admin-id',
+      mezonId: 'mezon-admin-search',
+      name: 'Admin Search',
+      role: UserRole.ADMIN,
+      status: 'ACTIVE',
+    };
+    const { handler, userService } = createHandler({
+      findByIdentifier: jest.fn().mockResolvedValue(user),
+      upsertByMezonId: jest.fn(),
+    });
+
+    await handler.handleUserCommand(['search', 'mezon-admin-search'], message, {
+      getClan: jest.fn().mockResolvedValue({
+        listRoles: jest.fn().mockRejectedValue(new Error('Mezon unavailable')),
+      }),
+    } as never);
+
     expect(userService.upsertByMezonId).not.toHaveBeenCalled();
     expectReplyText(message as never, 'Role: Administrator');
+  });
+
+  it('prepares user deletion and requires confirm delete before soft delete', async () => {
+    const message = createMessage();
+    const user = {
+      email: 'delete@example.com',
+      id: 'delete-user-id',
+      mezonId: 'mezon-delete',
+      name: 'Delete User',
+      role: UserRole.UK,
+      status: 'ACTIVE',
+    };
+    const { handler, userService } = createHandler({
+      findByIdentifier: jest.fn().mockResolvedValue(user),
+      softDeleteUser: jest.fn(),
+    });
+
+    await handler.handleUserCommand(['delete', 'mezon-delete'], message, {
+      dbUser: {
+        role: UserRole.ADMIN,
+      },
+    } as never);
+
+    expect(userService.softDeleteUser).not.toHaveBeenCalled();
+    expectReplyText(message as never, '*user confirm delete mezon-delete');
+  });
+
+  it('soft deletes a user only after confirm delete', async () => {
+    const message = createMessage();
+    const user = {
+      email: 'delete@example.com',
+      id: 'delete-user-id',
+      mezonId: 'mezon-delete',
+      name: 'Delete User',
+      role: UserRole.UK,
+      status: 'ACTIVE',
+    };
+    const { handler, userService } = createHandler({
+      findByIdentifier: jest.fn().mockResolvedValue(user),
+      softDeleteUser: jest.fn().mockResolvedValue(undefined),
+    });
+
+    await handler.handleUserCommand(
+      ['confirm', 'delete', 'mezon-delete'],
+      message,
+      {
+        dbUser: {
+          role: UserRole.ADMIN,
+        },
+      } as never,
+    );
+
+    expect(userService.softDeleteUser).toHaveBeenCalledWith('mezon-delete');
+    expectReplyText(message as never, 'was deleted');
   });
 });

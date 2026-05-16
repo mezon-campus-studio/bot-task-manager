@@ -72,6 +72,13 @@ export class TicketCommandHandler {
         case 'delete':
           await this.deleteTicket(args, senderId, message);
           return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteTicket(args, senderId, message);
+            return;
+          }
+          await this.reply(message, 'Usage: `*ticket confirm delete <id>`');
+          return;
         case 'resolve':
           await this.resolveTicket(args, message, ctx);
           return;
@@ -86,7 +93,8 @@ export class TicketCommandHandler {
               '  `*ticket status <id> <open|in_progress|resolved|closed>` – Update status',
               '  `*ticket assign <id> <userId|@username>` – Assign ticket to user',
               '  `*ticket resolve <id>` – Mark ticket as resolved',
-              '  `*ticket delete <id>` – Delete a ticket',
+              '  `*ticket delete <id>` – Prepare delete confirmation',
+              '  `*ticket confirm delete <id>` – Confirm ticket deletion',
             ].join('\n'),
           );
       }
@@ -317,16 +325,65 @@ export class TicketCommandHandler {
         senderId,
       );
 
+    const ticket = await this.ticketService.getDetailTicket(
+      context.projectId,
+      ticketId,
+    );
+
+    if (!ticket) {
+      await this.reply(
+        message,
+        `Ticket #${ticketId} not found in current project.`,
+      );
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete ticket **#${ticket.id}: ${ticket.title}**?`,
+        `Run: \`*ticket confirm delete ${ticket.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteTicket(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    const ticketId = this.parseId(args[2]);
+
+    if (ticketId == null) {
+      await this.reply(message, 'Usage: `*ticket confirm delete <id>`');
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const ticket = await this.ticketService.getDetailTicket(
+      context.projectId,
+      ticketId,
+    );
+
+    if (!ticket) {
+      await this.reply(
+        message,
+        `Ticket #${ticketId} not found in current project.`,
+      );
+      return;
+    }
+
     const deleted = await this.ticketService.deleteTicket(
       context.projectId,
       ticketId,
     );
 
     if (!deleted) {
-      await this.reply(
-        message,
-        `Ticket #${ticketId} not found in current project.`,
-      );
+      await this.reply(message, `Ticket #${ticketId} not found.`);
       return;
     }
 

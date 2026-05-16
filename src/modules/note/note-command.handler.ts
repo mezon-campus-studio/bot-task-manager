@@ -52,6 +52,13 @@ export class NoteCommandHandler {
         case 'delete':
           await this.deleteNote(args, senderId, message);
           return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteNote(args, senderId, message);
+            return;
+          }
+          await this.reply(message, 'Usage: `*note confirm delete <id>`');
+          return;
         case 'pin':
           await this.setNotePinned(args, senderId, message, true);
           return;
@@ -73,7 +80,8 @@ export class NoteCommandHandler {
               '  `*note create <resourceType> <resourceId> <content...>` - Create a note',
               '  `*note detail <id>` - View note detail',
               '  `*note update <id> <content...>` - Update your note',
-              '  `*note delete <id>` - Delete your note',
+              '  `*note delete <id>` - Prepare delete confirmation',
+              '  `*note confirm delete <id>` - Confirm note deletion',
               '  `*note pin <id>` / `*note unpin <id>` - Pin or unpin your note',
               '  `*note share <id>` / `*note unshare <id>` - Share or unshare your note',
             ].join('\n'),
@@ -238,6 +246,28 @@ export class NoteCommandHandler {
   ): Promise<void> {
     const note = await this.getRequiredProjectNote(
       args[1],
+      senderId,
+      message,
+      true,
+    );
+    if (!note) return;
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete note **#${note.id}**?`,
+        `Run: \`*note confirm delete ${note.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteNote(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    const note = await this.getRequiredProjectNote(
+      args[2],
       senderId,
       message,
       true,

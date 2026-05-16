@@ -91,10 +91,6 @@ export function shouldSyncResolvedUserRole(
   const current = normalizeUserRole(currentRole);
   const resolved = normalizeUserRole(resolvedRole);
 
-  if (resolved === UserRole.UK && current !== UserRole.UK) {
-    return false;
-  }
-
   return current !== resolved;
 }
 

@@ -45,6 +45,13 @@ export class PermissionCommandHandler {
         case 'delete':
           await this.deletePermission(args, message, ctx);
           return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeletePermission(args, message, ctx);
+            return;
+          }
+          await this.reply(message, 'Usage: `*permission confirm delete <id>`');
+          return;
         default:
           await this.reply(
             message,
@@ -54,7 +61,8 @@ export class PermissionCommandHandler {
               '  `*permission detail <id|key>` - View permission detail',
               '  `*permission create <key> <resource> <action> [description...]` - Create permission (PM only)',
               '  `*permission update <id> <key|resource|action|description> <value...>` - Update permission (PM only)',
-              '  `*permission delete <id>` - Delete permission (PM only)',
+              '  `*permission delete <id>` - Prepare delete confirmation (PM only)',
+              '  `*permission confirm delete <id>` - Confirm permission deletion (PM only)',
             ].join('\n'),
           );
       }
@@ -228,6 +236,41 @@ export class PermissionCommandHandler {
 
     if (permissionId == null) {
       await this.reply(message, 'Usage: `*permission delete <id>`');
+      return;
+    }
+
+    const permission = await this.permissionService.findById(permissionId);
+    if (!permission) {
+      await this.reply(message, `Permission **${args[1]}** not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete permission **#${permission.id}: ${permission.key}**?`,
+        `Run: \`*permission confirm delete ${permission.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeletePermission(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    if (!this.isProjectManager(ctx)) {
+      await this.reply(
+        message,
+        'Only project managers can delete permissions.',
+      );
+      return;
+    }
+
+    const permissionId = this.parseId(args[2]);
+
+    if (permissionId == null) {
+      await this.reply(message, 'Usage: `*permission confirm delete <id>`');
       return;
     }
 

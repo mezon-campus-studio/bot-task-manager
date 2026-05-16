@@ -40,6 +40,15 @@ export class HelpCommandHandler {
         case 'task':
           await this.showTaskHelp(message);
           return;
+        case 'note':
+          await this.showNoteHelp(message);
+          return;
+        case 'role':
+          await this.showRoleHelp(message);
+          return;
+        case 'permission':
+          await this.showPermissionHelp(message);
+          return;
         default:
           await this.showGeneralHelp(message);
       }
@@ -60,6 +69,8 @@ export class HelpCommandHandler {
         '  `*user info @username|userId` – View user details (only Admin,PM can see roles)',
         '  `*user search @username|userId` – Search for a user by username or ID (all users can search)',
         '  `*user list` – List all users',
+        '  `*user delete @username|userId` – Prepare delete confirmation',
+        '  `*user confirm delete @username|userId` – Confirm user deletion',
         '',
         '**Project Management:**',
         '  `*project list` – List your projects',
@@ -89,6 +100,8 @@ export class HelpCommandHandler {
         '  `*ticket assign <ticketId> <userId|@userName>` – Assign ticket',
         '  `*ticket status <ticketId> <status>` – Update ticket status',
         '  `*ticket resolve <ticketId>` – Resolve ticket',
+        '  `*ticket delete <ticketId>` – Prepare delete confirmation',
+        '  `*ticket confirm delete <ticketId>` – Confirm ticket deletion',
         '',
         '**Task Management:**',
         '  `*task create <title...>` – Create a task',
@@ -97,6 +110,16 @@ export class HelpCommandHandler {
         '  `*task detail <taskId>` – View task details',
         '  `*task status <taskId> <status>` – Update task status (to-do, in-progress, completed, closed)',
         '  `*task complete <taskId>` – Complete task',
+        '  `*task delete <taskId>` – Prepare delete confirmation',
+        '  `*task confirm delete <taskId>` – Confirm task deletion',
+        '',
+        '**Note Management:**',
+        '  `*note delete <noteId>` – Prepare delete confirmation',
+        '  `*note confirm delete <noteId>` – Confirm note deletion',
+        '',
+        '**Role & Permission Management:**',
+        '  `*role delete <roleId>` / `*role confirm delete <roleId>`',
+        '  `*permission delete <permissionId>` / `*permission confirm delete <permissionId>`',
         '',
         'Use `*help <category>` for detailed help (e.g., `*help user`).',
       ].join('\n'),
@@ -111,6 +134,8 @@ export class HelpCommandHandler {
         '  `*user create @username` – Add a user from clan mention (PM only)',
         '  `*user info @username|userId` – View user details and role',
         '  `*user list` – List all users in the system',
+        '  `*user delete @username|userId` – Prepare delete confirmation (Admin only)',
+        '  `*user confirm delete @username|userId` – Confirm user deletion (Admin only)',
       ].join('\n'),
     );
   }
@@ -167,6 +192,8 @@ export class HelpCommandHandler {
         '  `*ticket assign <ticketId> <userId|@userName>` – Assign ticket to user',
         '  `*ticket status <ticketId> <status>` – Update ticket status (open, in_progress, closed)',
         '  `*ticket resolve <ticketId>` – Resolve ticket (PM only)',
+        '  `*ticket delete <ticketId>` – Prepare delete confirmation',
+        '  `*ticket confirm delete <ticketId>` – Confirm ticket deletion',
       ].join('\n'),
     );
   }
@@ -181,6 +208,53 @@ export class HelpCommandHandler {
         '  `*task assign <taskId> <userId|@userName>` – Assign task to user',
         '  `*task status <taskId> <status>` – Update task status',
         '  `*task complete <taskId>` – Mark task as completed',
+        '  `*task delete <taskId>` – Prepare delete confirmation',
+        '  `*task confirm delete <taskId>` – Confirm task deletion',
+      ].join('\n'),
+    );
+  }
+
+  private async showNoteHelp(message: ManagedMessage): Promise<void> {
+    await this.reply(
+      message,
+      [
+        '📝 **Note Commands:**',
+        '  `*note list <resourceType> <resourceId>` – List notes',
+        '  `*note create <resourceType> <resourceId> <content...>` – Create a note',
+        '  `*note detail <id>` – View note detail',
+        '  `*note update <id> <content...>` – Update your note',
+        '  `*note delete <id>` – Prepare delete confirmation',
+        '  `*note confirm delete <id>` – Confirm note deletion',
+      ].join('\n'),
+    );
+  }
+
+  private async showRoleHelp(message: ManagedMessage): Promise<void> {
+    await this.reply(
+      message,
+      [
+        '🔐 **Role Commands:**',
+        '  `*role list [SYSTEM|PROJECT|TEAM]` – List roles',
+        '  `*role detail <id|key>` – View role detail',
+        '  `*role create <key> <SYSTEM|PROJECT|TEAM> <name...>` – Create role (PM only)',
+        '  `*role update <id> <key|name|scope|description> <value...>` – Update role (PM only)',
+        '  `*role delete <id>` – Prepare delete confirmation (PM only)',
+        '  `*role confirm delete <id>` – Confirm role deletion (PM only)',
+      ].join('\n'),
+    );
+  }
+
+  private async showPermissionHelp(message: ManagedMessage): Promise<void> {
+    await this.reply(
+      message,
+      [
+        '🛡️ **Permission Commands:**',
+        '  `*permission list` – List permissions',
+        '  `*permission detail <id|key>` – View permission detail',
+        '  `*permission create <key> <resource> <action> [description...]` – Create permission (PM only)',
+        '  `*permission update <id> <key|resource|action|description> <value...>` – Update permission (PM only)',
+        '  `*permission delete <id>` – Prepare delete confirmation (PM only)',
+        '  `*permission confirm delete <id>` – Confirm permission deletion (PM only)',
       ].join('\n'),
     );
   }

@@ -41,7 +41,7 @@ export class NezonAuthGuard implements CanActivate {
       return false;
     }
 
-    if (shouldSyncResolvedUserRole(user.role, role)) {
+    if (role != null && shouldSyncResolvedUserRole(user.role, role)) {
       this.logger.log(
         `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
       );
@@ -59,18 +59,18 @@ export class NezonAuthGuard implements CanActivate {
   private async resolveRoleFromClan(
     context: NezonCommandContext,
     mezonId: string,
-  ): Promise<UserRole> {
+  ): Promise<UserRole | null> {
     try {
       const clan = await context.getClan();
       if (!clan) {
-        return UserRole.UK;
+        return null;
       }
 
       const rolesData = await (clan as any).listRoles?.();
       const roles =
         rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
       if (!Array.isArray(roles)) {
-        return UserRole.UK;
+        return null;
       }
 
       return resolveBestMezonRoleForUser(roles, mezonId);
@@ -80,6 +80,6 @@ export class NezonAuthGuard implements CanActivate {
       );
     }
 
-    return UserRole.UK;
+    return null;
   }
 }

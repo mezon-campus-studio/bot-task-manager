@@ -44,6 +44,8 @@ describe(TicketCommandHandler.name, () => {
       ...overrides?.projectContextService,
     };
     const ticketService = {
+      deleteTicket: jest.fn(),
+      getDetailTicket: jest.fn(),
       updateTicket: jest.fn(),
       ...overrides?.ticketService,
     };
@@ -95,5 +97,46 @@ describe(TicketCommandHandler.name, () => {
       assigneeUserId: 'user-2',
     });
     expectReplyText(message as never, 'assigned to **Bao**');
+  });
+
+  it('prepares ticket deletion and requires a confirmation command', async () => {
+    const message = createMessage();
+    const { handler, ticketService } = createHandler({
+      ticketService: {
+        getDetailTicket: jest.fn().mockResolvedValue({
+          id: 1,
+          projectId: 7,
+          title: 'Resolve ticket',
+        }),
+      },
+    });
+
+    await handler.handleTicketCommand(['delete', '1'], message, {} as never);
+
+    expect(ticketService.deleteTicket).not.toHaveBeenCalled();
+    expectReplyText(message as never, '*ticket confirm delete 1');
+  });
+
+  it('deletes a ticket only after confirm delete', async () => {
+    const message = createMessage();
+    const { handler, ticketService } = createHandler({
+      ticketService: {
+        deleteTicket: jest.fn().mockResolvedValue(true),
+        getDetailTicket: jest.fn().mockResolvedValue({
+          id: 1,
+          projectId: 7,
+          title: 'Resolve ticket',
+        }),
+      },
+    });
+
+    await handler.handleTicketCommand(
+      ['confirm', 'delete', '1'],
+      message,
+      {} as never,
+    );
+
+    expect(ticketService.deleteTicket).toHaveBeenCalledWith(7, 1);
+    expectReplyText(message as never, 'has been deleted');
   });
 });
