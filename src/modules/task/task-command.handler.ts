@@ -58,6 +58,13 @@ export class TaskCommandHandler {
         case 'delete':
           await this.deleteTask(args, senderId, message);
           return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteTask(args, senderId, message);
+            return;
+          }
+          await this.reply(message, 'Usage: `*task confirm delete <id>`');
+          return;
         default:
           await this.reply(
             message,
@@ -68,7 +75,8 @@ export class TaskCommandHandler {
               '  `*task detail <id>` - View task detail',
               '  `*task status <id> <todo|in_progress|done|cancelled>` - Update status',
               '  `*task assign <id> <userId|@username>` - Assign task',
-              '  `*task delete <id>` - Delete a task',
+              '  `*task delete <id>` - Prepare delete confirmation',
+              '  `*task confirm delete <id>` - Confirm task deletion',
             ].join('\n'),
           );
       }
@@ -291,6 +299,37 @@ export class TaskCommandHandler {
 
     if (taskId == null) {
       await this.reply(message, 'Usage: `*task delete <id>`');
+      return;
+    }
+
+    const existingTask = await this.getTaskInCurrentProject(taskId, senderId);
+
+    if (!existingTask) {
+      await this.reply(
+        message,
+        `Task #${taskId} not found in current project.`,
+      );
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete task **#${existingTask.id}: ${existingTask.title}**?`,
+        `Run: \`*task confirm delete ${existingTask.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteTask(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    const taskId = this.parseId(args[2]);
+
+    if (taskId == null) {
+      await this.reply(message, 'Usage: `*task confirm delete <id>`');
       return;
     }
 

@@ -158,20 +158,26 @@ export class UserService extends CRUDService<UserEntity> {
     return result;
   }
 
-  async findByMezonId(mezonId: string): Promise<UserEntity | null> {
+  async findByMezonId(
+    mezonId: string,
+    includeDeleted = false,
+  ): Promise<UserEntity | null> {
     this.logger.log({
       log: 'Attempting to find user by mezon id',
       mezonId,
+      includeDeleted,
     });
 
     const result = await this.userRepository.findOne({
       where: { mezonId },
+      withDeleted: includeDeleted,
     });
 
     if (result == null) {
       this.logger.log({
         log: 'Fallback user lookup result because user was not found by mezon id',
         mezonId,
+        includeDeleted,
       });
 
       return null;
@@ -180,6 +186,7 @@ export class UserService extends CRUDService<UserEntity> {
     this.logger.log({
       log: 'Got user by mezon id',
       mezonId,
+      includeDeleted,
       result: {
         id: result.id,
         email: result.email,
@@ -199,7 +206,7 @@ export class UserService extends CRUDService<UserEntity> {
       meta,
     });
 
-    const existingUser = await this.findByMezonId(mezonId);
+    const existingUser = await this.findByMezonId(mezonId, true);
 
     if (existingUser == null) {
       this.logger.log({
@@ -223,6 +230,30 @@ export class UserService extends CRUDService<UserEntity> {
       });
 
       return result;
+    }
+
+    // If the row is soft-deleted (deletedAt not null), it will be hidden from default queries.
+    // Recover it regardless of whether status is DELETED or ACTIVE to keep the system idempotent.
+    if (existingUser.deletedAt != null) {
+      this.logger.log({
+        log: 'Existing user has deletedAt; recovering soft-delete',
+        mezonId,
+        existingUserId: existingUser.id,
+      });
+
+      existingUser.status = existingUser.status ?? UserStatus.ACTIVE;
+      existingUser.status = UserStatus.ACTIVE;
+
+      await this.userRepository.recover(existingUser);
+    } else if (existingUser.status === UserStatus.DELETED) {
+      // Extra safety: if status is DELETED but deletedAt is somehow null, still activate.
+      this.logger.log({
+        log: 'Existing user status is DELETED; setting ACTIVE to avoid duplicate create',
+        mezonId,
+        existingUserId: existingUser.id,
+      });
+
+      existingUser.status = UserStatus.ACTIVE;
     }
 
     this.logger.log({
@@ -436,5 +467,23 @@ export class UserService extends CRUDService<UserEntity> {
     });
 
     return result;
+  }
+
+  async listAll(): Promise<UserEntity[]> {
+    this.logger.log({
+      log: 'Attempting to list all users',
+    });
+
+    const users = await this.userRepository.find({
+      where: { status: Not(UserStatus.DELETED) },
+      order: { createdAt: 'DESC' },
+    });
+
+    this.logger.log({
+      log: 'Listed users',
+      resultCount: users.length,
+    });
+
+    return users;
   }
 }

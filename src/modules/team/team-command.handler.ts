@@ -168,7 +168,10 @@ export class TeamCommandHandler {
 
     const dbUser = (ctx as any).dbUser;
     if (!dbUser || !this.isProjectManager(dbUser)) {
-      await this.reply(message, '❌ Only project managers can create teams.');
+      await this.reply(
+        message,
+        '❌ Only Administrator/Project managers can create teams.',
+      );
       return;
     }
 

@@ -176,7 +176,7 @@ describe(TaskCommandHandler.name, () => {
     expect(taskService.assignTask).toHaveBeenCalledWith(8, 'user-2');
   });
 
-  it('deletes a task from the current project', async () => {
+  it('prepares task deletion and requires a confirmation command', async () => {
     const message = createMessage();
     const { handler, taskService } = createHandler({
       taskService: {
@@ -187,6 +187,22 @@ describe(TaskCommandHandler.name, () => {
 
     await handler.handleTaskCommand(['delete', '8'], message);
 
+    expect(taskService.deleteTask).not.toHaveBeenCalled();
+    expectReplyText(message as never, '*task confirm delete 8');
+  });
+
+  it('deletes a task from the current project only after confirm delete', async () => {
+    const message = createMessage();
+    const { handler, taskService } = createHandler({
+      taskService: {
+        deleteTask: jest.fn().mockResolvedValue(true),
+        findById: jest.fn().mockResolvedValue({ id: 8, projectId: 7 }),
+      },
+    });
+
+    await handler.handleTaskCommand(['confirm', 'delete', '8'], message);
+
     expect(taskService.deleteTask).toHaveBeenCalledWith(8);
+    expectReplyText(message as never, 'Deleted task #8');
   });
 });

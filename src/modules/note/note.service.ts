@@ -96,6 +96,30 @@ export class NoteService extends CRUDService<NoteEntity> {
     return result;
   }
 
+  async listByProject(projectId: number): Promise<NoteEntity[]> {
+    this.logger.log({
+      log: 'Attempting to list notes by project',
+      projectId,
+    });
+
+    const result = await this.noteRepository.find({
+      where: { projectId },
+      order: {
+        createdAt: 'DESC',
+        id: 'DESC',
+      },
+    });
+
+    this.logger.log({
+      log: 'Got notes by project result',
+      projectId,
+      count: result.length,
+      noteIds: result.map(({ id }) => id),
+    });
+
+    return result;
+  }
+
   async deleteNote(noteId: number, userId: string): Promise<void> {
     this.logger.log({ log: 'Attempting to delete note', noteId });
 

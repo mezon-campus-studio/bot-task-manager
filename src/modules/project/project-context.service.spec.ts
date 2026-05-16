@@ -6,6 +6,7 @@ import {
 import { createTestingModule, factory, testingModule } from '#jest';
 import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
 import { TaskService } from '@src/modules/task/task.service';
+import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
 import { ProjectContextService } from './project-context.service';
 import { ProjectService } from './project.service';
 
@@ -67,6 +68,44 @@ describe(ProjectContextService.name, () => {
     const { project, user } = await createProjectWithActiveMember(
       'project-context-use-by-mezon-id',
     );
+
+    await expect(
+      projectContextService.useProjectByMezonId(user.mezonId, project.slug),
+    ).resolves.toMatchObject({
+      projectId: project.id,
+      project: {
+        id: project.id,
+        slug: project.slug,
+      },
+      user: {
+        currentProjectId: project.id,
+        id: user.id,
+      },
+    });
+  });
+
+  it('sets current project when the user is an active member of a project team', async () => {
+    const owner = await factory.user({
+      mezonId: 'project-context-team-owner',
+    });
+    const user = await factory.user({
+      mezonId: 'project-context-team-member',
+    });
+    const project = await projectService.createProject({
+      name: 'project context team',
+      ownerUserId: owner.id,
+      slug: 'project-context-team',
+    });
+    const team = await factory.team({
+      projectId: project.id,
+      slug: 'project-context-team-access',
+    });
+
+    await factory.teamMember({
+      status: TeamMemberStatus.ACTIVE,
+      teamId: team.id,
+      userId: user.id,
+    });
 
     await expect(
       projectContextService.useProjectByMezonId(user.mezonId, project.slug),

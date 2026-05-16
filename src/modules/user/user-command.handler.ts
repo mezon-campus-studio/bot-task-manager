@@ -10,6 +10,11 @@ import {
 } from '@src/libs/nezon';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import {
+  mapMezonRoleToUserRole,
+  resolveBestMezonRoleForUser,
+  shouldSyncResolvedUserRole,
+} from './user-role.utils';
 import UserEntity from './user.entity';
 import { UserService } from './user.service';
 
@@ -19,7 +24,7 @@ import { UserService } from './user.service';
  * Supported commands (prefix: *):
  *   *user me               – Show your own profile (name, role, current project)
  *   *user search <userId>  – Search for a user by mezonId or internal UUID
- *   *user info <userId>    – Look up a user by mezonId or internal UUID (admin/PM only)
+ *   *user info <userId>    – Look up a user by mezonId or internal UUID (ADMIN/PM only)
  *   *user create @username – Create user from clan member (pulls role from clan)
  */
 @Injectable()
@@ -57,15 +62,34 @@ export class UserCommandHandler {
         case 'create':
           await this.createUserFromMention(message, ctx);
           return;
+        case 'list':
+          await this.listUsers(message);
+          return;
+        case 'delete':
+          await this.deleteUser(args, message, ctx);
+          return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteUser(args, message, ctx);
+            return;
+          }
+          await this.reply(
+            message,
+            'Usage: `*user confirm delete <mezonId|userId|@username>`',
+          );
+          return;
         default:
           await this.reply(
             message,
             [
               '👤 **User Commands:**',
               '  `*user me` – View your own profile',
+              '  `*user list` – List all users',
               '  `*user search <mezonId|userId>` – Search for a user',
               '  `*user info <mezonId|userId>` – Look up another user (admin/PM only)',
               '  `*user create @username` – Create user from clan member',
+              '  `*user delete <mezonId|userId|@username>` – Prepare delete confirmation',
+              '  `*user confirm delete <mezonId|userId|@username>` – Confirm user deletion',
             ].join('\n'),
           );
       }
@@ -84,7 +108,6 @@ export class UserCommandHandler {
     ctx: NezonCommandContext,
     message: ManagedMessage,
   ): Promise<void> {
-    // NezonAuthGuard already resolved and attached the DB user
     const user = (ctx as any).dbUser;
 
     if (!user) {
@@ -119,10 +142,11 @@ export class UserCommandHandler {
     ctx: NezonCommandContext,
   ): Promise<void> {
     const senderUser = (ctx as any).dbUser;
-    if (Number(senderUser?.role) !== UserRole.ADMIN) {
+    const senderRole = Number(senderUser?.role);
+    if (senderRole !== UserRole.ADMIN && senderRole !== UserRole.PM) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators.',
+        '❌ This command is only available to administrators and project managers.',
       );
       return;
     }
@@ -220,7 +244,6 @@ export class UserCommandHandler {
         return;
       }
 
-      // Get mentions from the raw channel message payload
       const mentions = (message.raw as any).mentions || [];
 
       if (mentions.length === 0) {
@@ -231,7 +254,6 @@ export class UserCommandHandler {
         return;
       }
 
-      // Use the first mention
       const mention = mentions[0];
       const mezonId = mention.user_id;
 
@@ -240,7 +262,6 @@ export class UserCommandHandler {
         return;
       }
 
-      // Check if user already exists
       const existingUser = await this.userService.findByMezonId(mezonId);
       if (existingUser) {
         await this.reply(
@@ -256,14 +277,14 @@ export class UserCommandHandler {
         return;
       }
 
-      let internalRole = UserRole.UK; // Default unknown
+      let internalRole = UserRole.UK;
       let memberName = `User_${mezonId.slice(-8)}`;
 
       const mentionRoleName = String((mention as any).rolename || '').trim();
       const mentionRoleId = String((mention as any).role_id || '').trim();
 
       if (mentionRoleName) {
-        internalRole = this.mapMezonRoleToUserRole(mentionRoleName);
+        internalRole = mapMezonRoleToUserRole(mentionRoleName);
       } else if (mentionRoleId && mentionRoleId !== '0') {
         try {
           const rolesData = await (clan as any).listRoles?.();
@@ -275,7 +296,7 @@ export class UserCommandHandler {
             memberRole?.name || memberRole?.rolename || '',
           ).trim();
           if (roleName) {
-            internalRole = this.mapMezonRoleToUserRole(roleName);
+            internalRole = mapMezonRoleToUserRole(roleName);
           }
         } catch (e) {
           this.logger.debug(
@@ -295,7 +316,6 @@ export class UserCommandHandler {
         role: internalRole,
       });
 
-      // Update the role in database if not default
       if (internalRole !== UserRole.UK && newUser.id) {
         try {
           await (this.userService as any).userRepository.update(
@@ -326,6 +346,92 @@ export class UserCommandHandler {
 
   // ─── helpers ────────────────────────────────────────────────────────────────
 
+  private async listUsers(message: ManagedMessage): Promise<void> {
+    const users = await this.userService.listAll();
+
+    if (users.length === 0) {
+      await this.reply(message, 'ℹ️ No users found.');
+      return;
+    }
+    const lines = users.map((u) => {
+      const roleLabel = this.getRoleLabel(u.role ?? UserRole.UK);
+      const status = u.status ?? '—';
+      return `  - ${u.name ?? '—'} (${u.mezonId}) | ${roleLabel} | ${status}`;
+    });
+
+    await this.reply(message, ['👤 **User List:**', ...lines].join('\n'));
+  }
+
+  private async deleteUser(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    if (!this.isAdministrator(ctx)) {
+      await this.reply(message, '❌ Only administrators can delete users.');
+      return;
+    }
+
+    const rawIdentifier = args[1];
+    if (!rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*user delete <mezonId|userId|@username>`',
+      );
+      return;
+    }
+
+    const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+    const user = await this.userService.findByIdentifier(identifier);
+
+    if (!user) {
+      await this.reply(message, `❌ User **${rawIdentifier}** not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete user **${user.name ?? user.mezonId}**?`,
+        `Run: \`*user confirm delete ${identifier}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteUser(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    if (!this.isAdministrator(ctx)) {
+      await this.reply(message, '❌ Only administrators can delete users.');
+      return;
+    }
+
+    const rawIdentifier = args[2];
+    if (!rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*user confirm delete <mezonId|userId|@username>`',
+      );
+      return;
+    }
+
+    const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+    const user = await this.userService.findByIdentifier(identifier);
+
+    if (!user) {
+      await this.reply(message, `❌ User **${rawIdentifier}** not found.`);
+      return;
+    }
+
+    await this.userService.softDeleteUser(identifier);
+    await this.reply(
+      message,
+      `🗑️ User **${user.name ?? user.mezonId}** was deleted.`,
+    );
+  }
+
   private async refreshUserRoleFromClan(
     user: UserEntity,
     ctx: NezonCommandContext,
@@ -347,42 +453,11 @@ export class UserCommandHandler {
         return user;
       }
 
-      let hasRoleInClan = false;
-      let resolvedRole = UserRole.UK;
+      const resolvedRole = resolveBestMezonRoleForUser(roles, user.mezonId);
 
-      for (const role of roles) {
-        const roleUsers =
-          role?.role_user_list?.role_users ?? role?.role_users ?? [];
-        if (!Array.isArray(roleUsers)) {
-          continue;
-        }
-
-        const isMember = roleUsers.some((member: any) => {
-          const userId = String(member?.id || member?.user_id || '').trim();
-          return userId === user.mezonId;
-        });
-
-        if (!isMember) {
-          continue;
-        }
-
-        hasRoleInClan = true;
-        const roleName = String(
-          role?.title || role?.name || role?.rolename || role?.role_label || '',
-        ).trim();
-        resolvedRole = this.mapMezonRoleToUserRole(roleName);
-        break;
-      }
-
-      if (user.role !== resolvedRole) {
+      if (shouldSyncResolvedUserRole(user.role, resolvedRole)) {
         return await this.userService.upsertByMezonId(user.mezonId, {
           role: resolvedRole,
-        });
-      }
-
-      if (!hasRoleInClan && user.role !== UserRole.UK) {
-        return await this.userService.upsertByMezonId(user.mezonId, {
-          role: UserRole.UK,
         });
       }
     } catch (error) {
@@ -394,8 +469,17 @@ export class UserCommandHandler {
     return user;
   }
 
-  private getRoleLabel(role: UserRole): string {
-    switch (role) {
+  private isAdministrator(ctx: NezonCommandContext): boolean {
+    const senderUser = (ctx as any).dbUser;
+    return Number(senderUser?.role) === UserRole.ADMIN;
+  }
+
+  private getRoleLabel(
+    role: UserRole | string | number | null | undefined,
+  ): string {
+    switch (Number(role)) {
+      case UserRole.ADMIN:
+        return 'Administrator';
       case UserRole.PM:
         return 'Project Manager';
       case UserRole.DEV:
@@ -405,37 +489,6 @@ export class UserCommandHandler {
       default:
         return 'Member';
     }
-  }
-
-  private mapMezonRoleToUserRole(roleName: string): UserRole {
-    const normalized = roleName.trim().toUpperCase();
-
-    if (
-      normalized.includes('OWNER') ||
-      normalized.includes('ADMIN') ||
-      normalized.includes('ADMINISTRATOR')
-    ) {
-      return UserRole.PM;
-    }
-
-    if (
-      normalized.includes('MANAGER') ||
-      normalized.includes('PROJECT') ||
-      normalized.includes('PM') ||
-      normalized.includes('PR')
-    ) {
-      return UserRole.PM;
-    }
-
-    if (normalized.includes('DEV') || normalized.includes('DEVELOPER')) {
-      return UserRole.DEV;
-    }
-
-    if (normalized.includes('QA')) {
-      return UserRole.QA;
-    }
-
-    return UserRole.UK;
   }
 
   private normalizeUserIdentifier(

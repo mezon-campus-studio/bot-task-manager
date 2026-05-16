@@ -12,7 +12,10 @@ function requiredEnv(name: string): string {
   return value;
 }
 
-async function withTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+async function withTimeout<T>(
+  operation: Promise<T>,
+  label: string,
+): Promise<T> {
   let timeout: NodeJS.Timeout | undefined;
 
   try {
@@ -35,7 +38,9 @@ async function waitForReady(client: MezonClient): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       cleanup();
-      reject(new Error(`Bot did not become ready within ${READY_TIMEOUT_MS}ms`));
+      reject(
+        new Error(`Bot did not become ready within ${READY_TIMEOUT_MS}ms`),
+      );
     }, READY_TIMEOUT_MS);
 
     const onReady = () => {

@@ -331,7 +331,8 @@ export class TeamMemberCommandHandler {
 
   private isProjectManager(ctx: any): boolean {
     const dbUser = ctx.dbUser;
-    return dbUser?.role === UserRole.PM || dbUser?.role === UserRole.ADMIN;
+    const role = Number(dbUser?.role);
+    return role === UserRole.PM || role === UserRole.ADMIN;
   }
 
   private getErrorMessage(error: unknown): string {

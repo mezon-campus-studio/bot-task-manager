@@ -46,6 +46,13 @@ export class RoleCommandHandler {
         case 'delete':
           await this.deleteRole(args, message, ctx);
           return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteRole(args, message, ctx);
+            return;
+          }
+          await this.reply(message, 'Usage: `*role confirm delete <id>`');
+          return;
         default:
           await this.reply(
             message,
@@ -55,7 +62,8 @@ export class RoleCommandHandler {
               '  `*role detail <id|key>` - View role detail',
               '  `*role create <key> <SYSTEM|PROJECT|TEAM> <name...>` - Create role (PM only)',
               '  `*role update <id> <key|name|scope|description> <value...>` - Update role (PM only)',
-              '  `*role delete <id>` - Delete role (PM only)',
+              '  `*role delete <id>` - Prepare delete confirmation (PM only)',
+              '  `*role confirm delete <id>` - Confirm role deletion (PM only)',
             ].join('\n'),
           );
       }
@@ -232,6 +240,38 @@ export class RoleCommandHandler {
 
     if (roleId == null) {
       await this.reply(message, 'Usage: `*role delete <id>`');
+      return;
+    }
+
+    const role = await this.roleService.findById(roleId);
+    if (!role) {
+      await this.reply(message, `Role **${args[1]}** not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete role **#${role.id}: ${role.name}**?`,
+        `Run: \`*role confirm delete ${role.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteRole(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    if (!this.isProjectManager(ctx)) {
+      await this.reply(message, 'Only project managers can delete roles.');
+      return;
+    }
+
+    const roleId = this.parseId(args[2]);
+
+    if (roleId == null) {
+      await this.reply(message, 'Usage: `*role confirm delete <id>`');
       return;
     }
 

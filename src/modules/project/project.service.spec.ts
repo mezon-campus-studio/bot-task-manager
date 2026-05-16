@@ -8,6 +8,7 @@ import { RoleScopeType } from '@src/modules/role/enums/role-scope-type.enum';
 import RoleEntity from '@src/modules/role/role.entity';
 import RolePermissionEntity from '@src/modules/role-permission/role-permission.entity';
 import TeamEntity from '@src/modules/team/team.entity';
+import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
 import UserRoleAssignmentEntity from '@src/modules/user-role-assignment/user-role-assignment.entity';
 import {
   PROJECT_DEFAULT_PERMISSIONS,
@@ -256,6 +257,62 @@ describe(ProjectService.name, () => {
     expect(projectIds.indexOf(secondProject.id)).toBeLessThan(
       projectIds.indexOf(firstProject.id),
     );
+  });
+
+  it('lists projects accessible through ownership, project membership, or team membership', async () => {
+    const owner = await factory.user({
+      mezonId: 'project-access-owner',
+    });
+    const user = await factory.user({
+      mezonId: 'project-access-user',
+    });
+
+    const ownedProject = await factory.project({
+      ownerUserId: user.id,
+      slug: 'project-access-owned',
+    });
+    const projectMemberProject = await factory.project({
+      ownerUserId: owner.id,
+      slug: 'project-access-project-member',
+    });
+    const teamMemberProject = await factory.project({
+      ownerUserId: owner.id,
+      slug: 'project-access-team-member',
+    });
+    const inaccessibleProject = await factory.project({
+      ownerUserId: owner.id,
+      slug: 'project-access-inaccessible',
+    });
+
+    await factory.projectMember({
+      projectId: projectMemberProject.id,
+      status: ProjectMemberStatus.ACTIVE,
+      userId: user.id,
+    });
+
+    const team = await factory.team({
+      projectId: teamMemberProject.id,
+      slug: 'project-access-team',
+    });
+    await factory.teamMember({
+      status: TeamMemberStatus.ACTIVE,
+      teamId: team.id,
+      userId: user.id,
+    });
+
+    const projects = await projectService.listAccessibleProjectsForUser(
+      user.id,
+    );
+    const projectIds = projects.map(({ id }) => id);
+
+    expect(projectIds).toEqual(
+      expect.arrayContaining([
+        ownedProject.id,
+        projectMemberProject.id,
+        teamMemberProject.id,
+      ]),
+    );
+    expect(projectIds).not.toContain(inaccessibleProject.id);
   });
 
   it('updates an existing project with the provided changes', async () => {

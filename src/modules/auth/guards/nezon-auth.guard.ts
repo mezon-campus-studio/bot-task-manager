@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
+import {
+  resolveBestMezonRoleForUser,
+  shouldSyncResolvedUserRole,
+} from '@src/modules/user/user-role.utils';
 import { UserService } from '@src/modules/user/user.service';
 
 @Injectable()
@@ -28,7 +32,7 @@ export class NezonAuthGuard implements CanActivate {
     }
 
     const role = await this.resolveRoleFromClan(nezonContext, senderId);
-    const user = await this.userService.findByMezonId(senderId);
+    const user = await this.userService.findByMezonId(senderId, true);
 
     if (!user) {
       this.logger.warn(
@@ -37,7 +41,14 @@ export class NezonAuthGuard implements CanActivate {
       return false;
     }
 
-    if (user.role !== role) {
+    if (user.deletedAt != null) {
+      this.logger.warn(
+        `NezonAuthGuard: Denying access for soft-deleted user mezonId ${senderId}`,
+      );
+      return false;
+    }
+
+    if (role != null && shouldSyncResolvedUserRole(user.role, role)) {
       this.logger.log(
         `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
       );
@@ -55,80 +66,27 @@ export class NezonAuthGuard implements CanActivate {
   private async resolveRoleFromClan(
     context: NezonCommandContext,
     mezonId: string,
-  ): Promise<UserRole> {
+  ): Promise<UserRole | null> {
     try {
       const clan = await context.getClan();
       if (!clan) {
-        return UserRole.UK;
+        return null;
       }
 
       const rolesData = await (clan as any).listRoles?.();
       const roles =
         rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
       if (!Array.isArray(roles)) {
-        return UserRole.UK;
+        return null;
       }
 
-      for (const role of roles) {
-        const roleUsers =
-          role?.role_user_list?.role_users ?? (role as any)?.role_users ?? [];
-        if (!Array.isArray(roleUsers)) {
-          continue;
-        }
-
-        const isMember = roleUsers.some((member: any) => {
-          const userId = String(member?.id || member?.user_id || '').trim();
-          return userId === mezonId;
-        });
-
-        if (isMember) {
-          const roleName = String(
-            role?.title ||
-              role?.name ||
-              role?.rolename ||
-              role?.role_label ||
-              '',
-          ).trim();
-          return this.mapMezonRoleToUserRole(roleName);
-        }
-      }
+      return resolveBestMezonRoleForUser(roles, mezonId);
     } catch (error) {
       this.logger.debug(
         `NezonAuthGuard: Could not resolve clan role for ${mezonId}: ${(error as Error).message}`,
       );
     }
 
-    return UserRole.UK;
-  }
-
-  private mapMezonRoleToUserRole(roleName: string): UserRole {
-    const normalized = roleName.trim().toUpperCase();
-
-    if (
-      normalized.includes('OWNER') ||
-      normalized.includes('ADMIN') ||
-      normalized.includes('ADMINISTRATOR')
-    ) {
-      return UserRole.ADMIN;
-    }
-
-    if (
-      normalized.includes('MANAGER') ||
-      normalized.includes('PROJECT') ||
-      normalized.includes('PM') ||
-      normalized.includes('PR')
-    ) {
-      return UserRole.PM;
-    }
-
-    if (normalized.includes('DEV') || normalized.includes('DEVELOPER')) {
-      return UserRole.DEV;
-    }
-
-    if (normalized.includes('QA')) {
-      return UserRole.QA;
-    }
-
-    return UserRole.UK;
+    return null;
   }
 }

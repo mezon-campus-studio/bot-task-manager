@@ -2,6 +2,11 @@ import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
+import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
+import ProjectMemberEntity from '@src/modules/project-member/project-member.entity';
+import TeamEntity from '@src/modules/team/team.entity';
+import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
+import TeamMemberEntity from '@src/modules/team-member/team-member.entity';
 import { ProjectOnboardingService } from './project-onboarding.service';
 import ProjectEntity from './project.entity';
 import { ProjectOnboardingStatus } from './project.enums';
@@ -104,6 +109,54 @@ export class ProjectService extends CRUDService<ProjectEntity> {
       log: 'Got projects result',
       count: result.length,
       projectIds: result.map(({ id }) => id),
+    });
+
+    return result;
+  }
+
+  async listAccessibleProjectsForUser(
+    userId: string,
+  ): Promise<ProjectEntity[]> {
+    this.logger.log({
+      log: 'Attempting to list accessible projects for user',
+      userId,
+    });
+
+    const result = await this.createAccessibleProjectsQuery(userId)
+      .orderBy('project.id', 'DESC')
+      .getMany();
+
+    this.logger.log({
+      log: 'Got accessible projects result',
+      count: result.length,
+      projectIds: result.map(({ id }) => id),
+      userId,
+    });
+
+    return result;
+  }
+
+  async canUserAccessProject(
+    projectId: number,
+    userId: string,
+  ): Promise<boolean> {
+    this.logger.log({
+      log: 'Attempting to check project access for user',
+      projectId,
+      userId,
+    });
+
+    const project = await this.createAccessibleProjectsQuery(userId)
+      .andWhere('project.id = :projectId', { projectId })
+      .getOne();
+
+    const result = project != null;
+
+    this.logger.log({
+      log: 'Project access check result',
+      projectId,
+      result,
+      userId,
     });
 
     return result;
@@ -274,5 +327,47 @@ export class ProjectService extends CRUDService<ProjectEntity> {
     });
 
     return result;
+  }
+
+  private createAccessibleProjectsQuery(userId: string) {
+    return this.projectRepository
+      .createQueryBuilder('project')
+      .distinct(true)
+      .leftJoin(
+        ProjectMemberEntity,
+        'projectMember',
+        [
+          'projectMember.projectId = project.id',
+          'projectMember.userId = :userId',
+          'projectMember.status = :activeProjectMemberStatus',
+        ].join(' AND '),
+      )
+      .leftJoin(
+        TeamEntity,
+        'team',
+        ['team.projectId = project.id', 'team.deletedAt IS NULL'].join(' AND '),
+      )
+      .leftJoin(
+        TeamMemberEntity,
+        'teamMember',
+        [
+          'teamMember.teamId = team.id',
+          'teamMember.userId = :userId',
+          'teamMember.status = :activeTeamMemberStatus',
+          'teamMember.deletedAt IS NULL',
+        ].join(' AND '),
+      )
+      .where(
+        `(${[
+          'project.ownerUserId = :userId',
+          'projectMember.id IS NOT NULL',
+          'teamMember.id IS NOT NULL',
+        ].join(' OR ')})`,
+        {
+          activeProjectMemberStatus: ProjectMemberStatus.ACTIVE,
+          activeTeamMemberStatus: TeamMemberStatus.ACTIVE,
+          userId,
+        },
+      );
   }
 }
