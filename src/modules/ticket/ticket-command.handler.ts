@@ -11,6 +11,7 @@ import {
 } from '@src/libs/nezon';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
+import { UserService } from '@src/modules/user/user.service';
 import { TicketStatus } from './enums';
 import { TicketService } from './ticket.service';
 
@@ -34,6 +35,7 @@ export class TicketCommandHandler {
   constructor(
     private readonly ticketService: TicketService,
     private readonly projectContextService: ProjectContextService,
+    private readonly userService: UserService,
   ) {}
 
   @Command('ticket')
@@ -82,7 +84,7 @@ export class TicketCommandHandler {
               '  `*ticket create <title>` – Create a ticket',
               '  `*ticket detail <id>` – View ticket detail',
               '  `*ticket status <id> <open|in_progress|resolved|closed>` – Update status',
-              '  `*ticket assign <id> <userId>` – Assign ticket to user',
+              '  `*ticket assign <id> <userId|@username>` – Assign ticket to user',
               '  `*ticket resolve <id>` – Mark ticket as resolved',
               '  `*ticket delete <id>` – Delete a ticket',
             ].join('\n'),
@@ -255,10 +257,13 @@ export class TicketCommandHandler {
     message: ManagedMessage,
   ): Promise<void> {
     const ticketId = this.parseId(args[1]);
-    const assigneeUserId = args[2];
+    const rawIdentifier = args[2];
 
-    if (ticketId == null || !assigneeUserId) {
-      await this.reply(message, 'Usage: `*ticket assign <id> <userId>`');
+    if (ticketId == null || !rawIdentifier) {
+      await this.reply(
+        message,
+        'Usage: `*ticket assign <id> <userId|@username>`',
+      );
       return;
     }
 
@@ -267,10 +272,21 @@ export class TicketCommandHandler {
         senderId,
       );
 
+    const targetIdentifier =
+      this.getMentionedUserIdentifier(rawIdentifier, message) ??
+      rawIdentifier.replace(/^@/, '').trim();
+    const targetUser =
+      await this.userService.findByIdentifier(targetIdentifier);
+
+    if (!targetUser) {
+      await this.reply(message, `User **${rawIdentifier}** not found.`);
+      return;
+    }
+
     const ticket = await this.ticketService.updateTicket(
       context.projectId,
       ticketId,
-      { assigneeUserId },
+      { assigneeUserId: targetUser.id },
     );
 
     if (!ticket) {
@@ -280,7 +296,7 @@ export class TicketCommandHandler {
 
     await this.reply(
       message,
-      `✅ Ticket **#${ticket.id}** assigned to **${ticket.assigneeUserId}**.`,
+      `✅ Ticket **#${ticket.id}** assigned to **${targetUser.name ?? targetUser.mezonId}**.`,
     );
   }
 
@@ -381,6 +397,60 @@ export class TicketCommandHandler {
     if (!value) return null;
     const id = Number(value);
     return Number.isInteger(id) && id > 0 ? id : null;
+  }
+
+  private getMentionedUserIdentifier(
+    identifier: string,
+    message: ManagedMessage,
+  ): string | null {
+    const normalized = identifier.trim();
+    if (!normalized.startsWith('@')) {
+      return null;
+    }
+
+    const mentionName = normalized.slice(1).trim().toLowerCase();
+    if (!mentionName) {
+      return null;
+    }
+
+    const raw = message.raw as any;
+    const mentions = Array.isArray(raw?.mentions) ? raw.mentions : [];
+    const contentText = String(raw?.content?.t || '').trim();
+
+    const matched = mentions.find((item: any) => {
+      const candidateValues = [
+        item.user_id,
+        item.id,
+        item.username,
+        item.display_name,
+        item.name,
+        item.user_name,
+      ]
+        .filter(Boolean)
+        .map((itemValue: any) => String(itemValue).trim().toLowerCase())
+        .map((itemValue: string) =>
+          itemValue.startsWith('@') ? itemValue.slice(1) : itemValue,
+        );
+
+      if (
+        typeof item.s === 'number' &&
+        typeof item.e === 'number' &&
+        contentText.length >= item.e
+      ) {
+        const rangeText = String(contentText.slice(item.s, item.e))
+          .trim()
+          .toLowerCase();
+        if (rangeText) {
+          candidateValues.push(
+            rangeText.startsWith('@') ? rangeText.slice(1) : rangeText,
+          );
+        }
+      }
+
+      return candidateValues.includes(mentionName);
+    });
+
+    return matched?.user_id || matched?.id || null;
   }
 
   private getErrorMessage(error: unknown): string {

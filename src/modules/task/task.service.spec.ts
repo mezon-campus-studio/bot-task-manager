@@ -333,6 +333,37 @@ describe(TaskService.name, () => {
     });
   });
 
+  it('should assign a project task to an active member of a team in the project', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: null,
+      projectId,
+      reporterUserId,
+      teamId: null,
+      title: 'Coordinate team-wide project handoff',
+    });
+    const team = await factory.team({
+      projectId,
+      slug: 'project-task-team-access',
+    });
+
+    await factory.teamMember({
+      status: TeamMemberStatus.ACTIVE,
+      teamId: team.id,
+      userId: assignee.id,
+    });
+
+    const updatedTask = await taskService.assignTask(task.id, assignee.id);
+
+    expect(updatedTask).toMatchObject({
+      assigneeUserId: assignee.id,
+      id: task.id,
+      projectId,
+      teamId: null,
+    });
+  });
+
   it('should assign a task to an active team member when the task belongs to a team', async () => {
     const { projectId, reporterUserId, teamId } = await createTeamTaskContext();
     const assignee = await factory.user({});
