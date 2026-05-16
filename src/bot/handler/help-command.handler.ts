@@ -43,12 +43,6 @@ export class HelpCommandHandler {
         case 'note':
           await this.showNoteHelp(message);
           return;
-        case 'role':
-          await this.showRoleHelp(message);
-          return;
-        case 'permission':
-          await this.showPermissionHelp(message);
-          return;
         default:
           await this.showGeneralHelp(message);
       }
@@ -109,8 +103,7 @@ export class HelpCommandHandler {
         '  `*task list` – List tasks',
         '  `*task assign <taskId> <userId|@userName>` – Assign task',
         '  `*task detail <taskId>` – View task details',
-        '  `*task status <taskId> <status>` – Update task status (to-do, in-progress, completed, closed)',
-        '  `*task complete <taskId>` – Complete task',
+        '  `*task status <taskId> <status>` – Update task status (todo, in_progress, done, cancelled)',
         '  `*task delete <taskId>` – Prepare delete confirmation',
         '  `*task confirm delete <taskId>` – Confirm task deletion',
         '',
@@ -124,10 +117,6 @@ export class HelpCommandHandler {
         '  `*note confirm delete <noteId>` – Confirm note deletion',
         '  `*note pin <noteId>` / `*note unpin <noteId>` – Pin or unpin your note',
         '  `*note share <noteId>` / `*note unshare <noteId>` – Share or unshare your note',
-        '',
-        '**Role & Permission Management:**',
-        '  `*role delete <roleId>` / `*role confirm delete <roleId>`',
-        '  `*permission delete <permissionId>` / `*permission confirm delete <permissionId>`',
         '',
         'Use `*help <category>` for detailed help (e.g., `*help user`).',
       ].join('\n'),
@@ -216,8 +205,7 @@ export class HelpCommandHandler {
         '  `*task create <title...>` – Create a new task',
         '  `*task list` – List tasks in current project',
         '  `*task assign <taskId> <userId|@userName>` – Assign task to user',
-        '  `*task status <taskId> <status>` – Update task status',
-        '  `*task complete <taskId>` – Mark task as completed',
+        '  `*task status <taskId> <status>` – Update task status (todo, in_progress, done, cancelled)',
         '  `*task delete <taskId>` – Prepare delete confirmation',
         '  `*task confirm delete <taskId>` – Confirm task deletion',
       ].join('\n'),
@@ -238,36 +226,6 @@ export class HelpCommandHandler {
         '  `*note confirm delete <id>` – Confirm note deletion',
         '  `*note pin <id>` / `*note unpin <id>` – Pin or unpin your note',
         '  `*note share <id>` / `*note unshare <id>` – Share or unshare your note',
-      ].join('\n'),
-    );
-  }
-
-  private async showRoleHelp(message: ManagedMessage): Promise<void> {
-    await this.reply(
-      message,
-      [
-        '🔐 **Role Commands:**',
-        '  `*role list [SYSTEM|PROJECT|TEAM]` – List roles',
-        '  `*role detail <id|key>` – View role detail',
-        '  `*role create <key> <SYSTEM|PROJECT|TEAM> <name...>` – Create role (PM only)',
-        '  `*role update <id> <key|name|scope|description> <value...>` – Update role (PM only)',
-        '  `*role delete <id>` – Prepare delete confirmation (PM only)',
-        '  `*role confirm delete <id>` – Confirm role deletion (PM only)',
-      ].join('\n'),
-    );
-  }
-
-  private async showPermissionHelp(message: ManagedMessage): Promise<void> {
-    await this.reply(
-      message,
-      [
-        '🛡️ **Permission Commands:**',
-        '  `*permission list` – List permissions',
-        '  `*permission detail <id|key>` – View permission detail',
-        '  `*permission create <key> <resource> <action> [description...]` – Create permission (PM only)',
-        '  `*permission update <id> <key|resource|action|description> <value...>` – Update permission (PM only)',
-        '  `*permission delete <id>` – Prepare delete confirmation (PM only)',
-        '  `*permission confirm delete <id>` – Confirm permission deletion (PM only)',
       ].join('\n'),
     );
   }
