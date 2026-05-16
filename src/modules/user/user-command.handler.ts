@@ -10,6 +10,11 @@ import {
 } from '@src/libs/nezon';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import {
+  mapMezonRoleToUserRole,
+  normalizeUserRole,
+  resolveBestMezonRoleForUser,
+} from './user-role.utils';
 import UserEntity from './user.entity';
 import { UserService } from './user.service';
 
@@ -263,7 +268,7 @@ export class UserCommandHandler {
       const mentionRoleId = String((mention as any).role_id || '').trim();
 
       if (mentionRoleName) {
-        internalRole = this.mapMezonRoleToUserRole(mentionRoleName);
+        internalRole = mapMezonRoleToUserRole(mentionRoleName);
       } else if (mentionRoleId && mentionRoleId !== '0') {
         try {
           const rolesData = await (clan as any).listRoles?.();
@@ -275,7 +280,7 @@ export class UserCommandHandler {
             memberRole?.name || memberRole?.rolename || '',
           ).trim();
           if (roleName) {
-            internalRole = this.mapMezonRoleToUserRole(roleName);
+            internalRole = mapMezonRoleToUserRole(roleName);
           }
         } catch (e) {
           this.logger.debug(
@@ -347,42 +352,11 @@ export class UserCommandHandler {
         return user;
       }
 
-      let hasRoleInClan = false;
-      let resolvedRole = UserRole.UK;
+      const resolvedRole = resolveBestMezonRoleForUser(roles, user.mezonId);
 
-      for (const role of roles) {
-        const roleUsers =
-          role?.role_user_list?.role_users ?? role?.role_users ?? [];
-        if (!Array.isArray(roleUsers)) {
-          continue;
-        }
-
-        const isMember = roleUsers.some((member: any) => {
-          const userId = String(member?.id || member?.user_id || '').trim();
-          return userId === user.mezonId;
-        });
-
-        if (!isMember) {
-          continue;
-        }
-
-        hasRoleInClan = true;
-        const roleName = String(
-          role?.title || role?.name || role?.rolename || role?.role_label || '',
-        ).trim();
-        resolvedRole = this.mapMezonRoleToUserRole(roleName);
-        break;
-      }
-
-      if (user.role !== resolvedRole) {
+      if (normalizeUserRole(user.role) !== resolvedRole) {
         return await this.userService.upsertByMezonId(user.mezonId, {
           role: resolvedRole,
-        });
-      }
-
-      if (!hasRoleInClan && user.role !== UserRole.UK) {
-        return await this.userService.upsertByMezonId(user.mezonId, {
-          role: UserRole.UK,
         });
       }
     } catch (error) {
@@ -394,8 +368,12 @@ export class UserCommandHandler {
     return user;
   }
 
-  private getRoleLabel(role: UserRole): string {
-    switch (role) {
+  private getRoleLabel(
+    role: UserRole | string | number | null | undefined,
+  ): string {
+    switch (Number(role)) {
+      case UserRole.ADMIN:
+        return 'Administrator';
       case UserRole.PM:
         return 'Project Manager';
       case UserRole.DEV:
@@ -405,37 +383,6 @@ export class UserCommandHandler {
       default:
         return 'Member';
     }
-  }
-
-  private mapMezonRoleToUserRole(roleName: string): UserRole {
-    const normalized = roleName.trim().toUpperCase();
-
-    if (
-      normalized.includes('OWNER') ||
-      normalized.includes('ADMIN') ||
-      normalized.includes('ADMINISTRATOR')
-    ) {
-      return UserRole.PM;
-    }
-
-    if (
-      normalized.includes('MANAGER') ||
-      normalized.includes('PROJECT') ||
-      normalized.includes('PM') ||
-      normalized.includes('PR')
-    ) {
-      return UserRole.PM;
-    }
-
-    if (normalized.includes('DEV') || normalized.includes('DEVELOPER')) {
-      return UserRole.DEV;
-    }
-
-    if (normalized.includes('QA')) {
-      return UserRole.QA;
-    }
-
-    return UserRole.UK;
   }
 
   private normalizeUserIdentifier(

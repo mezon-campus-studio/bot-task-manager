@@ -6,6 +6,10 @@ import {
 } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
+import {
+  normalizeUserRole,
+  resolveBestMezonRoleForUser,
+} from '@src/modules/user/user-role.utils';
 import { UserService } from '@src/modules/user/user.service';
 
 @Injectable()
@@ -37,7 +41,7 @@ export class NezonAuthGuard implements CanActivate {
       return false;
     }
 
-    if (user.role !== role) {
+    if (normalizeUserRole(user.role) !== role) {
       this.logger.log(
         `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
       );
@@ -69,64 +73,11 @@ export class NezonAuthGuard implements CanActivate {
         return UserRole.UK;
       }
 
-      for (const role of roles) {
-        const roleUsers =
-          role?.role_user_list?.role_users ?? (role as any)?.role_users ?? [];
-        if (!Array.isArray(roleUsers)) {
-          continue;
-        }
-
-        const isMember = roleUsers.some((member: any) => {
-          const userId = String(member?.id || member?.user_id || '').trim();
-          return userId === mezonId;
-        });
-
-        if (isMember) {
-          const roleName = String(
-            role?.title ||
-              role?.name ||
-              role?.rolename ||
-              role?.role_label ||
-              '',
-          ).trim();
-          return this.mapMezonRoleToUserRole(roleName);
-        }
-      }
+      return resolveBestMezonRoleForUser(roles, mezonId);
     } catch (error) {
       this.logger.debug(
         `NezonAuthGuard: Could not resolve clan role for ${mezonId}: ${(error as Error).message}`,
       );
-    }
-
-    return UserRole.UK;
-  }
-
-  private mapMezonRoleToUserRole(roleName: string): UserRole {
-    const normalized = roleName.trim().toUpperCase();
-
-    if (
-      normalized.includes('OWNER') ||
-      normalized.includes('ADMIN') ||
-      normalized.includes('ADMINISTRATOR')
-    ) {
-      return UserRole.ADMIN;
-    }
-
-    if (
-      normalized.includes('MANAGER') ||
-      normalized.includes('PROJECT') ||
-      normalized.includes('PM') ||
-      normalized.includes('PR')
-    ) {
-      return UserRole.PM;
-    }
-
-    if (normalized.includes('DEV') || normalized.includes('DEVELOPER')) {
-      return UserRole.DEV;
-    }
-
-    if (normalized.includes('QA')) {
-      return UserRole.QA;
     }
 
     return UserRole.UK;

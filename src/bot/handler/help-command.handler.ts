@@ -66,6 +66,8 @@ export class HelpCommandHandler {
         '  `*project create <slug> <name...>` – Create a new project',
         '  `*project use <projectId|projectSlug>` – Select a project',
         '  `*project current` – Show current project',
+        '  `*project delete <projectId|projectSlug>` – Prepare delete confirmation',
+        '  `*project confirm delete <projectId|projectSlug>` – Confirm project deletion',
         '  `*project exit` – Exit current project',
         '',
         '**Team Management:**',
@@ -116,10 +118,12 @@ export class HelpCommandHandler {
       message,
       [
         '📁 **Project Commands:**',
-        '  `*project list` – List all projects you own',
+        '  `*project list` – List all projects you can access',
         '  `*project create <slug> <name...>` – Create a new project',
         '  `*project use <projectId|projectSlug>` – Select a project to work with',
         '  `*project current` – Show your current selected project',
+        '  `*project delete <projectId|projectSlug>` – Prepare delete confirmation',
+        '  `*project confirm delete <projectId|projectSlug>` – Confirm project deletion',
         '  `*project exit` – Exit the current project',
       ].join('\n'),
     );

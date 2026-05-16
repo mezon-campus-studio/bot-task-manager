@@ -45,6 +45,19 @@ export class ProjectCommandHandler {
         case 'list':
           await this.listProjects(senderId, message, ctx);
           return;
+        case 'delete':
+          await this.prepareDeleteProject(args, message, ctx);
+          return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteProject(args, message, ctx);
+            return;
+          }
+          await this.reply(
+            message,
+            'Usage: `*project confirm delete <projectId|projectSlug>`',
+          );
+          return;
         case 'use':
           await this.useProject(args, senderId, message);
           return;
@@ -59,10 +72,12 @@ export class ProjectCommandHandler {
             message,
             [
               '📁 **Project Commands:**',
-              '  `*project list` – List all projects you own',
+              '  `*project list` – List all projects you can access',
               '  `*project create <slug> <name...>` – Create a new project',
               '  `*project use <projectId|projectSlug>` – Select a project to work with',
               '  `*project current` – Show current selected project',
+              '  `*project delete <projectId|projectSlug>` – Prepare delete confirmation',
+              '  `*project confirm delete <projectId|projectSlug>` – Confirm project deletion',
               '  `*project exit` – Exit current project',
             ].join('\n'),
           );
@@ -88,27 +103,31 @@ export class ProjectCommandHandler {
       return;
     }
 
-    // Get user's own projects
+    const accessibleProjects =
+      await this.projectService.listAccessibleProjectsForUser(dbUser.id);
+
     const ownedProjects = await this.projectService.findByOwnerUserId(
       dbUser.id,
     );
+    const ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
 
     // Get all projects
     const allProjects = await this.projectService.listProjects();
 
     let response = '📁 **Your Projects:**';
-    if (ownedProjects.length > 0) {
-      const ownedLines = ownedProjects.map(
-        (p) => `  [#${p.id}] ${p.name} (${p.slug}) ⭐`,
+    if (accessibleProjects.length > 0) {
+      const accessibleLines = accessibleProjects.map(
+        (p) =>
+          `  [#${p.id}] ${p.name} (${p.slug})${ownedProjectIds.has(p.id) ? ' ⭐' : ''}`,
       );
-      response += '\n' + ownedLines.join('\n');
+      response += '\n' + accessibleLines.join('\n');
     } else {
       response += '\n  You have no projects yet.';
     }
 
-    // Show all projects if there are any besides user's own
+    // Show all projects if there are any besides user's accessible projects
     const otherProjects = allProjects.filter(
-      (p) => !ownedProjects.some((op) => op.id === p.id),
+      (p) => !accessibleProjects.some((ap) => ap.id === p.id),
     );
     if (otherProjects.length > 0) {
       response += '\n\n📁 **All Projects:**';
@@ -135,10 +154,7 @@ export class ProjectCommandHandler {
       return;
     }
 
-    if (
-      Number(dbUser.role) !== UserRole.PM &&
-      Number(dbUser.role) !== UserRole.ADMIN
-    ) {
+    if (!this.isProjectManager(dbUser)) {
       await this.reply(
         message,
         '❌ Only project managers and administrators can create projects.',
@@ -174,6 +190,87 @@ export class ProjectCommandHandler {
     await this.reply(
       message,
       `✅ Created project **${project.name}** (\`${project.slug}\`). Use \`*project use ${project.slug}\` to select it.`,
+    );
+  }
+
+  private async prepareDeleteProject(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+
+    if (!this.isProjectManager(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can delete projects.',
+      );
+      return;
+    }
+
+    const projectKey = args[1];
+    if (!projectKey) {
+      await this.reply(
+        message,
+        'Project key is required.\nUsage: `*project delete <projectId|projectSlug>`',
+      );
+      return;
+    }
+
+    const project = await this.findProjectByIdentifier(projectKey);
+    if (!project) {
+      await this.reply(message, `Project **${projectKey}** not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `🗑️ Are you sure you want to delete project **${project.name}** (\`${project.slug}\`)?`,
+        `Run: \`*project confirm delete ${project.id}\` to complete the deletion.`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteProject(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+
+    if (!this.isProjectManager(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can delete projects.',
+      );
+      return;
+    }
+
+    const projectKey = args[2];
+    if (!projectKey) {
+      await this.reply(
+        message,
+        'Project key is required.\nUsage: `*project confirm delete <projectId|projectSlug>`',
+      );
+      return;
+    }
+
+    const project = await this.findProjectByIdentifier(projectKey);
+    if (!project) {
+      await this.reply(message, `Project **${projectKey}** not found.`);
+      return;
+    }
+
+    const deleted = await this.projectService.deleteProject(project.id);
+    if (!deleted) {
+      await this.reply(message, `Project **${projectKey}** not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      `🗑️ Project **${project.name}** (\`${project.slug}\`) was deleted.`,
     );
   }
 
@@ -252,6 +349,25 @@ export class ProjectCommandHandler {
     }
 
     return 'Project command failed.';
+  }
+
+  private async findProjectByIdentifier(projectKey: string) {
+    const normalizedProjectKey = projectKey.trim();
+
+    if (!normalizedProjectKey) {
+      return null;
+    }
+
+    if (/^\d+$/.test(normalizedProjectKey)) {
+      return this.projectService.findById(Number(normalizedProjectKey));
+    }
+
+    return this.projectService.findBySlug(normalizedProjectKey);
+  }
+
+  private isProjectManager(dbUser: any): boolean {
+    const role = Number(dbUser?.role);
+    return role === UserRole.PM || role === UserRole.ADMIN;
   }
 
   private async reply(message: ManagedMessage, content: string): Promise<void> {

@@ -5,11 +5,6 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
-import { ProjectMemberService } from '@src/modules/project-member/project-member.service';
-import { TeamService } from '@src/modules/team/team.service';
-import { TeamMemberStatus as TeamMemberStatusEnum } from '@src/modules/team-member/enums/team-member-status.enum';
-import { TeamMemberService } from '@src/modules/team-member/team-member.service';
 import UserEntity from '@src/modules/user/user.entity';
 import { UserService } from '@src/modules/user/user.service';
 import ProjectEntity from './project.entity';
@@ -36,11 +31,8 @@ export class ProjectContextService {
   private readonly logger = new Logger(ProjectContextService.name);
 
   constructor(
-    private readonly projectMemberService: ProjectMemberService,
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
-    private readonly teamMemberService: TeamMemberService,
-    private readonly teamService: TeamService,
   ) {}
 
   async useProject(input: UseProjectInput): Promise<UserEntity> {
@@ -319,40 +311,19 @@ export class ProjectContextService {
     projectId: number,
     userId: string,
   ): Promise<void> {
-    const membership = await this.projectMemberService.findByProjectAndUser(
+    const canAccessProject = await this.projectService.canUserAccessProject(
       projectId,
       userId,
     );
 
-    if (membership?.status === ProjectMemberStatus.ACTIVE) {
-      return;
-    }
-
-    // Check if user is a member of any team in the project
-    const teamMemberships = await this.teamMemberService.find({
-      where: { userId },
-    });
-
-    const isTeamMember = await Promise.all(
-      teamMemberships.map(async (tm) => {
-        if (tm.status !== TeamMemberStatusEnum.ACTIVE) {
-          return false;
-        }
-
-        const team = await this.teamService.findById(tm.teamId);
-        return team?.projectId === projectId;
-      }),
-    ).then((results) => results.some(Boolean));
-
-    if (isTeamMember) {
+    if (canAccessProject) {
       return;
     }
 
     this.logger.log({
       log: 'Use project failed because user is not an active project member or team member',
       projectId,
-      projectMembershipStatus: membership?.status ?? null,
-      isTeamMember,
+      canAccessProject,
       userId,
     });
 
