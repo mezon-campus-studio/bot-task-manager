@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import entities from '@src/common/database/entities';
@@ -8,9 +9,15 @@ import { DatabaseSeeder } from './database.seeder';
 
 @Module({
   imports: [
+    // Ensure ConfigService injection works even when the seed script creates
+    // the Nest context outside the normal app bootstrap path.
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
     SharedModule,
     TypeOrmModule.forRootAsync({
-      imports: [SharedModule],
+      imports: [SharedModule, ConfigModule],
       useFactory: (configService: AppConfigService) =>
         configService.postgresConfig,
       inject: [AppConfigService],

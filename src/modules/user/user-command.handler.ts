@@ -10,6 +10,7 @@ import {
 } from '@src/libs/nezon';
 import { NezonCommandContext } from '@src/libs/nezon/interfaces/command-context.interface';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import { UserStatus } from './enum/user-status.enum';
 import {
   mapMezonRoleToUserRole,
   resolveBestMezonRoleForUser,
@@ -262,11 +263,15 @@ export class UserCommandHandler {
         return;
       }
 
-      const existingUser = await this.userService.findByMezonId(mezonId);
-      if (existingUser) {
+      const existingUser = await this.userService.findByMezonId(mezonId, true);
+      if (
+        existingUser &&
+        existingUser.status !== null &&
+        existingUser.status !== UserStatus.DELETED
+      ) {
         await this.reply(
           message,
-          `ℹ️ User already exists in the system (Mezon ID: ${mezonId}).`,
+          `ℹ️ Create Administrator user (Mezon ID: ${mezonId}).`,
         );
         return;
       }
