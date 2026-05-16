@@ -101,44 +101,57 @@ export class NoteCommandHandler {
     const resourceType = this.parseResourceType(args[1]);
     const resourceId = args[2];
 
-    if (!resourceType || !resourceId) {
-      await this.reply(
-        message,
-        'Usage: `*note list <USER|PROJECT|TEAM|TASK|TICKET|EVENT> <resourceId>`',
-      );
-      return;
-    }
-
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
-    const notes = await this.noteService.listByResource(
-      context.projectId,
-      resourceType,
-      resourceId,
-    );
+    const isFiltered = !!resourceType && !!resourceId;
+
+    const notes = isFiltered
+      ? await this.noteService.listByResource(
+          context.projectId,
+          resourceType as NoteResourceType,
+          resourceId as string,
+        )
+      : await this.noteService.listByProject(context.projectId);
 
     if (!notes.length) {
+      if (isFiltered) {
+        await this.reply(
+          message,
+          `No notes found for ${resourceType} **${resourceId}** in project **${context.project.name}**.`,
+        );
+        return;
+      }
+
       await this.reply(
         message,
-        `No notes found for ${resourceType} **${resourceId}** in project **${context.project.name}**.`,
+        `No notes found in project **${context.project.name}**.`,
       );
       return;
     }
 
-    const lines = notes.map(
-      (note) =>
-        `  [#${note.id}] ${this.formatNoteFlags(note)} ${this.truncate(note.content, 80)}`,
-    );
+    const lines = notes.map((note) => {
+      // Khi không truyền resourceType/resourceId: chỉ show id + resourceType + resourceId, không show content
+      if (!isFiltered) {
+        return `  [#${note.id}] ${this.formatNoteFlags(note)} ${note.resourceType} **${note.resourceId}**`;
+      }
+
+      // Khi truyền đủ: show content (giữ yêu cầu của bạn) và vẫn có resourceType/resourceId/id
+      return `  [#${note.id}] ${this.formatNoteFlags(note)} ${note.resourceType} **${note.resourceId}** ${this.truncate(note.content, 80)}`;
+    });
 
     await this.reply(
       message,
-      [
-        `Notes for ${resourceType} **${resourceId}** in **${context.project.name}**:`,
-        ...lines,
-      ].join('\n'),
+      isFiltered
+        ? [
+            `Notes for ${resourceType} **${resourceId}** in **${context.project.name}**:`,
+            ...lines,
+          ].join('\n')
+        : [`All notes in project **${context.project.name}**:`, ...lines].join(
+            '\n',
+          ),
     );
   }
 
