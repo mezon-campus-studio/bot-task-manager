@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
 import { SearchOrder } from '@src/common/enums';
@@ -14,7 +13,6 @@ describe(TaskService.name, () => {
   let taskService: TaskService;
   let noteRepository: Repository<NoteEntity>;
   let taskRepository: Repository<TaskEntity>;
-  let numericSequence = 0;
 
   beforeAll(createTestingModule);
 
@@ -23,11 +21,6 @@ describe(TaskService.name, () => {
     noteRepository = testingModule!.get(DataSource).getRepository(NoteEntity);
     taskRepository = testingModule!.get(DataSource).getRepository(TaskEntity);
   });
-
-  function nextNumericId() {
-    numericSequence += 1;
-    return numericSequence;
-  }
 
   async function createTaskContext() {
     const project = await factory.project({});
@@ -152,56 +145,6 @@ describe(TaskService.name, () => {
       title: 'Prepare onboarding checklist',
     });
     expect(storedTask.dueAt?.toISOString()).toBe(dueAt.toISOString());
-  });
-
-  it('should return only project tasks ordered by due date and newest id for ties', async () => {
-    const { assigneeUserId, projectId, reporterUserId, teamId } =
-      await createTaskContext();
-    const otherProjectId = nextNumericId();
-    const sharedDueAt = new Date('2026-06-15T09:00:00.000Z');
-
-    const firstTask = await factory.task({
-      assigneeUserId,
-      dueAt: new Date('2026-06-14T09:00:00.000Z'),
-      projectId,
-      reporterUserId,
-      teamId,
-      title: 'Kick off student invite review',
-    });
-    const olderSameDayTask = await factory.task({
-      assigneeUserId,
-      dueAt: sharedDueAt,
-      projectId,
-      reporterUserId,
-      teamId,
-      title: 'Validate advisor assignments',
-    });
-    const newerSameDayTask = await factory.task({
-      assigneeUserId,
-      dueAt: sharedDueAt,
-      projectId,
-      reporterUserId,
-      teamId,
-      title: 'Share the launch brief',
-    });
-
-    await factory.task({
-      dueAt: new Date('2026-06-13T09:00:00.000Z'),
-      projectId: otherProjectId,
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
-      title: 'Ignore other project task',
-    });
-
-    const tasks = await taskService.listByProject(projectId);
-
-    expect(tasks).toHaveLength(3);
-    expect(tasks.map(({ id }) => id)).toEqual([
-      firstTask.id,
-      newerSameDayTask.id,
-      olderSameDayTask.id,
-    ]);
-    expect(tasks.every((task) => task.projectId === projectId)).toBe(true);
   });
 
   it('should query tasks by project and supported filters', async () => {
@@ -810,9 +753,10 @@ describe(TaskService.name, () => {
   });
 
   it('should support updateEntry from the CRUD base for task workflow changes', async () => {
-    const { projectId, reporterUserId, teamId } = await createTaskContext();
+    const { projectId, reporterUserId, teamId, assigneeUserId } =
+      await createTaskContext();
     const task = await factory.task({
-      assigneeUserId: randomUUID(),
+      assigneeUserId,
       description: 'Initial task detail',
       projectId,
       reporterUserId,

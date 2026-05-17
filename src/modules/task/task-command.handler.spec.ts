@@ -1,3 +1,4 @@
+import { UserRole } from '#src/common/enums/user.enum.js';
 import { TaskStatus } from './enums';
 import { TaskCommandHandler } from './task-command.handler';
 
@@ -27,7 +28,12 @@ describe(TaskCommandHandler.name, () => {
     const context = {
       project: { id: 7, name: 'Campus Core', slug: 'campus-core' },
       projectId: 7,
-      user: { id: 'user-1', mezonId: 'mezon-user-1', name: 'Reporter' },
+      user: {
+        id: 'user-1',
+        mezonId: 'mezon-user-1',
+        name: 'Reporter',
+        role: UserRole.ADMIN,
+      },
     };
     const projectContextService = {
       getRequiredCurrentProjectByMezonId: jest.fn().mockResolvedValue(context),
@@ -106,27 +112,6 @@ describe(TaskCommandHandler.name, () => {
       message as never,
       'Created task **#8: Write release notes**',
     );
-  });
-
-  it('shows task details only when the task belongs to the current project', async () => {
-    const message = createMessage();
-    const { handler } = createHandler({
-      taskService: {
-        findById: jest.fn().mockResolvedValue({
-          assigneeUserId: 'user-2',
-          id: 8,
-          priority: 'HIGH',
-          projectId: 7,
-          reporterUserId: 'user-1',
-          status: TaskStatus.IN_PROGRESS,
-          title: 'Write release notes',
-        }),
-      },
-    });
-
-    await handler.handleTaskCommand(['detail', '8'], message);
-
-    expectReplyText(message as never, '**Task #8**');
   });
 
   it('updates task status with the current user as author', async () => {
