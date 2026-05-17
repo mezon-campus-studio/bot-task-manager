@@ -129,7 +129,7 @@ describe(ProjectCommandHandler.name, () => {
     expect(projectService.deleteProject).not.toHaveBeenCalled();
     expectReplyText(
       message as never,
-      'Only project managers and administrators can delete projects.',
+      'Only administrators can delete projects.',
     );
   });
 
@@ -147,7 +147,7 @@ describe(ProjectCommandHandler.name, () => {
     });
 
     await handler.handleProjectCommand(['confirm', 'delete', '12'], message, {
-      dbUser: { id: 'pm-user', role: UserRole.PM },
+      dbUser: { id: 'admin-user', role: UserRole.ADMIN },
     } as never);
 
     expect(projectService.deleteProject).toHaveBeenCalledWith(12);

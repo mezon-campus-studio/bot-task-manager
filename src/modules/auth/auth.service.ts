@@ -120,7 +120,6 @@ export class AuthService {
     if (!refreshToken) {
       throw new BadRequestException('No refresh token provided');
     }
-    // Simple implementation for now: verify and resign
     try {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.appConfigService.jwtConfig.refreshSecret,

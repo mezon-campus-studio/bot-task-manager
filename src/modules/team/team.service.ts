@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { EntityManager, Not, Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import TaskEntity from '@src/modules/task/task.entity';
 import TeamMemberEntity from '@src/modules/team-member/team-member.entity';
@@ -33,23 +33,57 @@ export class TeamService extends CRUDService<TeamEntity> {
   async createTeam(input: CreateTeamInput): Promise<TeamEntity> {
     return await this.teamRepository.manager.transaction(
       async (transactionalEntityManager) => {
-        const existingTeam = await transactionalEntityManager.findOne(
-          TeamEntity,
-          {
-            where: [
-              { projectId: input.projectId, slug: input.slug },
-              { projectId: input.projectId, name: input.name },
-            ],
-          },
-        );
+        const matches = await transactionalEntityManager.find(TeamEntity, {
+          where: [
+            { projectId: input.projectId, slug: input.slug },
+            { projectId: input.projectId, name: input.name },
+          ],
+          withDeleted: true,
+        });
 
-        if (existingTeam) {
+        const slugMatch = matches.find((t) => t.slug === input.slug);
+        const nameMatch = matches.find((t) => t.name === input.name);
+
+        const activeSlug = slugMatch?.deletedAt === null ? slugMatch : null;
+        const activeName = nameMatch?.deletedAt === null ? nameMatch : null;
+
+        if (activeSlug) {
           throw new ConflictException(
-            `Team or slug or name already exists in project ${input.projectId}`,
+            `Team with slug "${input.slug}" already exists in this project.`,
+          );
+        }
+        if (activeName) {
+          throw new ConflictException(
+            `Team with name "${input.name}" already exists in this project.`,
           );
         }
 
-        if (input.isDefault) {
+        const isSameRecord =
+          slugMatch && nameMatch && slugMatch.id === nameMatch.id;
+
+        if (isSameRecord) {
+          return await this.restoreTeam(
+            transactionalEntityManager,
+            slugMatch!,
+            input,
+          );
+        }
+
+        if (slugMatch || nameMatch) {
+          const conflictFields = [
+            slugMatch ? `slug "${input.slug}"` : null,
+            nameMatch ? `name "${input.name}"` : null,
+          ]
+            .filter(Boolean)
+            .join(' and ');
+
+          throw new ConflictException(
+            `Team with ${conflictFields} conflicts with existing records in this project. ` +
+              `Please use different values or contact an admin to clean up deleted teams.`,
+          );
+        }
+
+        if (input.isDefault === true) {
           await transactionalEntityManager.update(
             TeamEntity,
             { projectId: input.projectId, isDefault: true },
@@ -57,16 +91,44 @@ export class TeamService extends CRUDService<TeamEntity> {
           );
         }
 
-        const team = transactionalEntityManager.create(TeamEntity, {
-          ...input,
-          description: input.description ?? null,
-          isDefault: input.isDefault ?? false,
-          leaderId: input.leaderId ?? null,
-        });
-
-        return await transactionalEntityManager.save(team);
+        const newTeam = transactionalEntityManager.create(TeamEntity, input);
+        return await transactionalEntityManager.save(TeamEntity, newTeam);
       },
     );
+  }
+
+  private async restoreTeam(
+    em: EntityManager,
+    team: TeamEntity,
+    input: CreateTeamInput,
+  ): Promise<TeamEntity> {
+    this.logger.log({
+      log: 'Restoring soft-deleted team',
+      teamId: team.id,
+      projectId: input.projectId,
+      slug: input.slug,
+      name: input.name,
+    });
+
+    team.deletedAt = null;
+    team.name = input.name;
+    team.slug = input.slug;
+    if (input.description !== undefined) team.description = input.description;
+    if (input.leaderId !== undefined) team.leaderId = input.leaderId;
+    if (input.updatedBy !== undefined) team.updatedBy = input.updatedBy;
+
+    if (input.isDefault === true) {
+      await em.update(
+        TeamEntity,
+        { projectId: input.projectId, isDefault: true },
+        { isDefault: false },
+      );
+      team.isDefault = true;
+    } else {
+      team.isDefault = input.isDefault ?? false;
+    }
+
+    return await em.save(TeamEntity, team);
   }
 
   async findById(id: number): Promise<TeamEntity | null> {
@@ -132,7 +194,10 @@ export class TeamService extends CRUDService<TeamEntity> {
 
     const numericId = Number(normalized);
     if (/^[0-9]+$/.test(normalized) && Number.isInteger(numericId)) {
-      const team = await this.findById(numericId);
+      const team = await this.teamRepository.findOne({
+        where: { id: numericId },
+        relations: ['leader'],
+      });
       if (team?.projectId === projectId) {
         return team;
       }
@@ -141,19 +206,28 @@ export class TeamService extends CRUDService<TeamEntity> {
     if (normalized.startsWith('@')) {
       const slug = normalized.slice(1).trim();
       if (slug) {
-        const teamBySlug = await this.findByProjectAndSlug(projectId, slug);
+        const teamBySlug = await this.teamRepository.findOne({
+          where: { projectId, slug },
+          relations: ['leader'],
+        });
         if (teamBySlug) {
           return teamBySlug;
         }
       }
     }
 
-    const teamBySlug = await this.findByProjectAndSlug(projectId, normalized);
+    const teamBySlug = await this.teamRepository.findOne({
+      where: { projectId, slug: normalized },
+      relations: ['leader'],
+    });
     if (teamBySlug) {
       return teamBySlug;
     }
 
-    return this.findByProjectAndName(projectId, normalized);
+    return this.teamRepository.findOne({
+      where: { projectId, name: normalized },
+      relations: ['leader'],
+    });
   }
 
   async findByLeaderId(leaderId: string): Promise<TeamEntity[]> {
@@ -385,6 +459,39 @@ export class TeamService extends CRUDService<TeamEntity> {
 
         team.isDefault = true;
         return transactionalEntityManager.save(team);
+      },
+    );
+  }
+
+  async restoreTeamBySlug(
+    projectId: number,
+    slug: string,
+  ): Promise<TeamEntity> {
+    this.logger.log({
+      log: 'Manual attempt to restore soft-deleted team by slug',
+      projectId,
+      slug,
+    });
+
+    return await this.teamRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const team = await transactionalEntityManager.findOne(TeamEntity, {
+          where: { projectId, slug },
+          withDeleted: true,
+        });
+
+        if (!team) {
+          throw new NotFoundException(`Team with slug "${slug}" not found.`);
+        }
+
+        if (team.deletedAt === null) {
+          throw new ConflictException(
+            `Team with slug "${slug}" is not deleted, no need to restore.`,
+          );
+        }
+
+        team.deletedAt = null;
+        return await transactionalEntityManager.save(TeamEntity, team);
       },
     );
   }

@@ -51,7 +51,7 @@ export class TicketController {
   async getListTicket(
     @Param('projectId', ParseIntPipe) projectId: number,
   ): Promise<TicketResponseDto[]> {
-    const tickets = await this.ticketService.getListTicket(projectId);
+    const tickets = await this.ticketService.listByProject(projectId);
     return plainToInstance(TicketResponseDto, tickets, {
       excludeExtraneousValues: true,
     });
@@ -63,7 +63,7 @@ export class TicketController {
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('id', ParseIntPipe) id: number,
   ): Promise<TicketResponseDto> {
-    const ticket = await this.ticketService.getDetailTicket(projectId, id);
+    const ticket = await this.ticketService.getTicketById(projectId, id);
     return plainToInstance(TicketResponseDto, ticket, {
       excludeExtraneousValues: true,
     });
@@ -87,8 +87,8 @@ export class TicketController {
   async deleteTicket(
     @Param('projectId', ParseIntPipe) projectId: number,
     @Param('id', ParseIntPipe) id: number,
-  ): Promise<boolean> {
-    return this.ticketService.deleteTicket(projectId, id);
+  ): Promise<void> {
+    await this.ticketService.deleteTicket(projectId, id);
   }
 
   @Get('project/:projectId/status/:status')

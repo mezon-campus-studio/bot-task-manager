@@ -79,7 +79,7 @@ export class HelpCommandHandler {
         '**Team Management:**',
         '  `*team list` – List teams in current project',
         '  `*team create <slug> <name> [@leader]` – Create a team',
-        '  `*team info <teamId|slug|@slug>` – View team details',
+        '  `*team detail | info <teamId|slug|@slug>` – View team details',
         '  `*team default <teamId|@slug>` – Set team as default in current project',
         '  `*team delete <teamId|slug|@slug>` – Prepare delete confirmation',
         '  `*team confirm delete <teamId|slug|@slug>` – Confirm delete',

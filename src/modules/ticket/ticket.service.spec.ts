@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
 import { TicketSeverity, TicketStatus } from './enums';
@@ -24,18 +23,24 @@ describe(TicketService.name, () => {
     return numericSequence;
   }
 
-  function createTicketContext() {
+  async function createTicketContext() {
+    const team = await factory.team();
+    const project = await factory.project();
+
+    const reporter = await factory.user();
+    const assignee = await factory.user();
+
     return {
-      assigneeUserId: randomUUID(),
-      projectId: nextNumericId(),
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
+      assigneeUserId: assignee.id,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: team.id,
     };
   }
 
   it('should create a ticket for the active project support queue', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTicketContext();
+      await createTicketContext();
 
     const ticket = await ticketService.createTicket({
       assigneeUserId,
@@ -76,8 +81,8 @@ describe(TicketService.name, () => {
 
   it('should return only project tickets in newest-first order', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTicketContext();
-    const otherProjectId = nextNumericId();
+      await createTicketContext();
+    const otherContext = await createTicketContext();
 
     const olderTicket = await factory.ticket({
       assigneeUserId,
@@ -86,6 +91,7 @@ describe(TicketService.name, () => {
       teamId,
       title: 'Student role is missing',
     });
+
     const newerTicket = await factory.ticket({
       assigneeUserId,
       projectId,
@@ -95,9 +101,9 @@ describe(TicketService.name, () => {
     });
 
     await factory.ticket({
-      projectId: otherProjectId,
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
+      projectId: otherContext.projectId,
+      reporterUserId: otherContext.reporterUserId,
+      teamId: otherContext.teamId,
       title: 'Ignore other project ticket',
     });
 
@@ -115,7 +121,7 @@ describe(TicketService.name, () => {
 
   it('should mark an existing ticket as resolved after the support fix lands', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTicketContext();
+      await createTicketContext();
     const ticket = await factory.ticket({
       assigneeUserId,
       projectId,
@@ -126,7 +132,10 @@ describe(TicketService.name, () => {
       title: 'Advisor sync webhook failed',
     });
 
-    const resolvedTicket = await ticketService.markResolved(ticket.id);
+    const resolvedTicket = await ticketService.markResolved(
+      projectId,
+      ticket.id,
+    );
 
     expect(resolvedTicket).toMatchObject({
       id: ticket.id,
@@ -143,12 +152,14 @@ describe(TicketService.name, () => {
   });
 
   it('should return null when the ticket to resolve does not exist', async () => {
-    await expect(ticketService.markResolved(999_999)).resolves.toBeNull();
+    await expect(
+      ticketService.markResolved(nextNumericId(), 999_999),
+    ).resolves.toBeNull();
     await expect(ticketRepository.count()).resolves.toBe(0);
   });
 
   it('should return a ticket when getDetailTicket finds a match within the project', async () => {
-    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const { projectId, reporterUserId, teamId } = await createTicketContext();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
@@ -156,7 +167,7 @@ describe(TicketService.name, () => {
       title: 'Detail lookup ticket',
     });
 
-    const found = await ticketService.getDetailTicket(projectId, ticket.id);
+    const found = await ticketService.getTicketById(projectId, ticket.id);
 
     expect(found).toMatchObject({
       id: ticket.id,
@@ -166,22 +177,22 @@ describe(TicketService.name, () => {
   });
 
   it('should return null from getDetailTicket when the ticket belongs to a different project', async () => {
-    const { projectId, reporterUserId, teamId } = createTicketContext();
-    const otherProjectId = nextNumericId();
+    const { projectId, reporterUserId, teamId } = await createTicketContext();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
       teamId,
       title: 'Wrong project ticket',
     });
+    const otherProjectId = ticket.projectId + 999_999;
 
     await expect(
-      ticketService.getDetailTicket(otherProjectId, ticket.id),
+      ticketService.getTicketById(otherProjectId, ticket.id),
     ).resolves.toBeNull();
   });
 
   it('should update ticket fields and persist the changes', async () => {
-    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const { projectId, reporterUserId, teamId } = await createTicketContext();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
@@ -214,15 +225,15 @@ describe(TicketService.name, () => {
   });
 
   it('should return null from updateTicket when the ticket does not exist', async () => {
-    const { projectId } = createTicketContext();
+    const { projectId } = await createTicketContext();
 
     await expect(
       ticketService.updateTicket(projectId, 999_999, { title: 'Ghost' }),
     ).resolves.toBeNull();
   });
 
-  it('should soft-delete a ticket and return true', async () => {
-    const { projectId, reporterUserId, teamId } = createTicketContext();
+  it('should soft-delete a ticket', async () => {
+    const { projectId, reporterUserId, teamId } = await createTicketContext();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
@@ -230,25 +241,25 @@ describe(TicketService.name, () => {
       title: 'Ticket to delete',
     });
 
-    const result = await ticketService.deleteTicket(projectId, ticket.id);
+    await ticketService.deleteTicket(projectId, ticket.id);
 
-    expect(result).toBe(true);
     await expect(
       ticketRepository.findOneBy({ id: ticket.id }),
     ).resolves.toBeNull();
   });
 
-  it('should return false from deleteTicket when the ticket does not exist', async () => {
-    const { projectId } = createTicketContext();
+  it('should throw from deleteTicket when the ticket does not exist', async () => {
+    await createTicketContext();
 
-    await expect(ticketService.deleteTicket(projectId, 999_999)).resolves.toBe(
-      false,
-    );
+    const { projectId } = await createTicketContext();
+    await expect(
+      ticketService.deleteTicket(projectId, 999_999),
+    ).rejects.toBeDefined();
   });
 
   it('should support updateSession from the CRUD base for ticket escalation changes', async () => {
-    const { projectId, reporterUserId, teamId } = createTicketContext();
-    const nextAssigneeUserId = randomUUID();
+    const { projectId, reporterUserId, teamId } = await createTicketContext();
+    const nextAssigneeUser = await factory.user();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
@@ -260,7 +271,7 @@ describe(TicketService.name, () => {
 
     const updateSession = ticketService.updateSession(ticket);
 
-    ticket.assigneeUserId = nextAssigneeUserId;
+    ticket.assigneeUserId = nextAssigneeUser.id;
     ticket.severity = TicketSeverity.CRITICAL;
     ticket.status = TicketStatus.IN_PROGRESS;
 
@@ -269,7 +280,7 @@ describe(TicketService.name, () => {
     await expect(
       ticketRepository.findOneByOrFail({ id: ticket.id }),
     ).resolves.toMatchObject({
-      assigneeUserId: nextAssigneeUserId,
+      assigneeUserId: nextAssigneeUser.id,
       id: ticket.id,
       severity: TicketSeverity.CRITICAL,
       status: TicketStatus.IN_PROGRESS,
@@ -277,7 +288,7 @@ describe(TicketService.name, () => {
   });
 
   it('should support updateEntry from the CRUD base for ticket closure updates', async () => {
-    const { projectId, reporterUserId, teamId } = createTicketContext();
+    const { projectId, reporterUserId, teamId } = await createTicketContext();
     const ticket = await factory.ticket({
       description: 'Initial triage note',
       projectId,

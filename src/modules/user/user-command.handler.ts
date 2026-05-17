@@ -140,10 +140,10 @@ export class UserCommandHandler {
   ): Promise<void> {
     const senderUser = (ctx as any).dbUser;
     const senderRole = Number(senderUser?.role);
-    if (senderRole !== UserRole.ADMIN && senderRole !== UserRole.PM) {
+    if (senderRole !== UserRole.ADMIN) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators and project managers.',
+        '❌ This command is only available to administrators.',
       );
       return;
     }
@@ -233,11 +233,8 @@ export class UserCommandHandler {
     try {
       const senderUser = (ctx as any).dbUser;
       const userRole = Number(senderUser?.role);
-      if (userRole !== UserRole.PM && userRole !== UserRole.ADMIN) {
-        await this.reply(
-          message,
-          '❌ Only project managers and administrators can create users.',
-        );
+      if (userRole !== UserRole.ADMIN) {
+        await this.reply(message, '❌ Only administrators can create users.');
         return;
       }
 
@@ -265,11 +262,14 @@ export class UserCommandHandler {
         existingUser.status !== null &&
         existingUser.status !== UserStatus.DELETED
       ) {
-        await this.reply(
-          message,
-          `ℹ️ Create Administrator user (Mezon ID: ${mezonId}).`,
-        );
-        return;
+        const isNewBootstrap = (ctx as any).isNewBootstrap === true;
+        if (!isNewBootstrap) {
+          await this.reply(
+            message,
+            `ℹ️ User already exists (Mezon ID: ${mezonId}).`,
+          );
+          return;
+        }
       }
 
       const clan = await ctx.getClan();
@@ -278,51 +278,49 @@ export class UserCommandHandler {
         return;
       }
 
+      const contentText = String((message.raw as any).content?.t || '').trim();
+      let memberName = mention.display_name || mention.username || '';
+      if (
+        !memberName &&
+        typeof mention.s === 'number' &&
+        typeof mention.e === 'number'
+      ) {
+        const extractedName = contentText.slice(mention.s, mention.e).trim();
+        if (extractedName) {
+          memberName = extractedName.startsWith('@')
+            ? extractedName.slice(1)
+            : extractedName;
+        }
+      }
+      if (!memberName) {
+        memberName = `User_${mezonId.slice(-8)}`;
+      }
+
       let internalRole = UserRole.UK;
-      let memberName = `User_${mezonId.slice(-8)}`;
-
-      const mentionRoleName = String((mention as any).rolename || '').trim();
-      const mentionRoleId = String((mention as any).role_id || '').trim();
-
-      if (mentionRoleName) {
-        internalRole = mapMezonRoleToUserRole(mentionRoleName);
-      } else if (mentionRoleId && mentionRoleId !== '0') {
-        try {
-          const rolesData = await (clan as any).listRoles?.();
-          const roles = rolesData?.roles || rolesData || [];
-          const memberRole = Array.isArray(roles)
-            ? roles.find((r: any) => String(r.id) === mentionRoleId)
-            : undefined;
-          const roleName = String(
-            memberRole?.name || memberRole?.rolename || '',
-          ).trim();
-          if (roleName) {
-            internalRole = mapMezonRoleToUserRole(roleName);
+      try {
+        const rolesData = await (clan as any).listRoles?.();
+        const roles =
+          rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
+        if (Array.isArray(roles)) {
+          const resolvedClanRole = resolveBestMezonRoleForUser(roles, mezonId);
+          if (resolvedClanRole !== null) {
+            internalRole = resolvedClanRole;
           }
-        } catch (e) {
-          this.logger.debug(
-            `Could not resolve clan role metadata: ${(e as Error).message}`,
-          );
+        }
+      } catch (e) {
+        this.logger.warn(
+          `Could not fetch real-time clan roles during creation for ${mezonId}: ${(e as Error).message}`,
+        );
+        const mentionRoleName = String((mention as any).rolename || '').trim();
+        if (mentionRoleName) {
+          internalRole = mapMezonRoleToUserRole(mentionRoleName);
         }
       }
 
-      const newUser = await this.userService.upsertByMezonId(mezonId, {
+      await this.userService.upsertByMezonId(mezonId, {
         name: memberName,
         role: internalRole,
       });
-
-      if (internalRole !== UserRole.UK && newUser.id) {
-        try {
-          await (this.userService as any).userRepository.update(
-            { id: newUser.id },
-            { role: internalRole },
-          );
-        } catch (e) {
-          this.logger.warn(
-            `Could not update user role: ${(e as Error).message}`,
-          );
-        }
-      }
 
       await this.reply(
         message,

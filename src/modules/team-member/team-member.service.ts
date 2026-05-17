@@ -85,6 +85,7 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
 
     return this.teamMemberRepository.find({
       where: { teamId, status: TeamMemberStatus.ACTIVE },
+      relations: ['user'],
       order: { id: 'ASC' },
     });
   }

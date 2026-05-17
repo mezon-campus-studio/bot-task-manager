@@ -70,6 +70,9 @@ export class TeamCommandHandler {
         case 'confirm':
           await this.confirmTeamCommand(args, senderId, message, ctx);
           return;
+        case 'restore':
+          await this.restoreTeamCommand(args, senderId, message, ctx);
+          return;
         case 'default':
           await this.setDefaultTeam(args, senderId, message, ctx);
           return;
@@ -80,9 +83,10 @@ export class TeamCommandHandler {
               '🏷️ **Team Commands:**',
               '  `*team list` – List all teams in current project',
               '  `*team create <slug> <name> [@leader]` – Create a new team',
-              '  `*team info <teamId|slug|@slug>` – View team detail',
+              '  `*team detail | info <teamId|slug|@slug>` – View team detail',
               '  `*team delete <teamId|slug|@slug>` – Prepare delete confirmation',
               '  `*team confirm delete <teamId|slug|@slug>` – Confirm delete',
+              '  `*team restore <slug>` – Restore a soft-deleted team',
               '  `*team default <teamId|slug|@slug>` – Set default team for project',
             ].join('\n'),
           );
@@ -166,7 +170,7 @@ export class TeamCommandHandler {
       );
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only Administrator/Project managers can create teams.',
@@ -241,7 +245,9 @@ export class TeamCommandHandler {
         `  Name: ${team.name}`,
         `  Slug: ${team.slug}`,
         `  Default: ${team.isDefault ? 'Yes ⭐' : 'No'}`,
-        `  Leader ID: ${team.leaderId ?? 'none'}`,
+        `  Leader Name: ${team.leader?.name ?? 'none'}`,
+        `  Created At: ${team.createdAt.toLocaleString()}`,
+        `  Updated At: ${team.updatedAt.toLocaleString()}`,
         `  Project: ${context.project.name} (${context.project.slug})`,
       ].join('\n'),
     );
@@ -264,8 +270,11 @@ export class TeamCommandHandler {
     }
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
-      await this.reply(message, '❌ Only project managers can delete teams.');
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can delete teams.',
+      );
       return;
     }
 
@@ -314,8 +323,11 @@ export class TeamCommandHandler {
     }
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
-      await this.reply(message, '❌ Only project managers can delete teams.');
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can delete teams.',
+      );
       return;
     }
 
@@ -342,6 +354,44 @@ export class TeamCommandHandler {
     await this.reply(
       message,
       `🗑️ Team **${team.name}** (\`${team.slug}\`) was deleted from project **${context.project.name}**.`,
+    );
+  }
+
+  private async restoreTeamCommand(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const slug = args[1];
+
+    if (!slug) {
+      await this.reply(message, '⚠️ Usage: `*team restore <slug>`');
+      return;
+    }
+
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only Project Managers and Administrators can restore teams.',
+      );
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const restoredTeam = await this.teamService.restoreTeamBySlug(
+      context.projectId,
+      slug,
+    );
+
+    await this.reply(
+      message,
+      `✅ Successfully restored team **${restoredTeam.name}** (\`${restoredTeam.slug}\`) into project **${context.project.name}**.`,
     );
   }
 
@@ -399,7 +449,7 @@ export class TeamCommandHandler {
     return matched?.user_id || matched?.id || null;
   }
 
-  private isProjectManager(dbUser: any): boolean {
+  private isProjectManagerOrAdmin(dbUser: any): boolean {
     const userRole = Number(dbUser?.role);
     return userRole === UserRole.PM || userRole === UserRole.ADMIN;
   }
@@ -418,7 +468,7 @@ export class TeamCommandHandler {
     }
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only project managers and administrators can set default team.',

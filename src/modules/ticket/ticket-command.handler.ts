@@ -11,6 +11,7 @@ import {
 } from '@src/libs/nezon';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
+
 import { UserService } from '@src/modules/user/user.service';
 import { TicketStatus } from './enums';
 import { TicketService } from './ticket.service';
@@ -18,13 +19,13 @@ import { TicketService } from './ticket.service';
 /**
  * Ticket command handler for the Mezon bot.
  *
- *   *ticket list                         – List all tickets in current project
- *   *ticket create <title>               – Create a new ticket
- *   *ticket detail <ticketId>            – Get ticket detail
- *   *ticket status <ticketId> <status>   – Update ticket status (open|in_progress|resolved|closed)
- *   *ticket assign <ticketId> @mention   – Assign ticket to a user (via mention)
- *   *ticket delete <ticketId>            – Soft-delete a ticket
- *   *ticket resolve <ticketId>           – Mark ticket as resolved
+ * *ticket list                         – List all tickets in current project
+ * *ticket create <title>               – Create a new ticket
+ * *ticket detail <ticketId>            – Get ticket detail
+ * *ticket status <ticketId> <status>   – Update ticket status (open|in_progress|resolved|closed)
+ * *ticket assign <ticketId> @mention   – Assign ticket to a user (via mention)
+ * *ticket delete <ticketId>            – Soft-delete a ticket
+ * *ticket resolve <ticketId>           – Mark ticket as resolved
  */
 @Injectable()
 @UseGuards(NezonAuthGuard)
@@ -41,7 +42,7 @@ export class TicketCommandHandler {
   async handleTicketCommand(
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
-    @Context() ctx: NezonCommandContext,
+    @Context() _ctx: NezonCommandContext,
   ): Promise<void> {
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
@@ -54,7 +55,7 @@ export class TicketCommandHandler {
     try {
       switch (action) {
         case 'list':
-          await this.listTickets(senderId, message);
+          await this.listTickets(args, senderId, message);
           return;
         case 'create':
           await this.createTicket(args, senderId, message);
@@ -79,7 +80,7 @@ export class TicketCommandHandler {
           await this.reply(message, 'Usage: `*ticket confirm delete <id>`');
           return;
         case 'resolve':
-          await this.resolveTicket(args, message, ctx);
+          await this.resolveTicket(args, senderId, message);
           return;
         default:
           await this.reply(
@@ -104,32 +105,48 @@ export class TicketCommandHandler {
   }
 
   private async listTickets(
+    _args: string[],
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const context =
-      await this.projectContextService.getRequiredCurrentProjectByMezonId(
-        senderId,
-      );
+    try {
+      const context =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
 
-    const tickets = await this.ticketService.listByProject(context.projectId);
+      let tickets = await this.ticketService.listByProject(context.projectId);
 
-    if (!tickets.length) {
-      await this.reply(
-        message,
-        `No tickets found in project **${context.project.name}**.`,
-      );
-      return;
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        tickets = tickets.filter(
+          (t) =>
+            t.assigneeUserId === context.user.id ||
+            t.reporterUserId === context.user.id,
+        );
+      }
+
+      if (tickets.length === 0) {
+        await this.reply(
+          message,
+          `ℹ️ No tickets found in project **${context.project.name}**.`,
+        );
+        return;
+      }
+
+      const responseLines = [
+        `🎫 **Tickets for Project: ${context.project.name}**`,
+        `| ID | Title | Status | Assignee |`,
+        ...tickets.map(
+          (t) =>
+            `| #${t.id} | ${t.title} | \`${t.status}\` | ${t.assigneeUser?.name ?? 'Unassigned'} |`,
+        ),
+      ];
+
+      await this.reply(message, responseLines.join('\n'));
+    } catch (error) {
+      this.logger.error('List tickets failed', (error as Error)?.stack);
+      await this.reply(message, this.getErrorMessage(error));
     }
-
-    const lines = tickets.map(
-      (t) => `  [#${t.id}] ${t.title} — ${t.status ?? 'open'}`,
-    );
-
-    await this.reply(
-      message,
-      [`📋 Tickets in **${context.project.name}**:`, ...lines].join('\n'),
-    );
   }
 
   private async createTicket(
@@ -184,7 +201,7 @@ export class TicketCommandHandler {
         senderId,
       );
 
-    const ticket = await this.ticketService.getDetailTicket(
+    const ticket = await this.ticketService.getTicketById(
       context.projectId,
       ticketId,
     );
@@ -193,6 +210,19 @@ export class TicketCommandHandler {
       await this.reply(
         message,
         `Ticket #${ticketId} not found in current project.`,
+      );
+      return;
+    }
+
+    if (
+      !this.hasTicketPermission(context.user, {
+        reporterUserId: ticket.reporterUserId,
+        assigneeUserId: ticket.assigneeUserId,
+      })
+    ) {
+      await this.reply(
+        message,
+        `❌ You have no permission to view details for this ticket.`,
       );
       return;
     }
@@ -204,8 +234,8 @@ export class TicketCommandHandler {
         `  Title: ${ticket.title}`,
         `  Status: ${ticket.status ?? 'open'}`,
         `  Severity: ${ticket.severity ?? 'unknown'}`,
-        `  Assignee: ${ticket.assigneeUserId ?? 'unassigned'}`,
-        `  Reporter: ${ticket.reporterUserId}`,
+        `  Assignee: ${ticket.assigneeUser?.name ?? 'unassigned'}`,
+        `  Reporter: ${ticket.reporterUser?.name ?? 'unknown'}`,
       ].join('\n'),
     );
   }
@@ -215,47 +245,73 @@ export class TicketCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const ticketId = this.parseId(args[1]);
-    const rawStatus = args[2]?.trim();
-    const status = rawStatus?.toUpperCase() as TicketStatus | undefined;
+    try {
+      const ticketId = Number(args[1]);
+      const rawStatus = args[2];
+      const normalizedStatus = rawStatus
+        ? String(rawStatus).trim().toUpperCase()
+        : undefined;
 
-    if (ticketId == null || !status) {
+      const newStatus = normalizedStatus as TicketStatus | undefined;
+
+      if (!ticketId || !rawStatus || !newStatus) {
+        await this.reply(
+          message,
+          'Usage: `*ticket status <id> <open|in_progress|resolved|closed>`',
+        );
+        return;
+      }
+
+      const validStatuses = Object.values(TicketStatus) as string[];
+      if (!validStatuses.includes(newStatus)) {
+        await this.reply(
+          message,
+          `Invalid status. Valid values: ${validStatuses.join(', ')}`,
+        );
+        return;
+      }
+
+      const context =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
+
+      const ticket = await this.ticketService.getTicketById(
+        context.projectId,
+        ticketId,
+      );
+      if (!ticket) {
+        await this.reply(message, `❌ Ticket #${ticketId} not found.`);
+        return;
+      }
+
+      if (
+        !this.hasTicketPermission(context.user, {
+          reporterUserId: ticket.reporterUserId,
+          assigneeUserId: ticket.assigneeUserId,
+        })
+      ) {
+        await this.reply(
+          message,
+          `❌ You have no permission to update the status of this ticket.`,
+        );
+        return;
+      }
+      const projectId = context.projectId;
+
+      const updated = await this.ticketService.updateStatus(
+        projectId,
+        ticketId,
+        newStatus,
+      );
       await this.reply(
         message,
-        'Usage: `*ticket status <id> <open|in_progress|resolved|closed>`',
+        `✅ Ticket #${ticketId} status updated to \`${updated.status}\`.`,
       );
-      return;
+    } catch (error) {
+      this.logger.error('Update ticket status failed', (error as Error)?.stack);
+      await this.reply(message, this.getErrorMessage(error));
     }
-
-    const validStatuses = Object.values(TicketStatus) as string[];
-    if (!validStatuses.includes(status)) {
-      await this.reply(
-        message,
-        `Invalid status. Valid values: ${validStatuses.join(', ')}`,
-      );
-      return;
-    }
-
-    const context =
-      await this.projectContextService.getRequiredCurrentProjectByMezonId(
-        senderId,
-      );
-
-    const ticket = await this.ticketService.updateTicket(
-      context.projectId,
-      ticketId,
-      { status },
-    );
-
-    if (!ticket) {
-      await this.reply(message, `Ticket #${ticketId} not found.`);
-      return;
-    }
-
-    await this.reply(
-      message,
-      `✅ Ticket **#${ticket.id}** status updated to **${ticket.status}**.`,
-    );
   }
 
   private async assignTicket(
@@ -263,48 +319,61 @@ export class TicketCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const ticketId = this.parseId(args[1]);
-    const rawIdentifier = args[2];
+    try {
+      const ticketId = this.parseId(args[1]);
+      const rawIdentifier = args[2];
 
-    if (ticketId == null || !rawIdentifier) {
+      if (ticketId == null || !rawIdentifier) {
+        await this.reply(
+          message,
+          'Usage: `*ticket assign <id> <userId|@username>`',
+        );
+        return;
+      }
+
+      const context =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
+
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        await this.reply(
+          message,
+          `❌ Only project managers and administrators can assign tickets.`,
+        );
+        return;
+      }
+
+      const targetIdentifier =
+        this.getMentionedUserIdentifier(rawIdentifier, message) ??
+        rawIdentifier.replace(/^@/, '').trim();
+      const targetUser =
+        await this.userService.findByIdentifier(targetIdentifier);
+
+      if (!targetUser) {
+        await this.reply(message, `User **${rawIdentifier}** not found.`);
+        return;
+      }
+
+      const ticket = await this.ticketService.updateTicket(
+        context.projectId,
+        ticketId,
+        { assigneeUserId: targetUser.id },
+      );
+
+      if (!ticket) {
+        await this.reply(message, `Ticket #${ticketId} not found.`);
+        return;
+      }
+
       await this.reply(
         message,
-        'Usage: `*ticket assign <id> <userId|@username>`',
+        `✅ Ticket **#${ticket.id}** assigned to **${targetUser.name ?? targetUser.mezonId}**.`,
       );
-      return;
+    } catch (error) {
+      this.logger.error('Assign ticket failed', (error as Error)?.stack);
+      await this.reply(message, this.getErrorMessage(error));
     }
-
-    const context =
-      await this.projectContextService.getRequiredCurrentProjectByMezonId(
-        senderId,
-      );
-
-    const targetIdentifier =
-      this.getMentionedUserIdentifier(rawIdentifier, message) ??
-      rawIdentifier.replace(/^@/, '').trim();
-    const targetUser =
-      await this.userService.findByIdentifier(targetIdentifier);
-
-    if (!targetUser) {
-      await this.reply(message, `User **${rawIdentifier}** not found.`);
-      return;
-    }
-
-    const ticket = await this.ticketService.updateTicket(
-      context.projectId,
-      ticketId,
-      { assigneeUserId: targetUser.id },
-    );
-
-    if (!ticket) {
-      await this.reply(message, `Ticket #${ticketId} not found.`);
-      return;
-    }
-
-    await this.reply(
-      message,
-      `✅ Ticket **#${ticket.id}** assigned to **${targetUser.name ?? targetUser.mezonId}**.`,
-    );
   }
 
   private async deleteTicket(
@@ -312,38 +381,51 @@ export class TicketCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const ticketId = this.parseId(args[1]);
+    try {
+      const ticketId = this.parseId(args[1]);
 
-    if (ticketId == null) {
-      await this.reply(message, 'Usage: `*ticket delete <id>`');
-      return;
-    }
+      if (ticketId == null) {
+        await this.reply(message, 'Usage: `*ticket delete <id>`');
+        return;
+      }
 
-    const context =
-      await this.projectContextService.getRequiredCurrentProjectByMezonId(
-        senderId,
+      const context =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
+
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        await this.reply(
+          message,
+          `❌ Only project managers and administrators can delete tickets.`,
+        );
+        return;
+      }
+
+      const ticket = await this.ticketService.getTicketById(
+        context.projectId,
+        ticketId,
       );
 
-    const ticket = await this.ticketService.getDetailTicket(
-      context.projectId,
-      ticketId,
-    );
+      if (!ticket) {
+        await this.reply(
+          message,
+          `Ticket #${ticketId} not found in current project.`,
+        );
+        return;
+      }
 
-    if (!ticket) {
       await this.reply(
         message,
-        `Ticket #${ticketId} not found in current project.`,
+        [
+          `🗑️ Are you sure you want to delete ticket **#${ticket.id}: ${ticket.title}**?`,
+          `Run: \`*ticket confirm delete ${ticket.id}\` to complete the deletion.`,
+        ].join('\n'),
       );
-      return;
+    } catch (error) {
+      this.logger.error('Delete ticket failed', (error as Error)?.stack);
+      await this.reply(message, this.getErrorMessage(error));
     }
-
-    await this.reply(
-      message,
-      [
-        `🗑️ Are you sure you want to delete ticket **#${ticket.id}: ${ticket.title}**?`,
-        `Run: \`*ticket confirm delete ${ticket.id}\` to complete the deletion.`,
-      ].join('\n'),
-    );
   }
 
   private async confirmDeleteTicket(
@@ -351,103 +433,141 @@ export class TicketCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const ticketId = this.parseId(args[2]);
+    try {
+      const ticketId = this.parseId(args[2]);
 
-    if (ticketId == null) {
-      await this.reply(message, 'Usage: `*ticket confirm delete <id>`');
-      return;
-    }
+      if (ticketId == null) {
+        await this.reply(message, 'Usage: `*ticket confirm delete <id>`');
+        return;
+      }
 
-    const context =
-      await this.projectContextService.getRequiredCurrentProjectByMezonId(
-        senderId,
+      const context =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
+
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        await this.reply(
+          message,
+          `❌ Only project managers and administrators can delete tickets.`,
+        );
+        return;
+      }
+
+      const ticket = await this.ticketService.getTicketById(
+        context.projectId,
+        ticketId,
       );
 
-    const ticket = await this.ticketService.getDetailTicket(
-      context.projectId,
-      ticketId,
-    );
+      if (!ticket) {
+        await this.reply(
+          message,
+          `Ticket #${ticketId} not found in current project.`,
+        );
+        return;
+      }
 
-    if (!ticket) {
-      await this.reply(
-        message,
-        `Ticket #${ticketId} not found in current project.`,
-      );
-      return;
+      await this.ticketService.deleteTicket(context.projectId, ticketId);
+
+      await this.reply(message, `🗑️ Ticket **#${ticketId}** has been deleted.`);
+    } catch (error) {
+      this.logger.error('Delete ticket failed', (error as Error)?.stack);
+      await this.reply(message, this.getErrorMessage(error));
     }
-
-    const deleted = await this.ticketService.deleteTicket(
-      context.projectId,
-      ticketId,
-    );
-
-    if (!deleted) {
-      await this.reply(message, `Ticket #${ticketId} not found.`);
-      return;
-    }
-
-    await this.reply(message, `🗑️ Ticket **#${ticketId}** has been deleted.`);
   }
 
   private async resolveTicket(
     args: string[],
+    senderId: string,
     message: ManagedMessage,
-    ctx: NezonCommandContext,
   ): Promise<void> {
-    const ticketId = this.parseId(args[1]);
+    try {
+      const ticketId = this.parseId(args[1]);
 
-    if (ticketId == null) {
-      await this.reply(message, 'Usage: `*ticket resolve <id>`');
-      return;
-    }
+      if (ticketId == null) {
+        await this.reply(message, 'Usage: `*ticket resolve <id>`');
+        return;
+      }
 
-    const dbUser = (ctx as any).dbUser;
-    if (
-      !dbUser ||
-      (Number(dbUser.role) !== UserRole.PM &&
-        Number(dbUser.role) !== UserRole.ADMIN)
-    ) {
+      const context =
+        await this.projectContextService.getRequiredCurrentProjectByMezonId(
+          senderId,
+        );
+
+      const ticket = await this.ticketService.getTicketById(
+        context.projectId,
+        ticketId,
+      );
+
+      if (!ticket) {
+        await this.reply(
+          message,
+          `Ticket #${ticketId} not found in current project.`,
+        );
+        return;
+      }
+
+      if (
+        !this.hasTicketPermission(context.user, {
+          reporterUserId: ticket.reporterUserId,
+          assigneeUserId: ticket.assigneeUserId,
+        })
+      ) {
+        await this.reply(
+          message,
+          '❌ You have no permission to resolve this ticket.',
+        );
+        return;
+      }
+
+      const updated = await this.ticketService.updateTicket(
+        context.projectId,
+        ticketId,
+        {
+          status: TicketStatus.RESOLVED,
+        },
+      );
+
+      if (!updated) {
+        await this.reply(
+          message,
+          `Ticket #${ticketId} not found in current project.`,
+        );
+        return;
+      }
+
       await this.reply(
         message,
-        '❌ Only project managers and administrators can resolve tickets.',
+        `✅ Ticket **#${updated.id}: ${updated.title}** has been marked as resolved.`,
       );
-      return;
+    } catch (error) {
+      this.logger.error('Resolve ticket failed', (error as Error)?.stack);
+      await this.reply(message, this.getErrorMessage(error));
     }
-
-    const senderId = message.senderId;
-    if (!senderId) {
-      await this.reply(message, 'Cannot resolve command sender.');
-      return;
-    }
-
-    const context =
-      await this.projectContextService.getRequiredCurrentProjectByMezonId(
-        senderId,
-      );
-
-    const ticket = await this.ticketService.updateTicket(
-      context.projectId,
-      ticketId,
-      {
-        status: TicketStatus.RESOLVED,
-      },
-    );
-
-    if (!ticket) {
-      await this.reply(
-        message,
-        `Ticket #${ticketId} not found in current project.`,
-      );
-      return;
-    }
-
-    await this.reply(
-      message,
-      `✅ Ticket **#${ticket.id}: ${ticket.title}** has been marked as resolved.`,
-    );
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
+  private isProjectManagerOrAdmin(
+    dbUser: { role?: unknown } | null | undefined,
+  ): boolean {
+    const role = Number(dbUser?.role);
+    return role === UserRole.PM || role === UserRole.ADMIN;
+  }
+
+  private hasTicketPermission(
+    dbUser: { id?: unknown; role?: unknown } | null | undefined,
+    ticket: { reporterUserId: string; assigneeUserId: string | null },
+  ): boolean {
+    if (!dbUser?.id) return false;
+
+    const userId = String(dbUser.id);
+
+    const isAssignee =
+      ticket.assigneeUserId != null && ticket.assigneeUserId === userId;
+    const isReporter = ticket.reporterUserId === userId;
+
+    return this.isProjectManagerOrAdmin(dbUser) || isAssignee || isReporter;
+  }
 
   private parseId(value: string | undefined): number | null {
     if (!value) return null;
