@@ -5,6 +5,13 @@ export class FixTeamLeaderIdColumn1778989591881 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
+      `UPDATE "teams" 
+       SET "leader_id" = NULL 
+       WHERE "leader_id" IS NOT NULL 
+         AND "leader_id" NOT IN (SELECT "id" FROM "users")`,
+    );
+
+    await queryRunner.query(
       `ALTER TABLE "teams" ADD CONSTRAINT "FK_10c8e335dc32010ef90abe65cec" FOREIGN KEY ("leader_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE NO ACTION`,
     );
   }
