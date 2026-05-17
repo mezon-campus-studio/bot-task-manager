@@ -166,7 +166,7 @@ export class TeamCommandHandler {
       );
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only Administrator/Project managers can create teams.',
@@ -266,8 +266,11 @@ export class TeamCommandHandler {
     }
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
-      await this.reply(message, '❌ Only project managers can delete teams.');
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can delete teams.',
+      );
       return;
     }
 
@@ -316,8 +319,11 @@ export class TeamCommandHandler {
     }
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
-      await this.reply(message, '❌ Only project managers can delete teams.');
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only project managers and administrators can delete teams.',
+      );
       return;
     }
 
@@ -401,7 +407,7 @@ export class TeamCommandHandler {
     return matched?.user_id || matched?.id || null;
   }
 
-  private isProjectManager(dbUser: any): boolean {
+  private isProjectManagerOrAdmin(dbUser: any): boolean {
     const userRole = Number(dbUser?.role);
     return userRole === UserRole.PM || userRole === UserRole.ADMIN;
   }
@@ -420,7 +426,7 @@ export class TeamCommandHandler {
     }
 
     const dbUser = (ctx as any).dbUser;
-    if (!dbUser || !this.isProjectManager(dbUser)) {
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only project managers and administrators can set default team.',

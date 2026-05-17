@@ -4,10 +4,13 @@ import {
   DeleteDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { TeamMemberStatus } from './enums/team-member-status.enum';
+import UserEntity from '../user/user.entity';
 
 @Entity('team_members')
 @Index('team_members_team_id_user_id_key', ['teamId', 'userId'], {
@@ -20,8 +23,12 @@ export default class TeamMemberEntity {
   @Column({ type: 'int' })
   teamId!: number;
 
-  @Column({ type: 'uuid' })
+  @Column({ type: 'uuid', name: 'user_id' })
   userId!: string;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'user_id' })
+  user!: UserEntity;
 
   @Column({
     type: 'enum',

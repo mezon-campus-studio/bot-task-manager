@@ -119,16 +119,21 @@ export class TeamMemberCommandHandler {
       return;
     }
 
-    const lines = members.map(
-      (m, i) => `  ${i + 1}. userId: ${m.userId} — status: ${m.status}`,
-    );
+    const responseLines = [
+      `👥 **Members of Team: ${team.name}** (team #${teamId})`,
+      `| No. | Name | Status | Mezon ID |`,
+      ...members.map((m, i) => {
+        let userName = m.user?.name ?? 'Unknown';
+        const mezonId = m.user?.mezonId ?? 'N/A';
+        if (team.leaderId && m.userId === team.leaderId) {
+          userName = `👑 ${userName} (Leader)`;
+        }
 
-    await this.reply(
-      message,
-      [`👥 Members of **${team.name}** (team #${teamId}):`, ...lines].join(
-        '\n',
-      ),
-    );
+        return `| ${i + 1} | **${userName}** | ${m.status} | \`${mezonId}\` |`;
+      }),
+    ];
+
+    await this.reply(message, [...responseLines].join('\n'));
   }
 
   private async addMember(
@@ -148,7 +153,7 @@ export class TeamMemberCommandHandler {
       return;
     }
 
-    if (!this.isProjectManager(ctx)) {
+    if (!this.isProjectManagerOrAdmin(ctx)) {
       await this.reply(
         message,
         'Only project managers and administrators can add team members.',
@@ -220,7 +225,7 @@ export class TeamMemberCommandHandler {
       return;
     }
 
-    if (!this.isProjectManager(ctx)) {
+    if (!this.isProjectManagerOrAdmin(ctx)) {
       await this.reply(
         message,
         'Only project managers and administrators can remove team members.',
@@ -328,7 +333,7 @@ export class TeamMemberCommandHandler {
     return matched?.user_id || matched?.id || null;
   }
 
-  private isProjectManager(ctx: any): boolean {
+  private isProjectManagerOrAdmin(ctx: any): boolean {
     const dbUser = ctx.dbUser;
     const role = Number(dbUser?.role);
     return role === UserRole.PM || role === UserRole.ADMIN;
