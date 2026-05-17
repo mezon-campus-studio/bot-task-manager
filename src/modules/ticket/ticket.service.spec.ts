@@ -25,13 +25,16 @@ describe(TicketService.name, () => {
   }
 
   async function createTicketContext() {
-    const team = await factory.team(); // tạo team thật
+    const team = await factory.team();
     const project = await factory.project();
 
+    const reporter = await factory.user();
+    const assignee = await factory.user();
+
     return {
-      assigneeUserId: randomUUID(),
+      assigneeUserId: assignee.id,
       projectId: project.id,
-      reporterUserId: randomUUID(),
+      reporterUserId: reporter.id,
       teamId: team.id,
     };
   }
