@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
 import { TicketSeverity, TicketStatus } from './enums';
@@ -103,7 +102,7 @@ describe(TicketService.name, () => {
 
     await factory.ticket({
       projectId: otherContext.projectId,
-      reporterUserId: randomUUID(),
+      reporterUserId: otherContext.reporterUserId,
       teamId: otherContext.teamId,
       title: 'Ignore other project ticket',
     });
@@ -179,13 +178,13 @@ describe(TicketService.name, () => {
 
   it('should return null from getDetailTicket when the ticket belongs to a different project', async () => {
     const { projectId, reporterUserId, teamId } = await createTicketContext();
-    const otherProjectId = nextNumericId();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
       teamId,
       title: 'Wrong project ticket',
     });
+    const otherProjectId = ticket.projectId + 999_999;
 
     await expect(
       ticketService.getTicketById(otherProjectId, ticket.id),
@@ -260,7 +259,7 @@ describe(TicketService.name, () => {
 
   it('should support updateSession from the CRUD base for ticket escalation changes', async () => {
     const { projectId, reporterUserId, teamId } = await createTicketContext();
-    const nextAssigneeUserId = randomUUID();
+    const nextAssigneeUser = await factory.user();
     const ticket = await factory.ticket({
       projectId,
       reporterUserId,
@@ -272,7 +271,7 @@ describe(TicketService.name, () => {
 
     const updateSession = ticketService.updateSession(ticket);
 
-    ticket.assigneeUserId = nextAssigneeUserId;
+    ticket.assigneeUserId = nextAssigneeUser.id;
     ticket.severity = TicketSeverity.CRITICAL;
     ticket.status = TicketStatus.IN_PROGRESS;
 
@@ -281,7 +280,7 @@ describe(TicketService.name, () => {
     await expect(
       ticketRepository.findOneByOrFail({ id: ticket.id }),
     ).resolves.toMatchObject({
-      assigneeUserId: nextAssigneeUserId,
+      assigneeUserId: nextAssigneeUser.id,
       id: ticket.id,
       severity: TicketSeverity.CRITICAL,
       status: TicketStatus.IN_PROGRESS,
