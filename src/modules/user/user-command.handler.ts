@@ -140,10 +140,10 @@ export class UserCommandHandler {
   ): Promise<void> {
     const senderUser = (ctx as any).dbUser;
     const senderRole = Number(senderUser?.role);
-    if (senderRole !== UserRole.ADMIN && senderRole !== UserRole.PM) {
+    if (senderRole !== UserRole.ADMIN) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators and project managers.',
+        '❌ This command is only available to administrators.',
       );
       return;
     }
