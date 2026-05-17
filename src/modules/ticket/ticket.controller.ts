@@ -84,11 +84,8 @@ export class TicketController {
 
   @Delete('project/:projectId/:id')
   @ApiOperation({ summary: 'Delete a ticket' })
-  async deleteTicket(
-    @Param('projectId', ParseIntPipe) projectId: number,
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<boolean> {
-    return this.ticketService.deleteTicket(projectId, id);
+  async deleteTicket(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    await this.ticketService.deleteTicket(id);
   }
 
   @Get('project/:projectId/status/:status')

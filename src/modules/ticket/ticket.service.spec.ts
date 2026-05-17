@@ -221,7 +221,7 @@ describe(TicketService.name, () => {
     ).resolves.toBeNull();
   });
 
-  it('should soft-delete a ticket and return true', async () => {
+  it('should soft-delete a ticket', async () => {
     const { projectId, reporterUserId, teamId } = createTicketContext();
     const ticket = await factory.ticket({
       projectId,
@@ -230,20 +230,17 @@ describe(TicketService.name, () => {
       title: 'Ticket to delete',
     });
 
-    const result = await ticketService.deleteTicket(projectId, ticket.id);
+    await ticketService.deleteTicket(ticket.id);
 
-    expect(result).toBe(true);
     await expect(
       ticketRepository.findOneBy({ id: ticket.id }),
     ).resolves.toBeNull();
   });
 
-  it('should return false from deleteTicket when the ticket does not exist', async () => {
-    const { projectId } = createTicketContext();
+  it('should throw from deleteTicket when the ticket does not exist', async () => {
+    createTicketContext();
 
-    await expect(ticketService.deleteTicket(projectId, 999_999)).resolves.toBe(
-      false,
-    );
+    await expect(ticketService.deleteTicket(999_999)).rejects.toBeDefined();
   });
 
   it('should support updateSession from the CRUD base for ticket escalation changes', async () => {

@@ -142,6 +142,14 @@ export class TeamMemberCommandHandler {
     message: ManagedMessage,
     ctx: NezonCommandContext,
   ): Promise<void> {
+    if (!this.isProjectManagerOrAdmin(ctx)) {
+      await this.reply(
+        message,
+        'Only project managers and administrators can add team members.',
+      );
+      return;
+    }
+
     const teamIdentifier = args[1];
     const targetUserIdRaw = args[2];
 
@@ -149,14 +157,6 @@ export class TeamMemberCommandHandler {
       await this.reply(
         message,
         'Usage: `*member add <teamId|slug|@slug> <userId|@username>`',
-      );
-      return;
-    }
-
-    if (!this.isProjectManagerOrAdmin(ctx)) {
-      await this.reply(
-        message,
-        'Only project managers and administrators can add team members.',
       );
       return;
     }

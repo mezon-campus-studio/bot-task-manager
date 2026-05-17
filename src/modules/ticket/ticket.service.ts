@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
@@ -60,9 +60,8 @@ export class TicketService extends CRUDService<TicketEntity> {
 
     const result = await this.ticketRepository.find({
       where: { projectId },
-      order: {
-        id: 'DESC',
-      },
+      relations: ['assigneeUser', 'reporterUser'],
+      order: { id: 'DESC' },
     });
 
     this.logger.log({
@@ -73,6 +72,58 @@ export class TicketService extends CRUDService<TicketEntity> {
     });
 
     return result;
+  }
+
+  async listTicketsInProject(projectId: number): Promise<TicketEntity[]> {
+    return this.listByProject(projectId);
+  }
+
+  async getTicketById(ticketId: number): Promise<TicketEntity | null> {
+    return await this.ticketRepository.findOne({
+      where: { id: ticketId },
+      relations: ['assigneeUser', 'reporterUser'],
+    });
+  }
+
+  async updateStatus(
+    ticketId: number,
+    status: TicketStatus,
+  ): Promise<TicketEntity> {
+    this.logger.log({ log: 'Updating ticket status', ticketId, status });
+
+    const ticket = await this.getTicketById(ticketId);
+    if (!ticket) {
+      throw new NotFoundException(`Ticket #${ticketId} not found`);
+    }
+
+    ticket.status = status;
+    return await this.ticketRepository.save(ticket);
+  }
+
+  async assignTicket(
+    ticketId: number,
+    assigneeUserId: string,
+  ): Promise<TicketEntity> {
+    this.logger.log({ log: 'Assigning ticket', ticketId, assigneeUserId });
+
+    const ticket = await this.getTicketById(ticketId);
+    if (!ticket) {
+      throw new NotFoundException(`Ticket #${ticketId} not found`);
+    }
+
+    ticket.assigneeUserId = assigneeUserId;
+    return await this.ticketRepository.save(ticket);
+  }
+
+  async deleteTicket(ticketId: number): Promise<void> {
+    this.logger.log({ log: 'Deleting ticket', ticketId });
+
+    const ticket = await this.getTicketById(ticketId);
+    if (!ticket) {
+      throw new NotFoundException(`Ticket #${ticketId} not found`);
+    }
+
+    await this.ticketRepository.softDelete(ticketId);
   }
 
   async getListTicket(projectId: number): Promise<TicketEntity[]> {
@@ -94,6 +145,7 @@ export class TicketService extends CRUDService<TicketEntity> {
         id: ticketId,
         projectId,
       },
+      relations: ['assigneeUser', 'reporterUser'],
     });
 
     this.logger.log({
@@ -142,36 +194,6 @@ export class TicketService extends CRUDService<TicketEntity> {
     });
 
     return result;
-  }
-
-  async deleteTicket(projectId: number, ticketId: number): Promise<boolean> {
-    this.logger.log({
-      log: 'Attempting to delete ticket',
-      projectId,
-      ticketId,
-    });
-
-    const ticket = await this.getDetailTicket(projectId, ticketId);
-
-    if (!ticket) {
-      this.logger.log({
-        log: 'Ticket not found for delete',
-        projectId,
-        ticketId,
-      });
-
-      return false;
-    }
-
-    await this.ticketRepository.softRemove(ticket);
-
-    this.logger.log({
-      log: 'Ticket delete result',
-      projectId,
-      ticketId,
-    });
-
-    return true;
   }
 
   async getByStatus(
