@@ -4,6 +4,8 @@ import { createTestingModule, factory, testingModule } from '#jest';
 import { NoteResourceType } from './enums';
 import NoteEntity from './note.entity';
 import { NoteService } from './note.service';
+import { ProjectMemberStatus } from '../project-member/project-member-status.enum';
+import { TeamMemberStatus } from '../team-member';
 
 describe(NoteService.name, () => {
   let noteService: NoteService;
@@ -27,8 +29,41 @@ describe(NoteService.name, () => {
     const author = await factory.user({});
     const assignee = await factory.user({});
     const reporter = await factory.user({});
+
     const team = await factory.team({
       projectId: project.id,
+    });
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: author.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.teamMember({
+      teamId: team.id,
+      userId: author.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+    await factory.teamMember({
+      teamId: team.id,
+      userId: assignee.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+    await factory.teamMember({
+      teamId: team.id,
+      userId: reporter.id,
+      status: TeamMemberStatus.ACTIVE,
     });
 
     const task = await factory.task({

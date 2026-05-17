@@ -3,6 +3,7 @@ import { createTestingModule, factory, testingModule } from '#jest';
 import { TicketSeverity, TicketStatus } from './enums';
 import TicketEntity from './ticket.entity';
 import { TicketService } from './ticket.service';
+import { ProjectMemberStatus } from '../project-member/project-member-status.enum';
 
 describe(TicketService.name, () => {
   let ticketService: TicketService;
@@ -29,6 +30,18 @@ describe(TicketService.name, () => {
 
     const reporter = await factory.user();
     const assignee = await factory.user();
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
 
     return {
       assigneeUserId: assignee.id,

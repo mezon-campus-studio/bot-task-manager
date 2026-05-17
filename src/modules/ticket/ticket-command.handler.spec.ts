@@ -98,7 +98,10 @@ describe(TicketCommandHandler.name, () => {
       {} as never,
     );
 
-    expect(userService.findByIdentifier).toHaveBeenCalledWith('mezon-target-1');
+    expect(userService.findByIdentifier).toHaveBeenCalledWith(
+      'mezon-target-1',
+      false,
+    );
     expect(ticketService.updateTicket).toHaveBeenCalledWith(7, 1, {
       assigneeUserId: 'user-2',
     });

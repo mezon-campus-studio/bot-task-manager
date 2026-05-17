@@ -36,6 +36,28 @@ describe(TaskService.name, () => {
     const team = await factory.team({
       projectId: project.id,
     });
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.teamMember({
+      teamId: team.id,
+      userId: reporter.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+    await factory.teamMember({
+      teamId: team.id,
+      userId: assignee.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+
     return {
       assigneeUserId: assignee.id,
       projectId: project.id,
@@ -48,6 +70,12 @@ describe(TaskService.name, () => {
     const project = await factory.project({});
     const reporter = await factory.user({});
 
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
     return {
       projectId: project.id,
       reporterUserId: reporter.id,
@@ -59,6 +87,18 @@ describe(TaskService.name, () => {
     const reporter = await factory.user({});
     const team = await factory.team({
       projectId: project.id,
+    });
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.teamMember({
+      teamId: team.id,
+      userId: reporter.id,
+      status: TeamMemberStatus.ACTIVE,
     });
 
     return {
@@ -171,6 +211,12 @@ describe(TaskService.name, () => {
       projectId,
     });
     const otherProject = await factory.project({});
+
+    await factory.projectMember({
+      projectId,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
 
     const matchingTask = await factory.task({
       assigneeUserId: assignee.id,
