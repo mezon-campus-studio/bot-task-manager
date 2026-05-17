@@ -154,7 +154,7 @@ export class ProjectCommandHandler {
       return;
     }
 
-    if (!this.isProjectManager(dbUser)) {
+    if (!this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only project managers and administrators can create projects.',
@@ -200,7 +200,7 @@ export class ProjectCommandHandler {
   ): Promise<void> {
     const dbUser = (ctx as any).dbUser;
 
-    if (!this.isProjectManager(dbUser)) {
+    if (!this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only project managers and administrators can delete projects.',
@@ -239,7 +239,7 @@ export class ProjectCommandHandler {
   ): Promise<void> {
     const dbUser = (ctx as any).dbUser;
 
-    if (!this.isProjectManager(dbUser)) {
+    if (!this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
         '❌ Only project managers and administrators can delete projects.',
@@ -365,7 +365,7 @@ export class ProjectCommandHandler {
     return this.projectService.findBySlug(normalizedProjectKey);
   }
 
-  private isProjectManager(dbUser: any): boolean {
+  private isProjectManagerOrAdmin(dbUser: any): boolean {
     const role = Number(dbUser?.role);
     return role === UserRole.PM || role === UserRole.ADMIN;
   }

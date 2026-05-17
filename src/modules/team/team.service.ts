@@ -36,35 +36,41 @@ export class TeamService extends CRUDService<TeamEntity> {
         const existingTeam = await transactionalEntityManager.findOne(
           TeamEntity,
           {
-            where: [
-              { projectId: input.projectId, slug: input.slug },
-              { projectId: input.projectId, name: input.name },
-            ],
+            where: {
+              projectId: input.projectId,
+              slug: input.slug,
+            },
+            withDeleted: true,
           },
         );
 
         if (existingTeam) {
+          if (existingTeam.deletedAt !== null) {
+            this.logger.log({
+              log: 'Found soft-deleted team with same slug. Restoring...',
+              projectId: input.projectId,
+              slug: input.slug,
+            });
+
+            existingTeam.deletedAt = null;
+            existingTeam.name = input.name;
+            if (input.description) existingTeam.description = input.description;
+            if (input.leaderId) existingTeam.leaderId = input.leaderId;
+            if (input.updatedBy) existingTeam.updatedBy = input.updatedBy;
+
+            return await transactionalEntityManager.save(
+              TeamEntity,
+              existingTeam,
+            );
+          }
+
           throw new ConflictException(
-            `Team or slug or name already exists in project ${input.projectId}`,
+            `Team with slug "${input.slug}" already exists in this project.`,
           );
         }
 
-        if (input.isDefault) {
-          await transactionalEntityManager.update(
-            TeamEntity,
-            { projectId: input.projectId, isDefault: true },
-            { isDefault: false },
-          );
-        }
-
-        const team = transactionalEntityManager.create(TeamEntity, {
-          ...input,
-          description: input.description ?? null,
-          isDefault: input.isDefault ?? false,
-          leaderId: input.leaderId ?? null,
-        });
-
-        return await transactionalEntityManager.save(team);
+        const newTeam = transactionalEntityManager.create(TeamEntity, input);
+        return await transactionalEntityManager.save(TeamEntity, newTeam);
       },
     );
   }
