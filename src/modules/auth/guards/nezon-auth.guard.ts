@@ -31,53 +31,65 @@ export class NezonAuthGuard implements CanActivate {
       return false;
     }
 
-    const role = await this.resolveRoleFromClan(nezonContext, senderId);
+    const roleFromClan = await this.resolveRoleFromClan(nezonContext, senderId);
     const user = await this.userService.findByMezonId(senderId, true);
 
     const rawText = String((nezonContext.message as any)?.content?.t ?? '');
     const isUserCreateCommand = /^\s*\*user\s+create\b/i.test(rawText);
 
-    const isAdminAllowed = role === UserRole.ADMIN;
+    const effectiveRole = user ? user.role : roleFromClan;
+
+    let isAuthorizedForCreate = false;
+    if (user) {
+      isAuthorizedForCreate =
+        effectiveRole === UserRole.ADMIN || effectiveRole === UserRole.PM;
+    } else {
+      isAuthorizedForCreate = roleFromClan === UserRole.ADMIN;
+    }
 
     if (!user) {
-      if (isUserCreateCommand && isAdminAllowed) {
+      if (isUserCreateCommand && isAuthorizedForCreate) {
         this.logger.log(
-          `NezonAuthGuard: Bypassing missing-user check for *user create (mezonId=${senderId}, resolvedRole=${role}). Creating user in DB.`,
+          `NezonAuthGuard: Bypassing missing-user check for *user create (mezonId=${senderId}, resolvedRole=${roleFromClan}). Creating bootstrap admin user in DB.`,
         );
 
         const adminName =
           nezonContext.message?.display_name ||
           nezonContext.message?.username ||
           `Admin_${senderId.slice(-8)}`;
+
         const createdUser = await this.userService.upsertByMezonId(senderId, {
-          role,
+          role: roleFromClan as UserRole,
           name: adminName,
         });
+
         (nezonContext as any).dbUser = createdUser;
         (nezonContext as any).isNewBootstrap = true;
         return true;
       }
 
       this.logger.warn(
-        `NezonAuthGuard: User with mezonId ${senderId} not found. Access denied. Use *user create @mention to add users.`,
+        `NezonAuthGuard: User with mezonId ${senderId} not found or unauthorized (ClanRole=${roleFromClan}). Access denied.`,
       );
       return false;
     }
 
     if (user.deletedAt != null) {
-      if (isUserCreateCommand && isAdminAllowed) {
+      if (isUserCreateCommand && isAuthorizedForCreate) {
         this.logger.log(
-          `NezonAuthGuard: Recovering soft-deleted user for *user create (mezonId=${senderId}, resolvedRole=${role}).`,
+          `NezonAuthGuard: Recovering soft-deleted user for *user create (mezonId=${senderId}, role=${effectiveRole}).`,
         );
 
         const adminName =
           nezonContext.message?.display_name ||
           nezonContext.message?.username ||
           `Admin_${senderId.slice(-8)}`;
+
         const recoveredUser = await this.userService.upsertByMezonId(senderId, {
-          role: role as UserRole,
+          role: effectiveRole as UserRole,
           name: adminName,
         });
+
         (nezonContext as any).dbUser = recoveredUser;
         return true;
       }
@@ -88,20 +100,23 @@ export class NezonAuthGuard implements CanActivate {
       return false;
     }
 
-    if (isUserCreateCommand && !isAdminAllowed) {
+    if (isUserCreateCommand && !isAuthorizedForCreate) {
       this.logger.warn(
-        `NezonAuthGuard: Non-admin mezonId ${senderId} attempted to execute *user create. Denied.`,
+        `NezonAuthGuard: Non-authorized mezonId ${senderId} (Role=${effectiveRole}) attempted to execute *user create. Denied.`,
       );
       return false;
     }
 
-    if (role != null && shouldSyncResolvedUserRole(user.role, role)) {
+    if (
+      roleFromClan != null &&
+      shouldSyncResolvedUserRole(user.role, roleFromClan)
+    ) {
       this.logger.log(
-        `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${role}`,
+        `NezonAuthGuard: Syncing role for ${senderId} from ${user.role} to ${roleFromClan}`,
       );
 
       const updatedUser = await this.userService.upsertByMezonId(senderId, {
-        role,
+        role: roleFromClan,
       });
       (nezonContext as any).dbUser = updatedUser;
       return true;
