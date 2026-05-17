@@ -8,14 +8,27 @@ export const ticket = Factory.forEntity<TicketEntity>(
   TicketEntity,
   async (input) => {
     const projectId = input.projectId ?? (await project({})).id;
+
     const reporterUserId = input.reporterUserId ?? (await user({})).id;
+
+    const ensuredReporterUser =
+      input.reporterUserId == null
+        ? null
+        : await user({ id: input.reporterUserId }).catch(() => null);
+
+    const ensuredReporterUserId = ensuredReporterUser?.id ?? reporterUserId;
+
+    const ensuredAssigneeUser =
+      input.assigneeUserId == null
+        ? null
+        : await user({ id: input.assigneeUserId }).catch(() => null);
 
     return {
       ...input,
-      assigneeUserId: input.assigneeUserId ?? null,
+      assigneeUserId: ensuredAssigneeUser?.id ?? null,
       description: input.description ?? null,
       projectId,
-      reporterUserId,
+      reporterUserId: ensuredReporterUserId,
       severity: input.severity ?? TicketSeverity.MEDIUM,
       status: input.status ?? TicketStatus.OPEN,
       teamId: input.teamId ?? null,

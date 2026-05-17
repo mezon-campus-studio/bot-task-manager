@@ -200,8 +200,11 @@ export class ProjectCommandHandler {
   ): Promise<void> {
     const dbUser = (ctx as any).dbUser;
 
-    if (!this.isAdmin(dbUser)) {
-      await this.reply(message, '❌ Only administrators can delete projects.');
+    if (!this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        'Only project managers and administrators can delete projects.',
+      );
       return;
     }
 
@@ -236,8 +239,11 @@ export class ProjectCommandHandler {
   ): Promise<void> {
     const dbUser = (ctx as any).dbUser;
 
-    if (!this.isAdmin(dbUser)) {
-      await this.reply(message, '❌ Only administrators can delete projects.');
+    if (!this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        'Only project managers and administrators can delete projects.',
+      );
       return;
     }
 
