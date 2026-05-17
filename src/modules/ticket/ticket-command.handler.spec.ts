@@ -1,3 +1,4 @@
+import { UserRole } from '#src/common/enums/index.js';
 import { TicketCommandHandler } from './ticket-command.handler';
 
 describe(TicketCommandHandler.name, () => {
@@ -37,7 +38,12 @@ describe(TicketCommandHandler.name, () => {
     const context = {
       project: { id: 7, name: 'Campus Core', slug: 'campus-core' },
       projectId: 7,
-      user: { id: 'user-1', mezonId: 'mezon-user-1', name: 'Reporter' },
+      user: {
+        id: 'user-1',
+        mezonId: 'mezon-user-1',
+        name: 'Reporter',
+        role: UserRole.PM,
+      },
     };
     const projectContextService = {
       getRequiredCurrentProjectByMezonId: jest.fn().mockResolvedValue(context),
@@ -45,7 +51,7 @@ describe(TicketCommandHandler.name, () => {
     };
     const ticketService = {
       deleteTicket: jest.fn(),
-      getDetailTicket: jest.fn(),
+      getTicketById: jest.fn(),
       updateTicket: jest.fn(),
       ...overrides?.ticketService,
     };
@@ -103,7 +109,7 @@ describe(TicketCommandHandler.name, () => {
     const message = createMessage();
     const { handler, ticketService } = createHandler({
       ticketService: {
-        getDetailTicket: jest.fn().mockResolvedValue({
+        getTicketById: jest.fn().mockResolvedValue({
           id: 1,
           projectId: 7,
           title: 'Resolve ticket',
@@ -122,7 +128,7 @@ describe(TicketCommandHandler.name, () => {
     const { handler, ticketService } = createHandler({
       ticketService: {
         deleteTicket: jest.fn().mockResolvedValue(true),
-        getDetailTicket: jest.fn().mockResolvedValue({
+        getTicketById: jest.fn().mockResolvedValue({
           id: 1,
           projectId: 7,
           title: 'Resolve ticket',
