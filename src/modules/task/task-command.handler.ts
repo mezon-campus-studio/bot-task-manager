@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '#src/common/enums/user.enum.js';
 import {
   Args,
   AutoContext,
@@ -217,6 +218,15 @@ export class TaskCommandHandler {
       return;
     }
 
+    const dbUser = context.user;
+    if (!this.hasTaskPermission(dbUser, existingTask)) {
+      await this.reply(
+        message,
+        `You don't have permission to update status of task #${taskId}.`,
+      );
+      return;
+    }
+
     const updatedTask = await this.taskService.updateTaskStatus(taskId, {
       authorUserId: context.user.id,
       status,
@@ -277,6 +287,16 @@ export class TaskCommandHandler {
       return;
     }
 
+    const dbUser = context.user;
+    if (!this.canAssignTask(dbUser, targetUser.id)) {
+      await this.reply(
+        message,
+        `You don't have permission to assign task #${taskId} to **${targetUser.name ?? targetUser.mezonId}**
+        \nYou can only assign tasks to yourself or to users with the appropriate permissions.`,
+      );
+      return;
+    }
+
     const task = await this.taskService.assignTask(taskId, targetUser.id);
 
     if (!task) {
@@ -312,6 +332,20 @@ export class TaskCommandHandler {
       return;
     }
 
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    if (!this.isProjectManagerOrAdmin(context.user)) {
+      await this.reply(
+        message,
+        `You don't have permission to delete task #${taskId}.
+        \nYou can only delete tasks if you are the project manager or an administrator.`,
+      );
+      return;
+    }
+
     await this.reply(
       message,
       [
@@ -339,6 +373,20 @@ export class TaskCommandHandler {
       await this.reply(
         message,
         `Task #${taskId} not found in current project.`,
+      );
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    if (!this.isProjectManagerOrAdmin(context.user)) {
+      await this.reply(
+        message,
+        `You don't have permission to delete task #${taskId}.
+        \nYou can only delete tasks if you are the project manager or an administrator.`,
       );
       return;
     }
@@ -375,6 +423,44 @@ export class TaskCommandHandler {
     }
 
     return task;
+  }
+
+  private isProjectManagerOrAdmin(
+    dbUser: { role?: unknown } | null | undefined,
+  ): boolean {
+    const role = Number(dbUser?.role);
+    return role === UserRole.PM || role === UserRole.ADMIN;
+  }
+
+  private hasTaskPermission(
+    dbUser: { id?: unknown; role?: unknown } | null | undefined,
+    task: { assigneeUserId: string | null },
+  ): boolean {
+    if (!dbUser?.id) return false;
+
+    const userId = String(dbUser.id);
+
+    const isAssignee =
+      task.assigneeUserId != null && task.assigneeUserId === userId;
+
+    return this.isProjectManagerOrAdmin(dbUser) || isAssignee;
+  }
+
+  private canAssignTask(
+    dbUser: { id?: unknown; role?: unknown } | null | undefined,
+    targetAssigneeId: string, // ID của người ĐƯỢC chỉ định gán trong dòng lệnh
+  ): boolean {
+    if (!dbUser?.id) return false;
+
+    const currentUserId = String(dbUser.id);
+
+    // Điều kiện 1: Là PM hoặc Admin -> Có quyền gán cho bất kỳ ai
+    const isLead = this.isProjectManagerOrAdmin(dbUser);
+
+    // Điều kiện 2: Tự gán cho chính mình (Self-assign)
+    const isSelfAssign = currentUserId === targetAssigneeId;
+
+    return isLead || isSelfAssign;
   }
 
   private parseId(value: string | undefined): number | null {
