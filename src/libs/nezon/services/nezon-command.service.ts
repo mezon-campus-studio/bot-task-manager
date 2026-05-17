@@ -165,10 +165,20 @@ export class NezonCommandService {
     if (!this.isAllowedForContext(definition.restricts, context)) {
       return;
     }
-    const guardsOk = await this.canActivateGuards(definition.instance, method, [
-      context,
-    ]);
-    if (!guardsOk) {
+    try {
+      const guardsOk = await this.canActivateGuards(
+        definition.instance,
+        method,
+        [context],
+      );
+      if (!guardsOk) {
+        return;
+      }
+    } catch (error) {
+      const err = error as { message?: unknown };
+      const message =
+        typeof err?.message === 'string' ? err.message : '❌ Command denied.';
+      await context.reply(SmartMessage.text(message).toContent());
       return;
     }
     const parameters = definition.parameters ?? [];

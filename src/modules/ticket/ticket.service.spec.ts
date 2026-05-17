@@ -126,7 +126,10 @@ describe(TicketService.name, () => {
       title: 'Advisor sync webhook failed',
     });
 
-    const resolvedTicket = await ticketService.markResolved(ticket.id);
+    const resolvedTicket = await ticketService.markResolved(
+      projectId,
+      ticket.id,
+    );
 
     expect(resolvedTicket).toMatchObject({
       id: ticket.id,
@@ -143,7 +146,9 @@ describe(TicketService.name, () => {
   });
 
   it('should return null when the ticket to resolve does not exist', async () => {
-    await expect(ticketService.markResolved(999_999)).resolves.toBeNull();
+    await expect(
+      ticketService.markResolved(nextNumericId(), 999_999),
+    ).resolves.toBeNull();
     await expect(ticketRepository.count()).resolves.toBe(0);
   });
 
@@ -156,7 +161,7 @@ describe(TicketService.name, () => {
       title: 'Detail lookup ticket',
     });
 
-    const found = await ticketService.getDetailTicket(projectId, ticket.id);
+    const found = await ticketService.getTicketById(projectId, ticket.id);
 
     expect(found).toMatchObject({
       id: ticket.id,
@@ -176,7 +181,7 @@ describe(TicketService.name, () => {
     });
 
     await expect(
-      ticketService.getDetailTicket(otherProjectId, ticket.id),
+      ticketService.getTicketById(otherProjectId, ticket.id),
     ).resolves.toBeNull();
   });
 
@@ -230,7 +235,7 @@ describe(TicketService.name, () => {
       title: 'Ticket to delete',
     });
 
-    await ticketService.deleteTicket(ticket.id);
+    await ticketService.deleteTicket(projectId, ticket.id);
 
     await expect(
       ticketRepository.findOneBy({ id: ticket.id }),
@@ -240,7 +245,10 @@ describe(TicketService.name, () => {
   it('should throw from deleteTicket when the ticket does not exist', async () => {
     createTicketContext();
 
-    await expect(ticketService.deleteTicket(999_999)).rejects.toBeDefined();
+    const { projectId } = createTicketContext();
+    await expect(
+      ticketService.deleteTicket(projectId, 999_999),
+    ).rejects.toBeDefined();
   });
 
   it('should support updateSession from the CRUD base for ticket escalation changes', async () => {

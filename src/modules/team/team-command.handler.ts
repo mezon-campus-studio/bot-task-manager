@@ -80,7 +80,7 @@ export class TeamCommandHandler {
               '🏷️ **Team Commands:**',
               '  `*team list` – List all teams in current project',
               '  `*team create <slug> <name> [@leader]` – Create a new team',
-              '  `*team info <teamId|slug|@slug>` – View team detail',
+              '  `*team detail | info <teamId|slug|@slug>` – View team detail',
               '  `*team delete <teamId|slug|@slug>` – Prepare delete confirmation',
               '  `*team confirm delete <teamId|slug|@slug>` – Confirm delete',
               '  `*team default <teamId|slug|@slug>` – Set default team for project',

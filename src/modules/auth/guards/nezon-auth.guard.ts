@@ -1,6 +1,7 @@
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
   Logger,
 } from '@nestjs/common';
@@ -92,7 +93,7 @@ export class NezonAuthGuard implements CanActivate {
       this.logger.warn(
         `NezonAuthGuard: Non-admin mezonId ${senderId} attempted to execute *user create. Denied.`,
       );
-      return false;
+      throw new ForbiddenException('❌ Only administrators can create users.');
     }
 
     if (role != null && shouldSyncResolvedUserRole(user.role, role)) {

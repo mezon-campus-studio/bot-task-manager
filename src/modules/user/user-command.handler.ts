@@ -233,11 +233,8 @@ export class UserCommandHandler {
     try {
       const senderUser = (ctx as any).dbUser;
       const userRole = Number(senderUser?.role);
-      if (userRole !== UserRole.PM && userRole !== UserRole.ADMIN) {
-        await this.reply(
-          message,
-          '❌ Only project managers and administrators can create users.',
-        );
+      if (userRole !== UserRole.ADMIN) {
+        await this.reply(message, '❌ Only administrators can create users.');
         return;
       }
 
