@@ -276,7 +276,7 @@ export class TicketCommandHandler {
           senderId,
         );
 
-      const ticket = await this.ticketService.getTicketById(
+      const ticket = await this.ticketService.getDetailTicket(
         context.projectId,
         ticketId,
       );
@@ -402,7 +402,7 @@ export class TicketCommandHandler {
         return;
       }
 
-      const ticket = await this.ticketService.getTicketById(
+      const ticket = await this.ticketService.getDetailTicket(
         context.projectId,
         ticketId,
       );
@@ -454,7 +454,7 @@ export class TicketCommandHandler {
         return;
       }
 
-      const ticket = await this.ticketService.getTicketById(
+      const ticket = await this.ticketService.getDetailTicket(
         context.projectId,
         ticketId,
       );

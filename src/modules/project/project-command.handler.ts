@@ -365,11 +365,6 @@ export class ProjectCommandHandler {
     return this.projectService.findBySlug(normalizedProjectKey);
   }
 
-  private isAdmin(dbUser: any): boolean {
-    const role = Number(dbUser?.role);
-    return role === UserRole.ADMIN;
-  }
-
   private isProjectManagerOrAdmin(dbUser: any): boolean {
     const role = Number(dbUser?.role);
     return role === UserRole.PM || role === UserRole.ADMIN;

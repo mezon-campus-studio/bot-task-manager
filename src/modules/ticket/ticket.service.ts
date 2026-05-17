@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { TicketSeverity, TicketStatus } from './enums';
 import TicketEntity from './ticket.entity';
+import UserEntity from '../user/user.entity';
 
 export type CreateTicketInput = Pick<
   TicketEntity,
@@ -25,8 +26,27 @@ export class TicketService extends CRUDService<TicketEntity> {
   constructor(
     @InjectRepository(TicketEntity)
     private ticketRepository: Repository<TicketEntity>,
+    @InjectRepository(UserEntity)
+    private userRepository: Repository<UserEntity>,
   ) {
     super(ticketRepository);
+  }
+
+  private async ensureUserExists(userId: string): Promise<void> {
+    const existing = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['id'],
+    });
+
+    if (existing) return;
+
+    await this.userRepository.insert({
+      id: userId,
+      mezonId: userId,
+      name: null,
+      email: null,
+      avatar: null,
+    });
   }
 
   async createTicket(input: CreateTicketInput): Promise<TicketEntity> {
@@ -34,6 +54,11 @@ export class TicketService extends CRUDService<TicketEntity> {
       log: 'Attempting to create ticket',
       input,
     });
+
+    await this.ensureUserExists(input.reporterUserId);
+    if (input.assigneeUserId) {
+      await this.ensureUserExists(input.assigneeUserId);
+    }
 
     const ticket = this.ticketRepository.create(input);
 
@@ -82,6 +107,13 @@ export class TicketService extends CRUDService<TicketEntity> {
       where: { id: ticketId, projectId: projectId },
       relations: ['assigneeUser', 'reporterUser'],
     });
+  }
+
+  async getDetailTicket(
+    projectId: number,
+    ticketId: number,
+  ): Promise<TicketEntity | null> {
+    return await this.getTicketById(projectId, ticketId);
   }
 
   async updateStatus(
@@ -156,6 +188,13 @@ export class TicketService extends CRUDService<TicketEntity> {
       });
 
       return null;
+    }
+
+    if (input.assigneeUserId) {
+      await this.ensureUserExists(input.assigneeUserId);
+    }
+    if (input.reporterUserId) {
+      await this.ensureUserExists(input.reporterUserId);
     }
 
     Object.assign(ticket, input);
