@@ -19,13 +19,13 @@ import { TicketService } from './ticket.service';
 /**
  * Ticket command handler for the Mezon bot.
  *
- *   *ticket list                         – List all tickets in current project
- *   *ticket create <title>               – Create a new ticket
- *   *ticket detail <ticketId>            – Get ticket detail
- *   *ticket status <ticketId> <status>   – Update ticket status (open|in_progress|resolved|closed)
- *   *ticket assign <ticketId> @mention   – Assign ticket to a user (via mention)
- *   *ticket delete <ticketId>            – Soft-delete a ticket
- *   *ticket resolve <ticketId>           – Mark ticket as resolved
+ * *ticket list                         – List all tickets in current project
+ * *ticket create <title>               – Create a new ticket
+ * *ticket detail <ticketId>            – Get ticket detail
+ * *ticket status <ticketId> <status>   – Update ticket status (open|in_progress|resolved|closed)
+ * *ticket assign <ticketId> @mention   – Assign ticket to a user (via mention)
+ * *ticket delete <ticketId>            – Soft-delete a ticket
+ * *ticket resolve <ticketId>           – Mark ticket as resolved
  */
 @Injectable()
 @UseGuards(NezonAuthGuard)
@@ -42,7 +42,7 @@ export class TicketCommandHandler {
   async handleTicketCommand(
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
-    @Context() ctx: NezonCommandContext,
+    @Context() _ctx: NezonCommandContext,
   ): Promise<void> {
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
@@ -61,26 +61,26 @@ export class TicketCommandHandler {
           await this.createTicket(args, senderId, message);
           return;
         case 'detail':
-          await this.detailTicket(args, senderId, message, ctx);
+          await this.detailTicket(args, senderId, message);
           return;
         case 'status':
           await this.updateTicketStatus(args, senderId, message);
           return;
         case 'assign':
-          await this.assignTicket(args, senderId, message, ctx);
+          await this.assignTicket(args, senderId, message);
           return;
         case 'delete':
-          await this.deleteTicket(args, senderId, message, ctx);
+          await this.deleteTicket(args, senderId, message);
           return;
         case 'confirm':
           if (args[1]?.toLowerCase() === 'delete') {
-            await this.confirmDeleteTicket(args, senderId, message, ctx);
+            await this.confirmDeleteTicket(args, senderId, message);
             return;
           }
           await this.reply(message, 'Usage: `*ticket confirm delete <id>`');
           return;
         case 'resolve':
-          await this.resolveTicket(args, message, senderId);
+          await this.resolveTicket(args, senderId, message);
           return;
         default:
           await this.reply(
@@ -115,9 +115,7 @@ export class TicketCommandHandler {
           senderId,
         );
 
-      let tickets = await this.ticketService.listTicketsInProject(
-        context.projectId,
-      );
+      let tickets = await this.ticketService.listByProject(context.projectId);
 
       if (!this.isProjectManagerOrAdmin(context.user)) {
         tickets = tickets.filter(
@@ -150,6 +148,7 @@ export class TicketCommandHandler {
       await this.reply(message, this.getErrorMessage(error));
     }
   }
+
   private async createTicket(
     args: string[],
     senderId: string,
@@ -186,7 +185,6 @@ export class TicketCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
-    ctx: NezonCommandContext,
   ): Promise<void> {
     const ticketId = this.parseId(args[1]);
 
@@ -203,7 +201,7 @@ export class TicketCommandHandler {
         senderId,
       );
 
-    const ticket = await this.ticketService.getDetailTicket(
+    const ticket = await this.ticketService.getTicketById(
       context.projectId,
       ticketId,
     );
@@ -216,9 +214,8 @@ export class TicketCommandHandler {
       return;
     }
 
-    const dbUser = (ctx as any).dbUser;
     if (
-      !this.hasTicketPermission(dbUser, {
+      !this.hasTicketPermission(context.user, {
         reporterUserId: ticket.reporterUserId,
         assigneeUserId: ticket.assigneeUserId,
       })
@@ -279,7 +276,10 @@ export class TicketCommandHandler {
           senderId,
         );
 
-      const ticket = await this.ticketService.getTicketById(ticketId);
+      const ticket = await this.ticketService.getTicketById(
+        context.projectId,
+        ticketId,
+      );
       if (!ticket) {
         await this.reply(message, `❌ Ticket #${ticketId} not found.`);
         return;
@@ -297,8 +297,10 @@ export class TicketCommandHandler {
         );
         return;
       }
+      const projectId = context.projectId;
 
       const updated = await this.ticketService.updateStatus(
+        projectId,
         ticketId,
         newStatus,
       );
@@ -316,17 +318,8 @@ export class TicketCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
-    ctx: NezonCommandContext,
   ): Promise<void> {
     try {
-      const dbUser = (ctx as any).dbUser;
-      if (!this.isProjectManagerOrAdmin(dbUser)) {
-        await this.reply(
-          message,
-          `❌ Only project managers and administrators can assign tickets.`,
-        );
-        return;
-      }
       const ticketId = this.parseId(args[1]);
       const rawIdentifier = args[2];
 
@@ -342,6 +335,14 @@ export class TicketCommandHandler {
         await this.projectContextService.getRequiredCurrentProjectByMezonId(
           senderId,
         );
+
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        await this.reply(
+          message,
+          `❌ Only project managers and administrators can assign tickets.`,
+        );
+        return;
+      }
 
       const targetIdentifier =
         this.getMentionedUserIdentifier(rawIdentifier, message) ??
@@ -379,18 +380,8 @@ export class TicketCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
-    ctx: NezonCommandContext,
   ): Promise<void> {
     try {
-      const dbUser = (ctx as any).dbUser;
-      if (!this.isProjectManagerOrAdmin(dbUser)) {
-        await this.reply(
-          message,
-          `❌ Only project managers and administrators can delete tickets.`,
-        );
-        return;
-      }
-
       const ticketId = this.parseId(args[1]);
 
       if (ticketId == null) {
@@ -403,7 +394,15 @@ export class TicketCommandHandler {
           senderId,
         );
 
-      const ticket = await this.ticketService.getDetailTicket(
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        await this.reply(
+          message,
+          `❌ Only project managers and administrators can delete tickets.`,
+        );
+        return;
+      }
+
+      const ticket = await this.ticketService.getTicketById(
         context.projectId,
         ticketId,
       );
@@ -433,17 +432,8 @@ export class TicketCommandHandler {
     args: string[],
     senderId: string,
     message: ManagedMessage,
-    ctx: NezonCommandContext,
   ): Promise<void> {
     try {
-      const dbUser = (ctx as any).dbUser;
-      if (!this.isProjectManagerOrAdmin(dbUser)) {
-        await this.reply(
-          message,
-          `❌ Only project managers and administrators can delete tickets.`,
-        );
-        return;
-      }
       const ticketId = this.parseId(args[2]);
 
       if (ticketId == null) {
@@ -456,7 +446,15 @@ export class TicketCommandHandler {
           senderId,
         );
 
-      const ticket = await this.ticketService.getDetailTicket(
+      if (!this.isProjectManagerOrAdmin(context.user)) {
+        await this.reply(
+          message,
+          `❌ Only project managers and administrators can delete tickets.`,
+        );
+        return;
+      }
+
+      const ticket = await this.ticketService.getTicketById(
         context.projectId,
         ticketId,
       );
@@ -469,7 +467,7 @@ export class TicketCommandHandler {
         return;
       }
 
-      await this.ticketService.deleteTicket(ticketId);
+      await this.ticketService.deleteTicket(context.projectId, ticketId);
 
       await this.reply(message, `🗑️ Ticket **#${ticketId}** has been deleted.`);
     } catch (error) {
@@ -480,8 +478,8 @@ export class TicketCommandHandler {
 
   private async resolveTicket(
     args: string[],
-    message: ManagedMessage,
     senderId: string,
+    message: ManagedMessage,
   ): Promise<void> {
     try {
       const ticketId = this.parseId(args[1]);
@@ -496,7 +494,10 @@ export class TicketCommandHandler {
           senderId,
         );
 
-      const ticket = await this.ticketService.getTicketById(ticketId);
+      const ticket = await this.ticketService.getTicketById(
+        context.projectId,
+        ticketId,
+      );
 
       if (!ticket) {
         await this.reply(
