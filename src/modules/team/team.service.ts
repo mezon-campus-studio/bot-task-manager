@@ -462,4 +462,37 @@ export class TeamService extends CRUDService<TeamEntity> {
       },
     );
   }
+
+  async restoreTeamBySlug(
+    projectId: number,
+    slug: string,
+  ): Promise<TeamEntity> {
+    this.logger.log({
+      log: 'Manual attempt to restore soft-deleted team by slug',
+      projectId,
+      slug,
+    });
+
+    return await this.teamRepository.manager.transaction(
+      async (transactionalEntityManager) => {
+        const team = await transactionalEntityManager.findOne(TeamEntity, {
+          where: { projectId, slug },
+          withDeleted: true,
+        });
+
+        if (!team) {
+          throw new NotFoundException(`Team with slug "${slug}" not found.`);
+        }
+
+        if (team.deletedAt === null) {
+          throw new ConflictException(
+            `Team with slug "${slug}" is not deleted, no need to restore.`,
+          );
+        }
+
+        team.deletedAt = null;
+        return await transactionalEntityManager.save(TeamEntity, team);
+      },
+    );
+  }
 }

@@ -70,6 +70,9 @@ export class TeamCommandHandler {
         case 'confirm':
           await this.confirmTeamCommand(args, senderId, message, ctx);
           return;
+        case 'restore':
+          await this.restoreTeamCommand(args, senderId, message, ctx);
+          return;
         case 'default':
           await this.setDefaultTeam(args, senderId, message, ctx);
           return;
@@ -83,6 +86,7 @@ export class TeamCommandHandler {
               '  `*team detail | info <teamId|slug|@slug>` – View team detail',
               '  `*team delete <teamId|slug|@slug>` – Prepare delete confirmation',
               '  `*team confirm delete <teamId|slug|@slug>` – Confirm delete',
+              '  `*team restore <slug>` – Restore a soft-deleted team',
               '  `*team default <teamId|slug|@slug>` – Set default team for project',
             ].join('\n'),
           );
@@ -350,6 +354,44 @@ export class TeamCommandHandler {
     await this.reply(
       message,
       `🗑️ Team **${team.name}** (\`${team.slug}\`) was deleted from project **${context.project.name}**.`,
+    );
+  }
+
+  private async restoreTeamCommand(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const slug = args[1];
+
+    if (!slug) {
+      await this.reply(message, '⚠️ Usage: `*team restore <slug>`');
+      return;
+    }
+
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only Project Managers and Administrators can restore teams.',
+      );
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const restoredTeam = await this.teamService.restoreTeamBySlug(
+      context.projectId,
+      slug,
+    );
+
+    await this.reply(
+      message,
+      `✅ Successfully restored team **${restoredTeam.name}** (\`${restoredTeam.slug}\`) into project **${context.project.name}**.`,
     );
   }
 
