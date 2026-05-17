@@ -1,9 +1,16 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { TicketSeverity, TicketStatus } from './enums';
 import TicketEntity from './ticket.entity';
+import TeamEntity from '../team/team.entity';
+import TeamMemberEntity from '../team-member/team-member.entity';
 
 export type CreateTicketInput = Pick<
   TicketEntity,
@@ -29,11 +36,32 @@ export class TicketService extends CRUDService<TicketEntity> {
     super(ticketRepository);
   }
 
+  private async validateUserInProject(
+    projectId: number,
+    userId: string,
+  ): Promise<void> {
+    const memberCheck = await this.ticketRepository.manager
+      .createQueryBuilder(TeamMemberEntity, 'member')
+      .innerJoin(TeamEntity, 'team', 'team.id = member.team_id')
+      .where('team.project_id = :projectId', { projectId })
+      .andWhere('member.user_id = :userId', { userId })
+      .getOne();
+
+    if (!memberCheck) {
+      throw new BadRequestException(
+        `This user is not a member of any team in project ${projectId}`,
+      );
+    }
+  }
+
   async createTicket(input: CreateTicketInput): Promise<TicketEntity> {
     this.logger.log({
       log: 'Attempting to create ticket',
       input,
     });
+    if (input.assigneeUserId) {
+      await this.validateUserInProject(input.projectId, input.assigneeUserId);
+    }
 
     const ticket = this.ticketRepository.create(input);
 
@@ -50,6 +78,34 @@ export class TicketService extends CRUDService<TicketEntity> {
     });
 
     return result;
+  }
+
+  async updateTicket(
+    projectId: number,
+    ticketId: number,
+    input: UpdateTicketInput,
+  ): Promise<TicketEntity | null> {
+    this.logger.log({
+      log: 'Attempting to update ticket',
+      projectId,
+      ticketId,
+      input,
+    });
+
+    const ticket = await this.ticketRepository.findOne({
+      where: { id: ticketId, projectId },
+    });
+
+    if (!ticket) {
+      return null;
+    }
+
+    if (input.assigneeUserId) {
+      await this.validateUserInProject(projectId, input.assigneeUserId);
+    }
+
+    Object.assign(ticket, input);
+    return await this.ticketRepository.save(ticket);
   }
 
   async listByProject(projectId: number): Promise<TicketEntity[]> {
@@ -132,44 +188,6 @@ export class TicketService extends CRUDService<TicketEntity> {
     }
 
     await this.ticketRepository.softDelete(ticketId);
-  }
-
-  async updateTicket(
-    projectId: number,
-    ticketId: number,
-    input: UpdateTicketInput,
-  ): Promise<TicketEntity | null> {
-    this.logger.log({
-      log: 'Attempting to update ticket',
-      projectId,
-      ticketId,
-      input,
-    });
-
-    const ticket = await this.getTicketById(projectId, ticketId);
-
-    if (!ticket) {
-      this.logger.log({
-        log: 'Ticket not found in project for update',
-        projectId,
-        ticketId,
-      });
-
-      return null;
-    }
-
-    Object.assign(ticket, input);
-
-    const result = await this.ticketRepository.save(ticket);
-
-    this.logger.log({
-      log: 'Ticket update result',
-      projectId,
-      ticketId,
-      result,
-    });
-
-    return result;
   }
 
   async getByStatus(
