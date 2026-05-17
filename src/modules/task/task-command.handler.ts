@@ -106,8 +106,8 @@ export class TaskCommandHandler {
     }
 
     const lines = tasks.map((task) => {
-      const assignee = task.assigneeUserId
-        ? ` - assignee: ${task.assigneeUserId}`
+      const assignee = task.assigneeUser
+        ? ` - assignee: ${task.assigneeUser.name}`
         : '';
       return `  [#${task.id}] ${task.title} - ${task.status}${assignee}`;
     });
@@ -176,8 +176,8 @@ export class TaskCommandHandler {
         `Title: ${task.title}`,
         `Status: ${task.status}`,
         `Priority: ${task.priority ?? 'N/A'}`,
-        `Reporter: ${task.reporterUserId}`,
-        `Assignee: ${task.assigneeUserId ?? 'Unassigned'}`,
+        `Reporter: ${task.reporterUser.name}`,
+        `Assignee: ${task.assigneeUser?.name ?? 'Unassigned'}`,
         task.description ? `Description: ${task.description}` : null,
       ]
         .filter((line): line is string => line != null)
