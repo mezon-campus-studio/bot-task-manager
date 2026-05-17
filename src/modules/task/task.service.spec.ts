@@ -29,12 +29,18 @@ describe(TaskService.name, () => {
     return numericSequence;
   }
 
-  function createTaskContext() {
+  async function createTaskContext() {
+    const project = await factory.project({});
+    const reporter = await factory.user({});
+    const assignee = await factory.user({});
+    const team = await factory.team({
+      projectId: project.id,
+    });
     return {
-      assigneeUserId: randomUUID(),
-      projectId: nextNumericId(),
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
+      assigneeUserId: assignee.id,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: team.id,
     };
   }
 
@@ -64,7 +70,7 @@ describe(TaskService.name, () => {
 
   it('should create a task for the project workflow with the provided schedule', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
+      await createTaskContext();
     const dueAt = new Date('2026-05-01T09:00:00.000Z');
 
     const task = await taskService.createTask({
@@ -110,7 +116,7 @@ describe(TaskService.name, () => {
 
   it('should return only project tasks ordered by due date and newest id for ties', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
+      await createTaskContext();
     const otherProjectId = nextNumericId();
     const sharedDueAt = new Date('2026-06-15T09:00:00.000Z');
 
@@ -629,7 +635,7 @@ describe(TaskService.name, () => {
   });
 
   it('should find a task by id', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       projectId,
       reporterUserId,
@@ -652,7 +658,7 @@ describe(TaskService.name, () => {
 
   it('should update an existing task with the provided workflow changes', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
+      await createTaskContext();
     const dueAt = new Date('2026-07-01T09:00:00.000Z');
     const updatedDueAt = new Date('2026-07-10T09:00:00.000Z');
     const task = await factory.task({
@@ -703,7 +709,7 @@ describe(TaskService.name, () => {
   });
 
   it('should soft delete an existing task', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       projectId,
       reporterUserId,
@@ -729,7 +735,7 @@ describe(TaskService.name, () => {
   });
 
   it('should support updateSession from the CRUD base for task workflow changes', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       priority: TaskPriority.MEDIUM,
       projectId,
@@ -758,7 +764,7 @@ describe(TaskService.name, () => {
   });
 
   it('should support updateEntry from the CRUD base for task workflow changes', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       assigneeUserId: randomUUID(),
       description: 'Initial task detail',

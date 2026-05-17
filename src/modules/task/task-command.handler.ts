@@ -176,8 +176,8 @@ export class TaskCommandHandler {
         `Title: ${task.title}`,
         `Status: ${task.status}`,
         `Priority: ${task.priority ?? 'N/A'}`,
-        `Reporter: ${task.reporterUser.name}`,
-        `Assignee: ${task.assigneeUser?.name ?? 'Unassigned'}`,
+        `Reporter: ${task.reporterUser.name ?? task.reporterUser.mezonId}`,
+        `Assignee: ${task.assigneeUser?.name ?? task.assigneeUser?.mezonId}`,
         task.description ? `Description: ${task.description}` : null,
       ]
         .filter((line): line is string => line != null)

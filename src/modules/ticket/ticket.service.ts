@@ -9,8 +9,8 @@ import { Repository } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { TicketSeverity, TicketStatus } from './enums';
 import TicketEntity from './ticket.entity';
-import TeamEntity from '../team/team.entity';
-import TeamMemberEntity from '../team-member/team-member.entity';
+import { ProjectMemberStatus } from '../project-member/project-member-status.enum';
+import ProjectMemberEntity from '../project-member/project-member.entity';
 
 export type CreateTicketInput = Pick<
   TicketEntity,
@@ -41,15 +41,17 @@ export class TicketService extends CRUDService<TicketEntity> {
     userId: string,
   ): Promise<void> {
     const memberCheck = await this.ticketRepository.manager
-      .createQueryBuilder(TeamMemberEntity, 'member')
-      .innerJoin(TeamEntity, 'team', 'team.id = member.team_id')
-      .where('team.project_id = :projectId', { projectId })
-      .andWhere('member.user_id = :userId', { userId })
+      .createQueryBuilder(ProjectMemberEntity, 'member')
+      .where('member.projectId = :projectId', { projectId })
+      .andWhere('member.userId = :userId', { userId })
+      .andWhere('member.status = :status', {
+        status: ProjectMemberStatus.ACTIVE,
+      })
       .getOne();
 
     if (!memberCheck) {
       throw new BadRequestException(
-        `This user is not a member of any team in project ${projectId}`,
+        `This user is not an active member of project #${projectId}`,
       );
     }
   }

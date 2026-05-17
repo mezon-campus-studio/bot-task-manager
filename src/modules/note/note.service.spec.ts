@@ -23,18 +23,24 @@ describe(NoteService.name, () => {
   }
 
   async function createNoteContext() {
-    const authorUserId = randomUUID();
-    const projectId = nextNumericId();
+    const project = await factory.project({});
+    const author = await factory.user({});
+    const assignee = await factory.user({});
+    const reporter = await factory.user({});
+    const team = await factory.team({
+      projectId: project.id,
+    });
+
     const task = await factory.task({
-      assigneeUserId: randomUUID(),
-      projectId,
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
+      projectId: project.id,
+      teamId: team.id,
+      assigneeUserId: assignee.id,
+      reporterUserId: reporter.id,
     });
 
     return {
-      authorUserId,
-      projectId,
+      authorUserId: author.id,
+      projectId: project.id,
       task,
     };
   }

@@ -347,13 +347,13 @@ export class TicketCommandHandler {
 
     const assigneeUser = await this.userService.findByIdentifier(
       targetUserIdentifier,
-      true,
+      false,
     );
 
     if (!assigneeUser) {
       await this.reply(
         message,
-        `❌ User "${mentionArg}" not found in the system.`,
+        `❌ User "${mentionArg}" not found or has been deleted from the system.`,
       );
       return;
     }
