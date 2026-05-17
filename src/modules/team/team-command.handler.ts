@@ -241,7 +241,9 @@ export class TeamCommandHandler {
         `  Name: ${team.name}`,
         `  Slug: ${team.slug}`,
         `  Default: ${team.isDefault ? 'Yes ⭐' : 'No'}`,
-        `  Leader ID: ${team.leaderId ?? 'none'}`,
+        `  Leader Name: ${team.leader?.name ?? 'none'}`,
+        `  Created At: ${team.createdAt.toLocaleString()}`,
+        `  Updated At: ${team.updatedAt.toLocaleString()}`,
         `  Project: ${context.project.name} (${context.project.slug})`,
       ].join('\n'),
     );

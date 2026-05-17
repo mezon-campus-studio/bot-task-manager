@@ -138,7 +138,10 @@ export class TeamService extends CRUDService<TeamEntity> {
 
     const numericId = Number(normalized);
     if (/^[0-9]+$/.test(normalized) && Number.isInteger(numericId)) {
-      const team = await this.findById(numericId);
+      const team = await this.teamRepository.findOne({
+        where: { id: numericId },
+        relations: ['leader'],
+      });
       if (team?.projectId === projectId) {
         return team;
       }
@@ -147,19 +150,28 @@ export class TeamService extends CRUDService<TeamEntity> {
     if (normalized.startsWith('@')) {
       const slug = normalized.slice(1).trim();
       if (slug) {
-        const teamBySlug = await this.findByProjectAndSlug(projectId, slug);
+        const teamBySlug = await this.teamRepository.findOne({
+          where: { projectId, slug },
+          relations: ['leader'],
+        });
         if (teamBySlug) {
           return teamBySlug;
         }
       }
     }
 
-    const teamBySlug = await this.findByProjectAndSlug(projectId, normalized);
+    const teamBySlug = await this.teamRepository.findOne({
+      where: { projectId, slug: normalized },
+      relations: ['leader'],
+    });
     if (teamBySlug) {
       return teamBySlug;
     }
 
-    return this.findByProjectAndName(projectId, normalized);
+    return this.teamRepository.findOne({
+      where: { projectId, name: normalized },
+      relations: ['leader'],
+    });
   }
 
   async findByLeaderId(leaderId: string): Promise<TeamEntity[]> {
