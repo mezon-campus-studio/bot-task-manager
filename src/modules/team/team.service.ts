@@ -58,6 +58,15 @@ export class TeamService extends CRUDService<TeamEntity> {
             if (input.leaderId) existingTeam.leaderId = input.leaderId;
             if (input.updatedBy) existingTeam.updatedBy = input.updatedBy;
 
+            if (input.isDefault === true) {
+              await transactionalEntityManager.update(
+                TeamEntity,
+                { projectId: input.projectId, isDefault: true },
+                { isDefault: false },
+              );
+              existingTeam.isDefault = true;
+            }
+
             return await transactionalEntityManager.save(
               TeamEntity,
               existingTeam,
@@ -66,6 +75,14 @@ export class TeamService extends CRUDService<TeamEntity> {
 
           throw new ConflictException(
             `Team with slug "${input.slug}" already exists in this project.`,
+          );
+        }
+
+        if (input.isDefault === true) {
+          await transactionalEntityManager.update(
+            TeamEntity,
+            { projectId: input.projectId, isDefault: true },
+            { isDefault: false },
           );
         }
 
