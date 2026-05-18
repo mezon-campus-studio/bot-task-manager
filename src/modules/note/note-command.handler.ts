@@ -109,6 +109,7 @@ export class NoteCommandHandler {
       );
 
     const filter = this.buildListFilter(context);
+    const isManager = this.isManager(context);
 
     const notes = isFiltered
       ? await this.noteService.listByResource(
@@ -135,9 +136,17 @@ export class NoteCommandHandler {
       (note) => note.authorUserId !== context.user.id && note.isShared === true,
     );
 
+    const managerOnlyNotes = isManager
+      ? notes.filter(
+          (note) =>
+            note.authorUserId !== context.user.id &&
+            note.isShared === false &&
+            note.resourceType !== NoteResourceType.USER,
+        )
+      : [];
+
     const formatLine = (note: NoteEntity) => {
-      const base = `  [#${note.id}] - ${this.formatNoteFlags(note).toUpperCase()} - [Type: ${note.resourceType.toUpperCase()}] - [Resource: ${note.resourceId}] - [Author: ${note.authorUser?.name || 'Unknown'}] - [${note.createdAt.toLocaleString()}]`;
-      return isFiltered ? `${base}` : `${base}`;
+      return `  [#${note.id}] - ${this.formatNoteFlags(note).toUpperCase()} - [Type: ${note.resourceType.toUpperCase()}] - [Resource: ${note.resourceId}] - [Author: ${note.authorUser?.name || 'Unknown'}] - [${note.createdAt.toLocaleString()}]`;
     };
 
     const outputLines: string[] = [];
@@ -159,6 +168,15 @@ export class NoteCommandHandler {
       outputLines.push(...sharedNotes.map(formatLine));
     } else {
       outputLines.push('  *(No public shared notes from others)*');
+    }
+
+    if (isManager) {
+      outputLines.push('\n🔒 **PRIVATE NOTES (Chỉ manager mới thấy):**');
+      if (managerOnlyNotes.length > 0) {
+        outputLines.push(...managerOnlyNotes.map(formatLine));
+      } else {
+        outputLines.push('  *(No private notes from others)*');
+      }
     }
 
     await this.reply(message, outputLines.join('\n'));
