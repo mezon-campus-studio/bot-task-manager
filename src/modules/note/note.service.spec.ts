@@ -127,9 +127,6 @@ describe(NoteService.name, () => {
     const updateSession = noteService.updateSession(note);
 
     note.content = 'Follow-up completed after the status check.';
-    // Chỉ update các field nằm trong UpdateNoteInput (content, isShared, isPinned)
-    // resourceId và resourceType không được hỗ trợ qua updateEntry nên không test ở đây
-
     await updateSession.save();
 
     await expect(
@@ -137,7 +134,6 @@ describe(NoteService.name, () => {
     ).resolves.toMatchObject({
       content: 'Follow-up completed after the status check.',
       id: note.id,
-      // resourceId và resourceType giữ nguyên giá trị ban đầu
       resourceId: 'task-14',
       resourceType: NoteResourceType.TASK,
     });
@@ -153,15 +149,13 @@ describe(NoteService.name, () => {
       resourceType: NoteResourceType.PROJECT,
     });
 
-    // UpdateNoteInput chỉ hỗ trợ: content | isShared | isPinned
-    // Không truyền resourceId vì không nằm trong UpdateNoteInput
     await noteService.updateEntry(note, {
       content: 'Advisor confirmed the final plan after the review.',
     });
 
     expect(note).toMatchObject({
       content: 'Advisor confirmed the final plan after the review.',
-      resourceId: 'project-9', // giữ nguyên
+      resourceId: 'project-9',
     });
 
     await expect(
@@ -169,7 +163,7 @@ describe(NoteService.name, () => {
     ).resolves.toMatchObject({
       content: 'Advisor confirmed the final plan after the review.',
       id: note.id,
-      resourceId: 'project-9', // giữ nguyên
+      resourceId: 'project-9',
       resourceType: NoteResourceType.PROJECT,
     });
   });
