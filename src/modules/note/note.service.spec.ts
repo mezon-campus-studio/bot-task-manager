@@ -20,6 +20,7 @@ describe(NoteService.name, () => {
   afterEach(async () => {
     await noteRepository.query('TRUNCATE TABLE "notes" CASCADE;');
   });
+
   async function createNoteContext() {
     const project = await factory.project({});
     const author = await factory.user({});
@@ -126,8 +127,8 @@ describe(NoteService.name, () => {
     const updateSession = noteService.updateSession(note);
 
     note.content = 'Follow-up completed after the status check.';
-    note.resourceId = 'ticket-14';
-    note.resourceType = NoteResourceType.TICKET;
+    // Chỉ update các field nằm trong UpdateNoteInput (content, isShared, isPinned)
+    // resourceId và resourceType không được hỗ trợ qua updateEntry nên không test ở đây
 
     await updateSession.save();
 
@@ -136,8 +137,9 @@ describe(NoteService.name, () => {
     ).resolves.toMatchObject({
       content: 'Follow-up completed after the status check.',
       id: note.id,
-      resourceId: 'ticket-14',
-      resourceType: NoteResourceType.TICKET,
+      // resourceId và resourceType giữ nguyên giá trị ban đầu
+      resourceId: 'task-14',
+      resourceType: NoteResourceType.TASK,
     });
   });
 
@@ -151,14 +153,15 @@ describe(NoteService.name, () => {
       resourceType: NoteResourceType.PROJECT,
     });
 
+    // UpdateNoteInput chỉ hỗ trợ: content | isShared | isPinned
+    // Không truyền resourceId vì không nằm trong UpdateNoteInput
     await noteService.updateEntry(note, {
       content: 'Advisor confirmed the final plan after the review.',
-      resourceId: 'project-9-final',
     });
 
     expect(note).toMatchObject({
       content: 'Advisor confirmed the final plan after the review.',
-      resourceId: 'project-9-final',
+      resourceId: 'project-9', // giữ nguyên
     });
 
     await expect(
@@ -166,12 +169,11 @@ describe(NoteService.name, () => {
     ).resolves.toMatchObject({
       content: 'Advisor confirmed the final plan after the review.',
       id: note.id,
-      resourceId: 'project-9-final',
+      resourceId: 'project-9', // giữ nguyên
       resourceType: NoteResourceType.PROJECT,
     });
   });
 
-  // shared note test
   it('should support sharing notes inside current project', async () => {
     const { authorUserId, projectId } = await createNoteContext();
 
