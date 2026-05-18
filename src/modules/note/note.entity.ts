@@ -1,6 +1,14 @@
-import { Column, DeleteDateColumn, Entity, Index } from 'typeorm';
+import {
+  Column,
+  DeleteDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+} from 'typeorm';
 import { AbstractEntity } from '@src/common/database/abstract.entity';
 import { NoteResourceType } from './enums';
+import UserEntity from '../user/user.entity';
 
 @Entity('notes')
 @Index('IDX_notes_project_author', ['projectId', 'authorUserId'])
@@ -18,8 +26,13 @@ export default class NoteEntity extends AbstractEntity {
 
   @Column({
     type: 'uuid',
+    name: 'author_user_id',
   })
   authorUserId!: string;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'author_user_id' })
+  authorUser!: UserEntity;
 
   @Column({
     type: 'boolean',

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository, SelectQueryBuilder } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { CRUDService } from '@src/common/utils/crud';
 import { NoteResourceType } from './enums';
 import NoteEntity from './note.entity';
@@ -30,6 +30,11 @@ export interface QueryNotesByResourceInput {
   limit?: number;
 }
 
+export interface NoteListFilter {
+  callerId: string;
+  isManager: boolean;
+}
+
 @Injectable()
 export class NoteService extends CRUDService<NoteEntity> {
   private readonly logger = new Logger(NoteService.name);
@@ -41,14 +46,41 @@ export class NoteService extends CRUDService<NoteEntity> {
     super(noteRepository);
   }
 
+  private applyListFilter(
+    qb: SelectQueryBuilder<NoteEntity>,
+    filter: NoteListFilter,
+  ): void {
+    const { callerId, isManager } = filter;
+
+    if (isManager) {
+      qb.andWhere(
+        `(
+        note.authorUserId = :callerId
+        OR note.resourceType != :userType
+        OR (note.resourceType = :userType AND note.isShared = true)
+      )`,
+        { callerId, userType: NoteResourceType.USER },
+      );
+    } else {
+      qb.andWhere(
+        `(
+        note.authorUserId = :callerId
+        OR (
+          note.resourceType != :userType
+          AND note.isShared = true
+        )
+        OR (note.resourceType = :userType AND note.isShared = true)
+      )`,
+        { callerId, userType: NoteResourceType.USER },
+      );
+    }
+  }
+
   async createNote(input: CreateNoteInput): Promise<NoteEntity> {
-    this.logger.log({ log: 'Attempting to create note', input });
+    this.logger.log({ log: 'createNote', input });
     const note = this.noteRepository.create(input);
-    this.logger.log({ log: 'Got note draft for creation', note });
-
     const result = await this.noteRepository.save(note);
-    this.logger.log({ log: 'Note create result', result });
-
+    this.logger.log({ log: 'Note created', noteId: result.id });
     return result;
   }
 
@@ -56,204 +88,96 @@ export class NoteService extends CRUDService<NoteEntity> {
     projectId: number,
     resourceType: NoteResourceType,
     resourceId: string,
+    filter: NoteListFilter,
   ): Promise<NoteEntity[]> {
     this.logger.log({
-      log: 'Attempting to list notes by resource',
+      log: 'listByResource',
       projectId,
       resourceType,
       resourceId,
     });
 
-    const note = this.noteRepository.create({
-      projectId,
-      resourceType,
-      resourceId,
-      isPinned: false,
-    });
-    this.logger.log({ log: 'Got note draft for list by resource', note });
+    const qb = this.noteRepository
+      .createQueryBuilder('note')
+      .leftJoinAndSelect('note.authorUser', 'authorUser')
+      .where('note.projectId = :projectId', { projectId })
+      .andWhere('note.resourceType = :resourceType', { resourceType })
+      .andWhere('note.resourceId = :resourceId', { resourceId });
 
-    const result = await this.noteRepository.find({
-      where: {
-        projectId,
-        resourceType,
-        resourceId,
-      },
-      order: {
-        createdAt: 'DESC',
-        id: 'DESC',
-      },
-    });
+    this.applyListFilter(qb, filter);
 
-    this.logger.log({
-      log: 'Got notes by resource result',
-      projectId,
-      resourceType,
-      resourceId,
-      count: result.length,
-      noteIds: result.map(({ id }) => id),
-    });
-
-    return result;
+    return qb
+      .orderBy('note.createdAt', 'DESC')
+      .addOrderBy('note.id', 'DESC')
+      .getMany();
   }
 
-  async listByProject(projectId: number): Promise<NoteEntity[]> {
-    this.logger.log({
-      log: 'Attempting to list notes by project',
-      projectId,
-    });
+  async listByProject(
+    projectId: number,
+    filter: NoteListFilter,
+  ): Promise<NoteEntity[]> {
+    this.logger.log({ log: 'listByProject', projectId });
 
-    const result = await this.noteRepository.find({
-      where: { projectId },
-      order: {
-        createdAt: 'DESC',
-        id: 'DESC',
-      },
-    });
+    const qb = this.noteRepository
+      .createQueryBuilder('note')
+      .leftJoinAndSelect('note.authorUser', 'authorUser')
+      .where('note.projectId = :projectId', { projectId });
 
-    this.logger.log({
-      log: 'Got notes by project result',
-      projectId,
-      count: result.length,
-      noteIds: result.map(({ id }) => id),
-    });
+    this.applyListFilter(qb, filter);
 
-    return result;
-  }
-
-  async deleteNote(noteId: number, userId: string): Promise<void> {
-    this.logger.log({ log: 'Attempting to delete note', noteId });
-
-    const note = await this.noteRepository.findOne({ where: { id: noteId } });
-    if (!note) {
-      throw new Error('Note not found');
-    }
-    if (note.authorUserId !== userId) {
-      throw new Error('Permission denied');
-    }
-
-    await this.noteRepository.softDelete({ id: noteId });
-
-    this.logger.log({ log: 'Note deleted', noteId });
+    return qb
+      .orderBy('note.createdAt', 'DESC')
+      .addOrderBy('note.id', 'DESC')
+      .getMany();
   }
 
   async getNoteById(noteId: number): Promise<NoteEntity | null> {
-    this.logger.log({ log: 'Attempting to get note by id', noteId });
+    this.logger.log({ log: 'getNoteById', noteId });
 
-    const result = await this.noteRepository.findOne({
+    return this.noteRepository.findOne({
       where: { id: noteId },
+      relations: ['authorUser'],
     });
-
-    this.logger.log({
-      log: 'Got note by id result',
-      noteId,
-      found: !!result,
-      note: result,
-    });
-
-    return result;
-  }
-
-  async pinNote(
-    noteId: number,
-    userId: string,
-    isPinned: boolean,
-  ): Promise<NoteEntity> {
-    const note = await this.noteRepository.findOne({
-      where: { id: noteId },
-    });
-
-    if (note?.authorUserId !== userId) {
-      throw new Error('Permission denied');
-    }
-    if (!note) {
-      throw new Error('Note not found');
-    }
-
-    note.isPinned = isPinned;
-
-    return this.noteRepository.save(note);
   }
 
   async updateNote(
     noteId: number,
-    userId: string,
     input: UpdateNoteInput,
-  ): Promise<NoteEntity> {
-    const note = await this.noteRepository.findOne({
-      where: { id: noteId },
-    });
-    if (!note) {
-      throw new Error('Note not found');
-    }
+  ): Promise<NoteEntity | null> {
+    const note = await this.noteRepository.findOne({ where: { id: noteId } });
+    if (!note) return null;
 
-    if (note.authorUserId !== userId) {
-      throw new Error('Permission denied');
-    }
-    if (input.content !== undefined) {
-      note.content = input.content;
-    }
     Object.assign(note, input);
-
-    return await this.noteRepository.save(note);
+    return this.noteRepository.save(note);
   }
 
-  async listByResourceWithPagination(
-    input: QueryNotesByResourceInput,
-  ): Promise<{ notes: NoteEntity[]; total: number }> {
-    const {
-      projectId,
-      resourceType,
-      resourceId,
-      isPinned,
-      isShared,
-      page = 1,
-      keyword,
-      limit = 20,
-    } = input;
+  async deleteNote(noteId: number): Promise<void> {
+    this.logger.log({ log: 'deleteNote', noteId });
+    await this.noteRepository.softDelete({ id: noteId });
+  }
 
-    const [result, total] = await this.noteRepository.findAndCount({
-      where: {
-        projectId,
-        resourceType,
-        resourceId,
-        isPinned,
-        isShared,
-        content: keyword ? Like(`%${keyword}%`) : undefined,
-      },
-      order: {
-        createdAt: 'DESC',
-        id: 'DESC',
-      },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+  async pinNote(noteId: number, isPinned: boolean): Promise<NoteEntity | null> {
+    const note = await this.noteRepository.findOne({ where: { id: noteId } });
+    if (!note) return null;
 
-    return { notes: result, total };
+    note.isPinned = isPinned;
+    return this.noteRepository.save(note);
   }
 
   async shareNote(
     noteId: number,
-    userId: string,
     isShared: boolean,
-  ): Promise<NoteEntity> {
-    const note = await this.noteRepository.findOne({
-      where: { id: noteId },
-    });
-
-    if (note?.authorUserId !== userId) {
-      throw new Error('Permission denied');
-    }
-    if (!note) {
-      throw new Error('Note not found');
-    }
+  ): Promise<NoteEntity | null> {
+    const note = await this.noteRepository.findOne({ where: { id: noteId } });
+    if (!note) return null;
 
     note.isShared = isShared;
-
     return this.noteRepository.save(note);
   }
 
   async queryNote(
     query: QueryNotesByResourceInput,
+    filter: NoteListFilter,
   ): Promise<{ notes: NoteEntity[]; total: number }> {
     const {
       projectId,
@@ -266,31 +190,31 @@ export class NoteService extends CRUDService<NoteEntity> {
       limit = 20,
     } = query;
 
-    const db: SelectQueryBuilder<NoteEntity> = this.noteRepository
+    const qb: SelectQueryBuilder<NoteEntity> = this.noteRepository
       .createQueryBuilder('note')
+      .leftJoinAndSelect('note.authorUser', 'authorUser')
       .where('note.projectId = :projectId', { projectId })
       .andWhere('note.resourceType = :resourceType', { resourceType })
       .andWhere('note.resourceId = :resourceId', { resourceId });
 
+    this.applyListFilter(qb, filter);
+
     if (isPinned !== undefined) {
-      db.andWhere('note.isPinned = :isPinned', { isPinned });
+      qb.andWhere('note.isPinned = :isPinned', { isPinned });
     }
-
     if (isShared !== undefined) {
-      db.andWhere('note.isShared = :isShared', { isShared });
+      qb.andWhere('note.isShared = :isShared', { isShared });
     }
-
     if (keyword) {
-      db.andWhere('note.content ILIKE :keyword', { keyword: `%${keyword}%` });
+      qb.andWhere('note.content ILIKE :keyword', { keyword: `%${keyword}%` });
     }
 
-    db.orderBy('note.createdAt', 'DESC')
+    qb.orderBy('note.createdAt', 'DESC')
       .addOrderBy('note.id', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
 
-    const [result, total] = await db.getManyAndCount();
-
+    const [result, total] = await qb.getManyAndCount();
     return { notes: result, total };
   }
 }
