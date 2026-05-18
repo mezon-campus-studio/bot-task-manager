@@ -210,6 +210,7 @@ export class TaskService extends CRUDService<TaskEntity> {
         dueAt: 'ASC',
         id: 'DESC',
       },
+      relations: ['assigneeUser', 'reporterUser'],
     });
 
     this.logger.log({
@@ -310,6 +311,7 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     const result = await this.taskRepository.findOne({
       where: { id },
+      relations: ['assigneeUser', 'reporterUser'],
     });
 
     this.logger.log({ log: 'Got task by id result', taskId: id, result });

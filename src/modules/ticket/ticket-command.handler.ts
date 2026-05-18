@@ -319,60 +319,67 @@ export class TicketCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    try {
-      const ticketId = this.parseId(args[1]);
-      const rawIdentifier = args[2];
-
-      if (ticketId == null || !rawIdentifier) {
-        await this.reply(
-          message,
-          'Usage: `*ticket assign <id> <userId|@username>`',
-        );
-        return;
-      }
-
-      const context =
-        await this.projectContextService.getRequiredCurrentProjectByMezonId(
-          senderId,
-        );
-
-      if (!this.isProjectManagerOrAdmin(context.user)) {
-        await this.reply(
-          message,
-          `❌ Only project managers and administrators can assign tickets.`,
-        );
-        return;
-      }
-
-      const targetIdentifier =
-        this.getMentionedUserIdentifier(rawIdentifier, message) ??
-        rawIdentifier.replace(/^@/, '').trim();
-      const targetUser =
-        await this.userService.findByIdentifier(targetIdentifier);
-
-      if (!targetUser) {
-        await this.reply(message, `User **${rawIdentifier}** not found.`);
-        return;
-      }
-
-      const ticket = await this.ticketService.updateTicket(
-        context.projectId,
-        ticketId,
-        { assigneeUserId: targetUser.id },
+    const ticketId = Number(args[1]);
+    const mentionArg = args[2];
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
       );
 
-      if (!ticket) {
-        await this.reply(message, `Ticket #${ticketId} not found.`);
+    if (!this.isProjectManagerOrAdmin(context.user)) {
+      await this.reply(
+        message,
+        `❌ Only project managers and administrators can assign tickets.`,
+      );
+      return;
+    }
+    if (Number.isNaN(ticketId) || !mentionArg) {
+      await this.reply(
+        message,
+        '⚠️ Usage: `*ticket assign <ticketId> @mention`\nExample: `*ticket assign 12 @Bao`',
+      );
+      return;
+    }
+
+    const targetUserIdentifier =
+      this.getMentionedUserIdentifier(mentionArg, message) ||
+      mentionArg.replace(/^@/, '').trim();
+
+    const assigneeUser = await this.userService.findByIdentifier(
+      targetUserIdentifier,
+      false,
+    );
+
+    if (!assigneeUser) {
+      await this.reply(
+        message,
+        `❌ User "${mentionArg}" not found or has been deleted from the system.`,
+      );
+      return;
+    }
+
+    try {
+      const updatedTicket = await this.ticketService.updateTicket(
+        context.projectId,
+        ticketId,
+        { assigneeUserId: assigneeUser.id },
+      );
+
+      if (!updatedTicket) {
+        await this.reply(
+          message,
+          `❌ Ticket **#${ticketId}** not found in the current project (**${context.project.name}**).`,
+        );
         return;
       }
 
       await this.reply(
         message,
-        `✅ Ticket **#${ticket.id}** assigned to **${targetUser.name ?? targetUser.mezonId}**.`,
+        `✅ Ticket **#${ticketId}** has been assigned to **${assigneeUser.name}**.`,
       );
     } catch (error) {
-      this.logger.error('Assign ticket failed', (error as Error)?.stack);
-      await this.reply(message, this.getErrorMessage(error));
+      this.logger.warn('Failed to assign ticket', (error as Error)?.stack);
+      await this.reply(message, `❌ Failed: ${this.getErrorMessage(error)}`);
     }
   }
 
