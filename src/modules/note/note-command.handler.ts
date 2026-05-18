@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { UserRole } from '@src/common/enums/user.enum';
 import {
   Args,
   AutoContext,
@@ -10,7 +11,7 @@ import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
 import { NoteResourceType } from './enums';
 import NoteEntity from './note.entity';
-import { NoteService } from './note.service';
+import { NoteListFilter, NoteService } from './note.service';
 
 @Injectable()
 @UseGuards(NezonAuthGuard)
@@ -75,15 +76,15 @@ export class NoteCommandHandler {
           await this.reply(
             message,
             [
-              'Note Commands:',
-              '  `*note list <resourceType> <resourceId>` - List notes',
-              '  `*note create <resourceType> <resourceId> <content...>` - Create a note',
-              '  `*note detail <id>` - View note detail',
-              '  `*note update <id> <content...>` - Update your note',
-              '  `*note delete <id>` - Prepare delete confirmation',
-              '  `*note confirm delete <id>` - Confirm note deletion',
-              '  `*note pin <id>` / `*note unpin <id>` - Pin or unpin your note',
-              '  `*note share <id>` / `*note unshare <id>` - Share or unshare your note',
+              '📝 **Note Commands:**',
+              '  `*note list [resourceType] [resourceId]` – List notes',
+              '  `*note create <resourceType> <resourceId> <content...>` – Create a note',
+              '  `*note detail <id>` – View note detail',
+              '  `*note update <id> <content...>` – Update your note',
+              '  `*note delete <id>` – Prepare delete confirmation',
+              '  `*note confirm delete <id>` – Confirm note deletion',
+              '  `*note pin <id>` / `*note unpin <id>` – Pin or unpin a note',
+              '  `*note share <id>` / `*note unshare <id>` – Share or unshare your note',
             ].join('\n'),
           );
       }
@@ -100,56 +101,85 @@ export class NoteCommandHandler {
   ): Promise<void> {
     const resourceType = this.parseResourceType(args[1]);
     const resourceId = args[2];
+    const isFiltered = !!resourceType && !!resourceId;
 
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
-    const isFiltered = !!resourceType && !!resourceId;
+    const filter = this.buildListFilter(context);
+    const isManager = this.isManager(context);
 
     const notes = isFiltered
       ? await this.noteService.listByResource(
           context.projectId,
           resourceType as NoteResourceType,
           resourceId as string,
+          filter,
         )
-      : await this.noteService.listByProject(context.projectId);
+      : await this.noteService.listByProject(context.projectId, filter);
 
     if (!notes.length) {
-      if (isFiltered) {
-        await this.reply(
-          message,
-          `No notes found for ${resourceType} **${resourceId}** in project **${context.project.name}**.`,
-        );
-        return;
-      }
-
-      await this.reply(
-        message,
-        `No notes found in project **${context.project.name}**.`,
-      );
+      const where = isFiltered
+        ? `for ${resourceType} **${resourceId}** in project **${context.project.name}**`
+        : `in project **${context.project.name}**`;
+      await this.reply(message, `No notes found ${where}.`);
       return;
     }
 
-    const lines = notes.map((note) => {
-      if (!isFiltered) {
-        return `  [#${note.id}] ${this.formatNoteFlags(note)} ${note.resourceType} **${note.resourceId}**`;
-      }
-      return `  [#${note.id}] ${this.formatNoteFlags(note)} ${note.resourceType} **${note.resourceId}** ${this.truncate(note.content, 80)}`;
-    });
-
-    await this.reply(
-      message,
-      isFiltered
-        ? [
-            `Notes for ${resourceType} **${resourceId}** in **${context.project.name}**:`,
-            ...lines,
-          ].join('\n')
-        : [`All notes in project **${context.project.name}**:`, ...lines].join(
-            '\n',
-          ),
+    const myNotes = notes.filter(
+      (note) => note.authorUserId === context.user.id,
     );
+
+    const sharedNotes = notes.filter(
+      (note) => note.authorUserId !== context.user.id && note.isShared === true,
+    );
+
+    const managerOnlyNotes = isManager
+      ? notes.filter(
+          (note) =>
+            note.authorUserId !== context.user.id &&
+            note.isShared === false &&
+            note.resourceType !== NoteResourceType.USER,
+        )
+      : [];
+
+    const formatLine = (note: NoteEntity) => {
+      return `  [#${note.id}] - ${this.formatNoteFlags(note).toUpperCase()} - [Type: ${note.resourceType.toUpperCase()}] - [Resource: ${note.resourceId}] - [Author: ${note.authorUser?.name || 'Unknown'}] - [${note.createdAt.toLocaleString()}]`;
+    };
+
+    const outputLines: string[] = [];
+
+    const header = isFiltered
+      ? `📝 **Notes for ${resourceType} [${resourceId}] in project *${context.project.name}*:**`
+      : `📝 **All available notes in project *${context.project.name}*:**`;
+    outputLines.push(header);
+
+    outputLines.push('\n📌 **MY NOTES (Ghi chú của tôi):**');
+    if (myNotes.length > 0) {
+      outputLines.push(...myNotes.map(formatLine));
+    } else {
+      outputLines.push("  *(You haven't created any notes yet)*");
+    }
+
+    outputLines.push('\n🌐 **SHARED NOTES (Ghi chú được chia sẻ công khai):**');
+    if (sharedNotes.length > 0) {
+      outputLines.push(...sharedNotes.map(formatLine));
+    } else {
+      outputLines.push('  *(No public shared notes from others)*');
+    }
+
+    if (isManager) {
+      outputLines.push('\n🔒 **PRIVATE NOTES (Chỉ manager mới thấy):**');
+      if (managerOnlyNotes.length > 0) {
+        outputLines.push(...managerOnlyNotes.map(formatLine));
+      } else {
+        outputLines.push('  *(No private notes from others)*');
+      }
+    }
+
+    await this.reply(message, outputLines.join('\n'));
   }
 
   private async createNote(
@@ -174,18 +204,20 @@ export class NoteCommandHandler {
         senderId,
       );
 
+    const isSharedDefault = resourceType !== NoteResourceType.USER;
+
     const note = await this.noteService.createNote({
       authorUserId: context.user.id,
       content,
       projectId: context.projectId,
       resourceId,
       resourceType,
-      isShared: true,
+      isShared: isSharedDefault,
     });
 
     await this.reply(
       message,
-      `Created note **#${note.id}** for ${resourceType} **${resourceId}** in project **${context.project.name}**.`,
+      `✅ Created note **#${note.id}** for ${resourceType} **${resourceId}** in project **${context.project.name}**.`,
     );
   }
 
@@ -194,20 +226,53 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const note = await this.getRequiredProjectNote(
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const note = await this.getRequiredNote(
       args[1],
-      senderId,
+      context.projectId,
       message,
-      false,
     );
     if (!note) return;
+
+    const isManager = this.isManager(context);
+
+    if (!isManager) {
+      const isOwnNote = note.authorUserId === context.user.id;
+
+      const isVisibleOtherNote = note.isShared === true;
+
+      if (!isOwnNote && !isVisibleOtherNote) {
+        await this.reply(
+          message,
+          '❌ You do not have permission to view this note.',
+        );
+        return;
+      }
+    }
+
+    if (
+      isManager &&
+      note.authorUserId !== context.user.id &&
+      note.resourceType === NoteResourceType.USER &&
+      !note.isShared
+    ) {
+      await this.reply(
+        message,
+        '❌ You do not have permission to view this note.',
+      );
+      return;
+    }
 
     await this.reply(
       message,
       [
-        `Note #${note.id}`,
+        `📄 Note #${note.id}`,
         `  Resource: ${note.resourceType} ${note.resourceId}`,
-        `  Author: ${note.authorUserId}`,
+        `  Author: ${note.authorUser?.name ?? note.authorUserId}`,
         `  Pinned: ${note.isPinned ? 'yes' : 'no'}`,
         `  Shared: ${note.isShared ? 'yes' : 'no'}`,
         `  Content: ${note.content}`,
@@ -220,32 +285,38 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const note = await this.getRequiredProjectNote(
-      args[1],
-      senderId,
-      message,
-      true,
-    );
-    const content = args.slice(2).join(' ').trim();
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
 
+    const note = await this.getRequiredNote(
+      args[1],
+      context.projectId,
+      message,
+    );
     if (!note) return;
 
+    if (note.authorUserId !== context.user.id) {
+      await this.reply(message, '❌ You can only update your own notes.');
+      return;
+    }
+
+    const content = args.slice(2).join(' ').trim();
     if (!content) {
       await this.reply(message, 'Usage: `*note update <id> <content...>`');
       return;
     }
 
-    const updated = await this.noteService.updateNote(
-      note.id,
-      note.authorUserId,
-      {
-        content,
-      },
-    );
+    const updated = await this.noteService.updateNote(note.id, { content });
+    if (!updated) {
+      await this.reply(message, `Note #${note.id} not found.`);
+      return;
+    }
 
     await this.reply(
       message,
-      `Updated note **#${updated.id}**: ${this.truncate(updated.content, 80)}`,
+      `✅ Updated note **#${updated.id}**: ${this.truncate(updated.content, 80)}`,
     );
   }
 
@@ -254,13 +325,25 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const note = await this.getRequiredProjectNote(
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const note = await this.getRequiredNote(
       args[1],
-      senderId,
+      context.projectId,
       message,
-      true,
     );
     if (!note) return;
+
+    if (!this.canDelete(note, context)) {
+      await this.reply(
+        message,
+        '❌ You do not have permission to delete this note.',
+      );
+      return;
+    }
 
     await this.reply(
       message,
@@ -276,16 +359,28 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const note = await this.getRequiredProjectNote(
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const note = await this.getRequiredNote(
       args[2],
-      senderId,
+      context.projectId,
       message,
-      true,
     );
     if (!note) return;
 
-    await this.noteService.deleteNote(note.id, note.authorUserId);
-    await this.reply(message, `Deleted note **#${note.id}**.`);
+    if (!this.canDelete(note, context)) {
+      await this.reply(
+        message,
+        '❌ You do not have permission to delete this note.',
+      );
+      return;
+    }
+
+    await this.noteService.deleteNote(note.id);
+    await this.reply(message, `🗑️ Deleted note **#${note.id}**.`);
   }
 
   private async setNotePinned(
@@ -294,23 +389,46 @@ export class NoteCommandHandler {
     message: ManagedMessage,
     isPinned: boolean,
   ): Promise<void> {
-    const note = await this.getRequiredProjectNote(
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const note = await this.getRequiredNote(
       args[1],
-      senderId,
+      context.projectId,
       message,
-      true,
     );
     if (!note) return;
 
-    const updated = await this.noteService.pinNote(
-      note.id,
-      note.authorUserId,
-      isPinned,
-    );
+    const isOwner = note.authorUserId === context.user.id;
+    const isManager = this.isManager(context);
+
+    if (note.resourceType === NoteResourceType.USER && !isOwner) {
+      await this.reply(
+        message,
+        '❌ You do not have permission to pin/unpin this personal note.',
+      );
+      return;
+    }
+
+    if (!isOwner && !isManager) {
+      await this.reply(
+        message,
+        '❌ Only the note owner or a manager can pin/unpin notes.',
+      );
+      return;
+    }
+
+    const updated = await this.noteService.pinNote(note.id, isPinned);
+    if (!updated) {
+      await this.reply(message, `Note #${note.id} not found.`);
+      return;
+    }
 
     await this.reply(
       message,
-      `Note **#${updated.id}** is now ${updated.isPinned ? 'pinned' : 'unpinned'}.`,
+      `✅ Note **#${updated.id}** is now ${updated.isPinned ? 'pinned' : 'unpinned'}.`,
     );
   }
 
@@ -320,60 +438,87 @@ export class NoteCommandHandler {
     message: ManagedMessage,
     isShared: boolean,
   ): Promise<void> {
-    const note = await this.getRequiredProjectNote(
-      args[1],
-      senderId,
-      message,
-      true,
-    );
-    if (!note) return;
-
-    const updated = await this.noteService.shareNote(
-      note.id,
-      note.authorUserId,
-      isShared,
-    );
-
-    await this.reply(
-      message,
-      `Note **#${updated.id}** is now ${updated.isShared ? 'shared' : 'private'}.`,
-    );
-  }
-
-  private async getRequiredProjectNote(
-    rawNoteId: string | undefined,
-    senderId: string,
-    message: ManagedMessage,
-    requireAuthor: boolean,
-  ): Promise<NoteEntity | null> {
-    const noteId = this.parseId(rawNoteId);
-
-    if (noteId == null) {
-      await this.reply(message, 'Valid note ID is required.');
-      return null;
-    }
-
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
-    const note = await this.noteService.getNoteById(noteId);
+    const note = await this.getRequiredNote(
+      args[1],
+      context.projectId,
+      message,
+    );
+    if (!note) return;
 
-    if (!note || note.projectId !== context.projectId) {
+    if (note.authorUserId !== context.user.id) {
       await this.reply(
         message,
-        `Note #${noteId} not found in current project **${context.project.name}**.`,
+        '❌ Only the note owner can change the sharing setting.',
+      );
+      return;
+    }
+
+    const updated = await this.noteService.shareNote(note.id, isShared);
+    if (!updated) {
+      await this.reply(message, `Note #${note.id} not found.`);
+      return;
+    }
+
+    await this.reply(
+      message,
+      `✅ Note **#${updated.id}** is now ${updated.isShared ? 'shared' : 'private'}.`,
+    );
+  }
+
+  // ─── helpers ────────────────────────────────────────────────────────────────
+
+  private async getRequiredNote(
+    rawNoteId: string | undefined,
+    projectId: number,
+    message: ManagedMessage,
+  ): Promise<NoteEntity | null> {
+    const noteId = this.parseId(rawNoteId);
+    if (noteId == null) {
+      await this.reply(message, 'Valid note ID is required.');
+      return null;
+    }
+
+    const note = await this.noteService.getNoteById(noteId);
+    if (!note || note.projectId !== projectId) {
+      await this.reply(
+        message,
+        `Note #${noteId} not found in current project.`,
       );
       return null;
     }
 
-    if (requireAuthor && note.authorUserId !== context.user.id) {
-      await this.reply(message, 'Permission denied.');
-      return null;
+    return note;
+  }
+
+  private canDelete(note: NoteEntity, context: any): boolean {
+    const isOwner = note.authorUserId === context.user.id;
+    if (isOwner) return true;
+
+    if (
+      this.isManager(context) &&
+      note.resourceType !== NoteResourceType.USER
+    ) {
+      return true;
     }
 
-    return note;
+    return false;
+  }
+
+  private isManager(context: any): boolean {
+    const role = Number(context.user?.role);
+    return role === UserRole.ADMIN || role === UserRole.PM;
+  }
+
+  private buildListFilter(context: any): NoteListFilter {
+    return {
+      callerId: context.user.id as string,
+      isManager: this.isManager(context),
+    };
   }
 
   private parseResourceType(
@@ -398,13 +543,12 @@ export class NoteCommandHandler {
       note.isPinned ? 'pinned' : null,
       note.isShared ? 'shared' : 'private',
     ].filter(Boolean);
-
     return `[${flags.join(', ')}]`;
   }
 
   private truncate(value: string, maxLength: number): string {
     return value.length > maxLength
-      ? `${value.slice(0, Math.max(0, maxLength - 3))}...`
+      ? `${value.slice(0, maxLength - 3)}...`
       : value;
   }
 
@@ -417,12 +561,11 @@ export class NoteCommandHandler {
         typeof response === 'object' &&
         'message' in response
       ) {
-        const msg = response.message;
+        const msg = (response as any).message;
         if (Array.isArray(msg)) return msg.join(', ');
         if (typeof msg === 'string') return msg;
       }
     }
-
     return error instanceof Error ? error.message : 'Note command failed.';
   }
 

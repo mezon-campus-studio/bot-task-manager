@@ -20,6 +20,7 @@ describe(NoteService.name, () => {
   afterEach(async () => {
     await noteRepository.query('TRUNCATE TABLE "notes" CASCADE;');
   });
+
   async function createNoteContext() {
     const project = await factory.project({});
     const author = await factory.user({});
@@ -126,9 +127,6 @@ describe(NoteService.name, () => {
     const updateSession = noteService.updateSession(note);
 
     note.content = 'Follow-up completed after the status check.';
-    note.resourceId = 'ticket-14';
-    note.resourceType = NoteResourceType.TICKET;
-
     await updateSession.save();
 
     await expect(
@@ -136,8 +134,8 @@ describe(NoteService.name, () => {
     ).resolves.toMatchObject({
       content: 'Follow-up completed after the status check.',
       id: note.id,
-      resourceId: 'ticket-14',
-      resourceType: NoteResourceType.TICKET,
+      resourceId: 'task-14',
+      resourceType: NoteResourceType.TASK,
     });
   });
 
@@ -153,12 +151,11 @@ describe(NoteService.name, () => {
 
     await noteService.updateEntry(note, {
       content: 'Advisor confirmed the final plan after the review.',
-      resourceId: 'project-9-final',
     });
 
     expect(note).toMatchObject({
       content: 'Advisor confirmed the final plan after the review.',
-      resourceId: 'project-9-final',
+      resourceId: 'project-9',
     });
 
     await expect(
@@ -166,12 +163,11 @@ describe(NoteService.name, () => {
     ).resolves.toMatchObject({
       content: 'Advisor confirmed the final plan after the review.',
       id: note.id,
-      resourceId: 'project-9-final',
+      resourceId: 'project-9',
       resourceType: NoteResourceType.PROJECT,
     });
   });
 
-  // shared note test
   it('should support sharing notes inside current project', async () => {
     const { authorUserId, projectId } = await createNoteContext();
 
