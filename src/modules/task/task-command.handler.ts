@@ -1,5 +1,6 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '#src/common/enums/user.enum.js';
+import { buildPaginationFooter } from '@src/common/utils/pagination.util';
 import {
   Args,
   AutoContext,
@@ -41,7 +42,7 @@ export class TaskCommandHandler {
     try {
       switch (action) {
         case 'list':
-          await this.listTasks(senderId, message);
+          await this.listTasks(args, senderId, message);
           return;
         case 'create':
           await this.createTask(args, senderId, message);
@@ -70,14 +71,19 @@ export class TaskCommandHandler {
           await this.reply(
             message,
             [
-              '🧩 **Task Commands:**',
-              '  `*task list` - List tasks in current project',
-              '  `*task create <title...>` - Create a task',
-              '  `*task detail <id>` - View task detail',
-              '  `*task status <id> <todo|in_progress|done|cancelled>` - Update status',
-              '  `*task assign <id> <userId|@username>` - Assign task',
-              '  `*task delete <id>` - Prepare delete confirmation',
-              '  `*task confirm delete <id>` - Confirm task deletion',
+              `┌─────────────────────────────`,
+              `│ 🧩 **Task Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*task list [--page N] [--status <s>] [--q <kw>]\`  – List tasks`,
+              `│ \`*task create <title> [--desc <description>]\`       – Create a task`,
+              `│ \`*task detail <id>\`                                 – View task detail`,
+              `│ \`*task status <id> <status>\`                        – Update status`,
+              `│ \`*task assign <id> <userId|@username>\`              – Assign task`,
+              `│ \`*task delete <id>\`                                 – Prepare deletion`,
+              `│ \`*task confirm delete <id>\`                         – Confirm deletion`,
+              `├─────────────────────────────`,
+              `│ Statuses: \`todo | in_progress | done | cancelled\``,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -88,34 +94,108 @@ export class TaskCommandHandler {
   }
 
   private async listTasks(
+    args: string[],
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
+    let page = this.parseFlagNumber(args, '--page', 0);
+    if (page === 0) {
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    }
+    const statusRaw = this.parseFlagString(args, '--status');
+    const keyword = this.parseFlagString(args, '--q');
+    const status = statusRaw ? this.parseStatus(statusRaw) : undefined;
+
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
-    const tasks = await this.taskService.listByProject(context.projectId);
 
-    if (!tasks.length) {
-      await this.reply(
-        message,
-        `No tasks found in project **${context.project.name}**.`,
-      );
-      return;
-    }
-
-    const lines = tasks.map((task) => {
-      const assignee = task.assigneeUser
-        ? ` - assignee: ${task.assigneeUser.name}`
-        : '';
-      return `  [#${task.id}] ${task.title} - ${task.status}${assignee}`;
+    const {
+      result: tasks,
+      total,
+      pageSize,
+    } = await this.taskService.queryTasks(context.projectId, {
+      page,
+      take: 10,
+      ...(status != null ? { status } : {}),
+      ...(keyword ? { q: keyword } : {}),
     });
 
-    await this.reply(
-      message,
-      [`🧩 Tasks in **${context.project.name}**:`, ...lines].join('\n'),
-    );
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const meta = {
+      page,
+      pageSize,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    // Build filter hint
+    const activeFilters: string[] = [];
+    if (status) activeFilters.push(`status: **${status}**`);
+    if (keyword) activeFilters.push(`keyword: **"${keyword}"**`);
+
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 🧩 **Task List**`,
+      `├─────────────────────────────`,
+      `│ 📁 Project : ${context.project.name}`,
+      ...(activeFilters.length
+        ? [`│ 🔎 Filter  : ${activeFilters.join('  •  ')}`]
+        : []),
+      `├─────────────────────────────`,
+    ];
+
+    if (!tasks.length) {
+      lines.push(`│ ℹ️  No tasks found.`);
+      lines.push(`│ Use \`*task create <title>\` to create one.`);
+    } else {
+      const STATUS_ICON: Record<string, string> = {
+        [TaskStatus.TODO]: '⬜',
+        [TaskStatus.IN_PROGRESS]: '🔵',
+        [TaskStatus.DONE]: '✅',
+        [TaskStatus.CANCELLED]: '🚫',
+      };
+
+      const PRIORITY_ICON: Record<string, string> = {
+        low: '🟢',
+        medium: '🟡',
+        high: '🔴',
+      };
+
+      for (const task of tasks) {
+        const statusIcon = STATUS_ICON[task.status] ?? '❓';
+        const priorityIcon = task.priority
+          ? (PRIORITY_ICON[String(task.priority).toLowerCase()] ?? '⚪')
+          : '⚪';
+        const assignee =
+          task.assigneeUser?.name ?? task.assigneeUser?.mezonId ?? '—';
+        const dueTag = task.dueAt ? `  📅 ${this.formatDate(task.dueAt)}` : '';
+
+        lines.push(`│ ${statusIcon} **#${task.id}** ${task.title}`);
+        lines.push(
+          `│    ${priorityIcon} Priority : ${task.priority ?? '—'}   👤 Assignee : ${assignee}${dueTag}`,
+        );
+      }
+    }
+
+    // Build pagination command base with existing flags
+    const flagSuffix = [
+      status ? `--status ${statusRaw}` : '',
+      keyword ? `--q ${keyword}` : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const paginationCmd = `*task list${flagSuffix ? ` ${flagSuffix}` : ''}`;
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(`│ ${buildPaginationFooter(meta, paginationCmd)}`);
+    lines.push(`│ 💡 \`*task detail <id>\` to view details`);
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async createTask(
@@ -123,10 +203,47 @@ export class TaskCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const title = args.slice(1).join(' ').trim();
+    const raw = args.slice(1).join(' ').trim();
+
+    if (!raw) {
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*task create <title> [--desc <description>]\``,
+          `│ Example: \`*task create Fix login bug --desc Page crashes on submit\``,
+          `│ \`*task create <title> [--desc <description>]\`  – Create a task`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    // Tách title và description qua flag --desc
+    const descIndex = raw.indexOf('--desc');
+    let title: string;
+    let description: string | undefined;
+
+    if (descIndex !== -1) {
+      title = raw.slice(0, descIndex).trim();
+      description = raw.slice(descIndex + 6).trim() || undefined;
+    } else {
+      title = raw;
+    }
 
     if (!title) {
-      await this.reply(message, 'Usage: `*task create <title...>`');
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Title is required**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*task create <title> [--desc <description>]\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
       return;
     }
 
@@ -139,11 +256,27 @@ export class TaskCommandHandler {
       projectId: context.projectId,
       reporterUserId: context.user.id,
       title,
+      description,
     });
 
     await this.reply(
       message,
-      `✅ Created task **#${task.id}: ${task.title}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Task Created**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${task.id}`,
+        `│ 📝  Title    : ${task.title}`,
+        `│ ⬜  Status   : ${task.status}`,
+        `│ 👤  Reporter : ${context.user.name ?? context.user.mezonId}`,
+        `│ 📁  Project  : ${context.project.name}`,
+        task.description
+          ? `│ 📄  Desc     : ${task.description}`
+          : `│ 📄  Desc     : —`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*task assign ${task.id} @user\` to assign`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -164,25 +297,58 @@ export class TaskCommandHandler {
     if (!task) {
       await this.reply(
         message,
-        `Task #${taskId} not found in current project.`,
+        `❌ Task **#${taskId}** not found in current project.`,
       );
       return;
     }
 
-    await this.reply(
-      message,
-      [
-        `**Task #${task.id}**`,
-        `Title: ${task.title}`,
-        `Status: ${task.status}`,
-        `Priority: ${task.priority ?? 'N/A'}`,
-        `Reporter: ${task.reporterUser.name ?? task.reporterUser.mezonId}`,
-        `Assignee: ${task.assigneeUser?.name ?? task.assigneeUser?.mezonId}`,
-        task.description ? `Description: ${task.description}` : null,
-      ]
-        .filter((line): line is string => line != null)
-        .join('\n'),
+    const STATUS_ICON: Record<string, string> = {
+      [TaskStatus.TODO]: '⬜',
+      [TaskStatus.IN_PROGRESS]: '🔵',
+      [TaskStatus.DONE]: '✅',
+      [TaskStatus.CANCELLED]: '🚫',
+    };
+
+    const PRIORITY_ICON: Record<string, string> = {
+      low: '🟢',
+      medium: '🟡',
+      high: '🔴',
+    };
+
+    const statusIcon = STATUS_ICON[task.status] ?? '❓';
+    const priorityIcon = task.priority
+      ? (PRIORITY_ICON[String(task.priority).toLowerCase()] ?? '⚪')
+      : '⚪';
+
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 🧩 **Task Detail**`,
+      `├─────────────────────────────`,
+      `│ 🆔  ID        : #${task.id}`,
+      `│ 📝  Title     : ${task.title}`,
+      `│ ${statusIcon}  Status    : ${task.status}`,
+      `│ ${priorityIcon}  Priority  : ${task.priority ?? '—'}`,
+      `│ 👤  Reporter  : ${task.reporterUser?.name ?? task.reporterUser?.mezonId ?? '—'}`,
+      `│ 👤  Assignee  : ${task.assigneeUser?.name ?? task.assigneeUser?.mezonId ?? '—'}`,
+    ];
+
+    if (task.dueAt) {
+      lines.push(`│ 📅  Due       : ${this.formatDate(task.dueAt)}`);
+    }
+
+    if (task.description) {
+      lines.push(`│ 📄  Desc      : ${task.description}`);
+    }
+
+    lines.push(`│ 📅  Created   : ${this.formatDate(task.createdAt)}`);
+    lines.push(`│ 🔄  Updated   : ${this.formatDate(task.updatedAt)}`);
+    lines.push(`├─────────────────────────────`);
+    lines.push(
+      `│ 💡 \`*task status ${task.id} <todo|in_progress|done|cancelled>\``,
     );
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async updateStatus(
@@ -196,7 +362,15 @@ export class TaskCommandHandler {
     if (taskId == null || status == null) {
       await this.reply(
         message,
-        'Usage: `*task status <id> <todo|in_progress|done|cancelled>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Invalid arguments**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*task status <id> <status>\``,
+          `│ Statuses: \`todo\` → \`in_progress\` → \`done\``,
+          `│           \`todo\` or \`in_progress\` → \`cancelled\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -213,16 +387,15 @@ export class TaskCommandHandler {
     if (!existingTask) {
       await this.reply(
         message,
-        `Task #${taskId} not found in current project.`,
+        `❌ Task **#${taskId}** not found in current project.`,
       );
       return;
     }
 
-    const dbUser = context.user;
-    if (!this.hasTaskPermission(dbUser, existingTask)) {
+    if (!this.hasTaskPermission(context.user, existingTask)) {
       await this.reply(
         message,
-        `You don't have permission to update status of task #${taskId}.`,
+        `❌ You don't have permission to update task **#${taskId}**.\nOnly the assignee, PM, or Admin can change task status.`,
       );
       return;
     }
@@ -233,13 +406,28 @@ export class TaskCommandHandler {
     });
 
     if (!updatedTask) {
-      await this.reply(message, `Task #${taskId} not found.`);
+      await this.reply(message, `❌ Task **#${taskId}** not found.`);
       return;
     }
 
+    const STATUS_ICON: Record<string, string> = {
+      [TaskStatus.TODO]: '⬜',
+      [TaskStatus.IN_PROGRESS]: '🔵',
+      [TaskStatus.DONE]: '✅',
+      [TaskStatus.CANCELLED]: '🚫',
+    };
+
     await this.reply(
       message,
-      `✅ Task #${updatedTask.id} status updated to **${updatedTask.status}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ 🔄 **Status Updated**`,
+        `├─────────────────────────────`,
+        `│ 🆔  Task   : #${updatedTask.id} ${updatedTask.title}`,
+        `│ ${STATUS_ICON[updatedTask.status] ?? '❓'}  Status : **${updatedTask.status}**`,
+        `│ 📁  Project: ${context.project.name}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -254,7 +442,14 @@ export class TaskCommandHandler {
     if (taskId == null || !rawIdentifier) {
       await this.reply(
         message,
-        'Usage: `*task assign <id> <userId|@username>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*task assign <id> <userId|@username>\``,
+          `│ Example: \`*task assign 12 @alice\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -271,7 +466,7 @@ export class TaskCommandHandler {
     if (!existingTask) {
       await this.reply(
         message,
-        `Task #${taskId} not found in current project.`,
+        `❌ Task **#${taskId}** not found in current project.`,
       );
       return;
     }
@@ -283,16 +478,14 @@ export class TaskCommandHandler {
       await this.userService.findByIdentifier(targetIdentifier);
 
     if (!targetUser) {
-      await this.reply(message, `User **${rawIdentifier}** not found.`);
+      await this.reply(message, `❌ User **${rawIdentifier}** not found.`);
       return;
     }
 
-    const dbUser = context.user;
-    if (!this.canAssignTask(dbUser, targetUser.id)) {
+    if (!this.canAssignTask(context.user, targetUser.id)) {
       await this.reply(
         message,
-        `You don't have permission to assign task #${taskId} to **${targetUser.name ?? targetUser.mezonId}**
-        \nYou can only assign tasks to yourself or to users with the appropriate permissions.`,
+        `❌ You don't have permission to assign task **#${taskId}**.\nOnly PM/Admin can assign to others. You may self-assign.`,
       );
       return;
     }
@@ -300,13 +493,22 @@ export class TaskCommandHandler {
     const task = await this.taskService.assignTask(taskId, targetUser.id);
 
     if (!task) {
-      await this.reply(message, `Task #${taskId} not found.`);
+      await this.reply(message, `❌ Task **#${taskId}** not found.`);
       return;
     }
 
     await this.reply(
       message,
-      `✅ Assigned task #${task.id} to **${targetUser.name ?? targetUser.mezonId}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Task Assigned**`,
+        `├─────────────────────────────`,
+        `│ 🆔  Task    : #${task.id} ${task.title}`,
+        `│ 👤  Assignee: ${targetUser.name ?? targetUser.mezonId}`,
+        `│ 🪪  Mezon ID: \`${targetUser.mezonId}\``,
+        `│ 📁  Project : ${context.project.name}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -322,16 +524,6 @@ export class TaskCommandHandler {
       return;
     }
 
-    const existingTask = await this.getTaskInCurrentProject(taskId, senderId);
-
-    if (!existingTask) {
-      await this.reply(
-        message,
-        `Task #${taskId} not found in current project.`,
-      );
-      return;
-    }
-
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
@@ -340,8 +532,20 @@ export class TaskCommandHandler {
     if (!this.isProjectManagerOrAdmin(context.user)) {
       await this.reply(
         message,
-        `You don't have permission to delete task #${taskId}.
-        \nYou can only delete tasks if you are the project manager or an administrator.`,
+        '❌ Only **Administrators** and **Project Managers** can delete tasks.',
+      );
+      return;
+    }
+
+    const existingTask = await this.findTaskInProject(
+      taskId,
+      context.projectId,
+    );
+
+    if (!existingTask) {
+      await this.reply(
+        message,
+        `❌ Task **#${taskId}** not found in current project.`,
       );
       return;
     }
@@ -349,8 +553,18 @@ export class TaskCommandHandler {
     await this.reply(
       message,
       [
-        `🗑️ Are you sure you want to delete task **#${existingTask.id}: ${existingTask.title}**?`,
-        `Run: \`*task confirm delete ${existingTask.id}\` to complete the deletion.`,
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Confirm Delete Task**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID      : #${existingTask.id}`,
+        `│ 📝  Title   : ${existingTask.title}`,
+        `│ ⬜  Status  : ${existingTask.status}`,
+        `│ 📁  Project : ${context.project.name}`,
+        `├─────────────────────────────`,
+        `│ ⚠️  This action **cannot be undone**.`,
+        `│ Run to confirm:`,
+        `│ \`*task confirm delete ${existingTask.id}\``,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -367,16 +581,6 @@ export class TaskCommandHandler {
       return;
     }
 
-    const existingTask = await this.getTaskInCurrentProject(taskId, senderId);
-
-    if (!existingTask) {
-      await this.reply(
-        message,
-        `Task #${taskId} not found in current project.`,
-      );
-      return;
-    }
-
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
@@ -385,8 +589,20 @@ export class TaskCommandHandler {
     if (!this.isProjectManagerOrAdmin(context.user)) {
       await this.reply(
         message,
-        `You don't have permission to delete task #${taskId}.
-        \nYou can only delete tasks if you are the project manager or an administrator.`,
+        '❌ Only **Administrators** and **Project Managers** can delete tasks.',
+      );
+      return;
+    }
+
+    const existingTask = await this.findTaskInProject(
+      taskId,
+      context.projectId,
+    );
+
+    if (!existingTask) {
+      await this.reply(
+        message,
+        `❌ Task **#${taskId}** not found in current project.`,
       );
       return;
     }
@@ -394,11 +610,52 @@ export class TaskCommandHandler {
     const deleted = await this.taskService.deleteTask(taskId);
 
     if (!deleted) {
-      await this.reply(message, `Task #${taskId} not found.`);
+      await this.reply(message, `❌ Failed to delete task **#${taskId}**.`);
       return;
     }
 
-    await this.reply(message, `🗑️ Deleted task #${taskId}.`);
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Task Deleted**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID      : #${existingTask.id}`,
+        `│ 📝  Title   : ${existingTask.title}`,
+        `│ 📁  Project : ${context.project.name}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  // ─── helpers ────────────────────────────────────────────────────────────────
+
+  private parseFlagNumber(
+    args: string[],
+    flag: string,
+    fallback: number,
+  ): number {
+    const idx = args.indexOf(flag);
+    if (idx === -1) return fallback;
+    return Math.max(
+      1,
+      parseInt(args[idx + 1] ?? String(fallback), 10) || fallback,
+    );
+  }
+
+  private parseFlagString(args: string[], flag: string): string | undefined {
+    const idx = args.indexOf(flag);
+    if (idx === -1 || !args[idx + 1]) return undefined;
+    return args[idx + 1];
+  }
+
+  private formatDate(date: Date | string | null | undefined): string {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
   }
 
   private async getTaskInCurrentProject(

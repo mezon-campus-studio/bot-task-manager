@@ -105,7 +105,7 @@ describe(TicketCommandHandler.name, () => {
     expect(ticketService.updateTicket).toHaveBeenCalledWith(7, 1, {
       assigneeUserId: 'user-2',
     });
-    expectReplyText(message as never, 'assigned to **Bao**');
+    expectReplyText(message as never, 'Assignee: Bao');
   });
 
   it('prepares ticket deletion and requires a confirmation command', async () => {
@@ -146,6 +146,6 @@ describe(TicketCommandHandler.name, () => {
     );
 
     expect(ticketService.deleteTicket).toHaveBeenCalledWith(7, 1);
-    expectReplyText(message as never, 'has been deleted');
+    expectReplyText(message as never, '**Ticket Deleted**');
   });
 });

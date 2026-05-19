@@ -5,7 +5,6 @@ import { PermissionModule } from '@src/modules/permission/permission.module';
 import { RoleModule } from '@src/modules/role/role.module';
 import RolePermissionEntity from '@src/modules/role-permission/role-permission.entity';
 import { RolePermissionCommandHandler } from './role-permission-command.handler';
-import { RolePermissionController } from './role-permission.controller';
 import { RolePermissionService } from './role-permission.service';
 
 @Module({
@@ -16,7 +15,6 @@ import { RolePermissionService } from './role-permission.service';
     PermissionModule,
   ],
   providers: [RolePermissionService, RolePermissionCommandHandler],
-  controllers: [RolePermissionController],
   exports: [RolePermissionService],
 })
 export class RolePermissionModule {}

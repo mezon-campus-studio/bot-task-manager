@@ -1,6 +1,10 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+import {
   Args,
   AutoContext,
   Command,
@@ -43,7 +47,7 @@ export class ProjectCommandHandler {
           await this.createProject(args, message, ctx);
           return;
         case 'list':
-          await this.listProjects(senderId, message, ctx);
+          await this.listProjects(senderId, message, ctx, args);
           return;
         case 'delete':
           await this.prepareDeleteProject(args, message, ctx);
@@ -71,14 +75,17 @@ export class ProjectCommandHandler {
           await this.reply(
             message,
             [
-              '📁 **Project Commands:**',
-              '  `*project list` – List all projects you can access',
-              '  `*project create <slug> <name...>` – Create a new project',
-              '  `*project use <projectId|projectSlug>` – Select a project to work with',
-              '  `*project current` – Show current selected project',
-              '  `*project delete <projectId|projectSlug>` – Prepare delete confirmation',
-              '  `*project confirm delete <projectId|projectSlug>` – Confirm project deletion',
-              '  `*project exit` – Exit current project',
+              `┌─────────────────────────────`,
+              `│ 📁 **Project Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*project list [--page N]\`                              – List all accessible projects`,
+              `│ \`*project create <slug> <name...>\`                  – Create a new project`,
+              `│ \`*project use <projectId|slug>\`                     – Select a project to work with`,
+              `│ \`*project current\`                                  – Show current selected project`,
+              `│ \`*project exit\`                                     – Exit current project`,
+              `│ \`*project delete <projectId|slug>\`                  – Prepare delete confirmation`,
+              `│ \`*project confirm delete <projectId|slug>\`          – Confirm project deletion`,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -96,48 +103,91 @@ export class ProjectCommandHandler {
     _senderId: string,
     message: ManagedMessage,
     ctx: NezonCommandContext,
+    args: string[] = [],
   ): Promise<void> {
     const dbUser = (ctx as any).dbUser;
     if (!dbUser) {
-      await this.reply(message, 'User not found in database.');
+      await this.reply(message, '❌ User not found in database.');
       return;
     }
 
-    const accessibleProjects =
-      await this.projectService.listAccessibleProjectsForUser(dbUser.id);
-
-    const ownedProjects = await this.projectService.findByOwnerUserId(
-      dbUser.id,
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
     );
-    const ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
 
-    // Get all projects
-    const allProjects = await this.projectService.listProjects();
-
-    let response = '📁 **Your Projects:**';
-    if (accessibleProjects.length > 0) {
-      const accessibleLines = accessibleProjects.map(
-        (p) =>
-          `  [#${p.id}] ${p.name} (${p.slug})${ownedProjectIds.has(p.id) ? ' ⭐' : ''}`,
-      );
-      response += '\n' + accessibleLines.join('\n');
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
     } else {
-      response += '\n  You have no projects yet.';
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
     }
+    const [accessibleProjects, ownedProjects, allProjects] = await Promise.all([
+      this.projectService.listAccessibleProjectsForUser(dbUser.id),
+      this.projectService.findByOwnerUserId(dbUser.id),
+      this.projectService.listProjects(),
+    ]);
 
-    // Show all projects if there are any besides user's accessible projects
+    const ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
     const otherProjects = allProjects.filter(
       (p) => !accessibleProjects.some((ap) => ap.id === p.id),
     );
-    if (otherProjects.length > 0) {
-      response += '\n\n📁 **All Projects:**';
-      const allLines = otherProjects.map(
-        (p) => `  [#${p.id}] ${p.name} (${p.slug})`,
-      );
-      response += '\n' + allLines.join('\n');
+
+    // Gộp 2 section lại để phân trang chung
+    type ProjectRow = {
+      project: (typeof accessibleProjects)[0];
+      section: 'yours' | 'other';
+    };
+
+    const allRows: ProjectRow[] = [
+      ...accessibleProjects.map((p) => ({
+        project: p,
+        section: 'yours' as const,
+      })),
+      ...otherProjects.map((p) => ({ project: p, section: 'other' as const })),
+    ];
+
+    if (allRows.length === 0) {
+      await this.reply(message, 'ℹ️ No projects found.');
+      return;
     }
 
-    await this.reply(message, response);
+    const { items: pageRows, meta } = paginate(allRows, page);
+
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 📁 **Project List**`,
+      `├─────────────────────────────`,
+    ];
+
+    // Tách lại 2 nhóm trong trang hiện tại để giữ header section
+    const yoursOnPage = pageRows.filter((r) => r.section === 'yours');
+    const otherOnPage = pageRows.filter((r) => r.section === 'other');
+
+    if (yoursOnPage.length > 0) {
+      lines.push(`│ 🔓 **Your Projects**`);
+      for (const { project: p } of yoursOnPage) {
+        const ownerTag = ownedProjectIds.has(p.id) ? ' ⭐' : '';
+        lines.push(`│   [#${p.id}]${ownerTag} **${p.name}**`);
+        lines.push(`│        Slug : \`${p.slug}\``);
+        if (p.description) lines.push(`│        Desc : ${p.description}`);
+      }
+    }
+
+    if (otherOnPage.length > 0) {
+      if (yoursOnPage.length > 0) lines.push(`│`);
+      lines.push(`│ 🌐 **Other Projects**`);
+      for (const { project: p } of otherOnPage) {
+        lines.push(`│   [#${p.id}] **${p.name}**`);
+        lines.push(`│        Slug : \`${p.slug}\``);
+      }
+    }
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(`│ ${buildPaginationFooter(meta, '*project list')}`);
+    lines.push(`│ 💡 \`*project use <slug|id>\` to select`);
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async createProject(
@@ -149,7 +199,7 @@ export class ProjectCommandHandler {
     if (!dbUser) {
       await this.reply(
         message,
-        'User not found in database. Please log in once via portal.',
+        '❌ User not found in database. Please log in once via portal.',
       );
       return;
     }
@@ -157,7 +207,7 @@ export class ProjectCommandHandler {
     if (!this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
-        '❌ Only project managers and administrators can create projects.',
+        '❌ Only **Project Managers** and **Administrators** can create projects.',
       );
       return;
     }
@@ -167,17 +217,21 @@ export class ProjectCommandHandler {
     if (!slug || rawNameParts.length === 0) {
       await this.reply(
         message,
-        'Project slug and name are required.\nUsage: `*project create <slug> <name...>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*project create <slug> <name...>\``,
+          `│ Example: \`*project create my-app My Application\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
 
     const name = rawNameParts.join(' ').trim();
     if (!name) {
-      await this.reply(
-        message,
-        'Project name is required.\nUsage: `*project create <slug> <name...>`',
-      );
+      await this.reply(message, '❌ Project name is required.');
       return;
     }
 
@@ -189,7 +243,18 @@ export class ProjectCommandHandler {
 
     await this.reply(
       message,
-      `✅ Created project **${project.name}** (\`${project.slug}\`). Use \`*project use ${project.slug}\` to select it.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Project Created**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name  : ${project.name}`,
+        `│ 🔖  Slug  : \`${project.slug}\``,
+        `│ 🆔  ID    : #${project.id}`,
+        `│ 👤  Owner : ${dbUser.name ?? dbUser.mezonId}`,
+        `├─────────────────────────────`,
+        `│ 💡 Use \`*project use ${project.slug}\` to select it`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -201,7 +266,10 @@ export class ProjectCommandHandler {
     const dbUser = (ctx as any).dbUser;
 
     if (!this.isAdmin(dbUser)) {
-      await this.reply(message, '❌ Only administrators can delete projects.');
+      await this.reply(
+        message,
+        '❌ Only **Administrators** can delete projects.',
+      );
       return;
     }
 
@@ -209,22 +277,31 @@ export class ProjectCommandHandler {
     if (!projectKey) {
       await this.reply(
         message,
-        'Project key is required.\nUsage: `*project delete <projectId|projectSlug>`',
+        'Usage: `*project delete <projectId|projectSlug>`',
       );
       return;
     }
 
     const project = await this.findProjectByIdentifier(projectKey);
     if (!project) {
-      await this.reply(message, `Project **${projectKey}** not found.`);
+      await this.reply(message, `❌ Project **${projectKey}** not found.`);
       return;
     }
 
     await this.reply(
       message,
       [
-        `🗑️ Are you sure you want to delete project **${project.name}** (\`${project.slug}\`)?`,
-        `Run: \`*project confirm delete ${project.id}\` to complete the deletion.`,
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Confirm Delete Project**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${project.name}`,
+        `│ 🔖  Slug : \`${project.slug}\``,
+        `│ 🆔  ID   : #${project.id}`,
+        `├─────────────────────────────`,
+        `│ ⚠️  This action **cannot be undone**.`,
+        `│ Run to confirm:`,
+        `│ \`*project confirm delete ${project.id}\``,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -237,7 +314,10 @@ export class ProjectCommandHandler {
     const dbUser = (ctx as any).dbUser;
 
     if (!this.isAdmin(dbUser)) {
-      await this.reply(message, '❌ Only administrators can delete projects.');
+      await this.reply(
+        message,
+        '❌ Only **Administrators** can delete projects.',
+      );
       return;
     }
 
@@ -245,26 +325,37 @@ export class ProjectCommandHandler {
     if (!projectKey) {
       await this.reply(
         message,
-        'Project key is required.\nUsage: `*project confirm delete <projectId|projectSlug>`',
+        'Usage: `*project confirm delete <projectId|projectSlug>`',
       );
       return;
     }
 
     const project = await this.findProjectByIdentifier(projectKey);
     if (!project) {
-      await this.reply(message, `Project **${projectKey}** not found.`);
+      await this.reply(message, `❌ Project **${projectKey}** not found.`);
       return;
     }
 
     const deleted = await this.projectService.deleteProject(project.id);
     if (!deleted) {
-      await this.reply(message, `Project **${projectKey}** not found.`);
+      await this.reply(
+        message,
+        `❌ Failed to delete project **${projectKey}**. It may have already been removed.`,
+      );
       return;
     }
 
     await this.reply(
       message,
-      `🗑️ Project **${project.name}** (\`${project.slug}\`) was deleted.`,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Project Deleted**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${project.name}`,
+        `│ 🔖  Slug : \`${project.slug}\``,
+        `│ 🆔  ID   : #${project.id}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -276,7 +367,10 @@ export class ProjectCommandHandler {
     const projectKey = args[1];
 
     if (!projectKey) {
-      await this.reply(message, 'Project key is required.');
+      await this.reply(
+        message,
+        'Usage: `*project use <projectId|projectSlug>`',
+      );
       return;
     }
 
@@ -287,7 +381,17 @@ export class ProjectCommandHandler {
 
     await this.reply(
       message,
-      `Using project ${context.project.name} (${context.project.slug}).`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Project Selected**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${context.project.name}`,
+        `│ 🔖  Slug : \`${context.project.slug}\``,
+        `│ 🆔  ID   : #${context.project.id}`,
+        `├─────────────────────────────`,
+        `│ 💡 Use \`*project exit\` to deselect`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -299,13 +403,33 @@ export class ProjectCommandHandler {
       await this.projectContextService.getCurrentProjectByMezonId(senderId);
 
     if (context.project == null) {
-      await this.reply(message, 'No current project selected.');
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ 📁 **Current Project**`,
+          `├─────────────────────────────`,
+          `│ ℹ️  No project selected.`,
+          `│ Use \`*project use <slug|id>\` to select one.`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
       return;
     }
 
     await this.reply(
       message,
-      `Current project is ${context.project.name} (${context.project.slug}).`,
+      [
+        `┌─────────────────────────────`,
+        `│ 📁 **Current Project**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${context.project.name}`,
+        `│ 🔖  Slug : \`${context.project.slug}\``,
+        `│ 🆔  ID   : #${context.project.id}`,
+        `├─────────────────────────────`,
+        `│ 💡 Use \`*project exit\` to deselect`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -314,7 +438,17 @@ export class ProjectCommandHandler {
     message: ManagedMessage,
   ): Promise<void> {
     await this.projectContextService.exitProjectByMezonId(senderId);
-    await this.reply(message, 'Exited current project.');
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 👋 **Exited Project**`,
+        `├─────────────────────────────`,
+        `│ You have exited the current project.`,
+        `│ Use \`*project use <slug|id>\` to select a new one.`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
   }
 
   private getErrorMessage(error: unknown): string {

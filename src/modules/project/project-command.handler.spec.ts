@@ -78,8 +78,10 @@ describe(ProjectCommandHandler.name, () => {
       'user-1',
     );
     expect(projectService.listProjects).toHaveBeenCalledTimes(1);
-    expectReplyText(message as never, '[#10] Backend Campus (backend) ⭐');
-    expectReplyText(message as never, '[#11] Frontend Campus (frontend)');
+    expectReplyText(message as never, '[#10] ⭐ **Backend Campus**');
+    expectReplyText(message as never, 'Slug : `backend`');
+    expectReplyText(message as never, '[#11] **Frontend Campus**');
+    expectReplyText(message as never, 'Slug : `frontend`');
   });
 
   it('prints an empty-state message when no projects exist', async () => {
@@ -95,7 +97,7 @@ describe(ProjectCommandHandler.name, () => {
       dbUser: { id: 'user-1' },
     } as never);
 
-    expectReplyText(message as never, 'You have no projects yet.');
+    expectReplyText(message as never, 'No projects found.');
   });
 
   it('prepares project deletion and requires a confirmation command', async () => {
@@ -129,7 +131,7 @@ describe(ProjectCommandHandler.name, () => {
     expect(projectService.deleteProject).not.toHaveBeenCalled();
     expectReplyText(
       message as never,
-      'Only administrators can delete projects.',
+      'Only **Administrators** can delete projects.',
     );
   });
 
@@ -151,7 +153,7 @@ describe(ProjectCommandHandler.name, () => {
     } as never);
 
     expect(projectService.deleteProject).toHaveBeenCalledWith(12);
-    expectReplyText(message as never, 'Project **Delete Campus**');
-    expectReplyText(message as never, 'was deleted');
+    expectReplyText(message as never, '**Project Deleted**');
+    expectReplyText(message as never, 'Name : Delete Campus');
   });
 });
