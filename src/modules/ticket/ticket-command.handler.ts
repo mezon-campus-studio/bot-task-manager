@@ -237,7 +237,6 @@ export class TicketCommandHandler {
       return;
     }
 
-    // Tách title và description qua flag --desc
     const descIndex = raw.indexOf('--desc');
     let title: string;
     let description: string | undefined;

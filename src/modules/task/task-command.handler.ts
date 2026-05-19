@@ -132,7 +132,6 @@ export class TaskCommandHandler {
       hasPrev: page > 1,
     };
 
-    // Build filter hint
     const activeFilters: string[] = [];
     if (status) activeFilters.push(`status: **${status}**`);
     if (keyword) activeFilters.push(`keyword: **"${keyword}"**`);
@@ -181,7 +180,6 @@ export class TaskCommandHandler {
       }
     }
 
-    // Build pagination command base with existing flags
     const flagSuffix = [
       status ? `--status ${statusRaw}` : '',
       keyword ? `--q ${keyword}` : '',
@@ -221,7 +219,6 @@ export class TaskCommandHandler {
       return;
     }
 
-    // Tách title và description qua flag --desc
     const descIndex = raw.indexOf('--desc');
     let title: string;
     let description: string | undefined;
@@ -705,16 +702,14 @@ export class TaskCommandHandler {
 
   private canAssignTask(
     dbUser: { id?: unknown; role?: unknown } | null | undefined,
-    targetAssigneeId: string, // ID của người ĐƯỢC chỉ định gán trong dòng lệnh
+    targetAssigneeId: string,
   ): boolean {
     if (!dbUser?.id) return false;
 
     const currentUserId = String(dbUser.id);
 
-    // Điều kiện 1: Là PM hoặc Admin -> Có quyền gán cho bất kỳ ai
     const isLead = this.isProjectManagerOrAdmin(dbUser);
 
-    // Điều kiện 2: Tự gán cho chính mình (Self-assign)
     const isSelfAssign = currentUserId === targetAssigneeId;
 
     return isLead || isSelfAssign;

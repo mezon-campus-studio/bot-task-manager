@@ -99,7 +99,6 @@ export class UserCommandHandler {
     }
   }
 
-  // ─── actions ────────────────────────────────────────────────────────────────
   private async showMe(
     ctx: NezonCommandContext,
     message: ManagedMessage,

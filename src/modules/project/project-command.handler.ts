@@ -132,7 +132,6 @@ export class ProjectCommandHandler {
       (p) => !accessibleProjects.some((ap) => ap.id === p.id),
     );
 
-    // Gộp 2 section lại để phân trang chung
     type ProjectRow = {
       project: (typeof accessibleProjects)[0];
       section: 'yours' | 'other';
@@ -159,7 +158,6 @@ export class ProjectCommandHandler {
       `├─────────────────────────────`,
     ];
 
-    // Tách lại 2 nhóm trong trang hiện tại để giữ header section
     const yoursOnPage = pageRows.filter((r) => r.section === 'yours');
     const otherOnPage = pageRows.filter((r) => r.section === 'other');
 

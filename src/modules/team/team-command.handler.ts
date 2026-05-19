@@ -104,8 +104,6 @@ export class TeamCommandHandler {
     }
   }
 
-  // ─── actions ────────────────────────────────────────────────────────────────
-
   private async listTeams(
     senderId: string,
     message: ManagedMessage,
