@@ -45,6 +45,7 @@ describe(TaskCommandHandler.name, () => {
       deleteTask: jest.fn(),
       findById: jest.fn(),
       listByProject: jest.fn(),
+      queryTasks: jest.fn(),
       updateTaskStatus: jest.fn(),
       ...overrides?.taskService,
     };
@@ -68,16 +69,18 @@ describe(TaskCommandHandler.name, () => {
 
   it('lists tasks in the current project', async () => {
     const message = createMessage();
+    const tasks = [
+      {
+        assigneeUserId: null,
+        id: 4,
+        status: TaskStatus.TODO,
+        title: 'Prepare launch',
+      },
+    ];
     const { handler, taskService } = createHandler({
       taskService: {
-        listByProject: jest.fn().mockResolvedValue([
-          {
-            assigneeUserId: null,
-            id: 4,
-            status: TaskStatus.TODO,
-            title: 'Prepare launch',
-          },
-        ]),
+        listByProject: jest.fn().mockResolvedValue(tasks),
+        queryTasks: jest.fn().mockResolvedValue(tasks),
       },
     });
 
@@ -108,10 +111,7 @@ describe(TaskCommandHandler.name, () => {
       reporterUserId: 'user-1',
       title: 'Write release notes',
     });
-    expectReplyText(
-      message as never,
-      'Created task **#8: Write release notes**',
-    );
+    expectReplyText(message as never, 'Title    : Write release notes');
   });
 
   it('updates task status with the current user as author', async () => {
@@ -188,6 +188,6 @@ describe(TaskCommandHandler.name, () => {
     await handler.handleTaskCommand(['confirm', 'delete', '8'], message);
 
     expect(taskService.deleteTask).toHaveBeenCalledWith(8);
-    expectReplyText(message as never, 'Deleted task #8');
+    expectReplyText(message as never, '**Task Deleted**');
   });
 });

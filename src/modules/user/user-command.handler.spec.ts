@@ -55,7 +55,7 @@ describe(UserCommandHandler.name, () => {
       },
     } as never);
 
-    expectReplyText(message as never, 'Role: Administrator');
+    expectReplyText(message as never, 'Role      : Administrator');
   });
 
   it('maps clan Administrator role to internal admin during user search refresh', async () => {
@@ -95,7 +95,7 @@ describe(UserCommandHandler.name, () => {
       'mezon-admin-search',
       { role: UserRole.ADMIN },
     );
-    expectReplyText(message as never, 'Role: Administrator');
+    expectReplyText(message as never, 'Role      : Administrator');
   });
 
   it('keeps Administrator when a clan user also has a lower role', async () => {
@@ -141,7 +141,7 @@ describe(UserCommandHandler.name, () => {
       'mezon-admin-search',
       { role: UserRole.ADMIN },
     );
-    expectReplyText(message as never, 'Role: Administrator');
+    expectReplyText(message as never, 'Role      : Administrator');
   });
 
   it('downgrades an existing Administrator when clan search no longer finds a role for the user', async () => {
@@ -181,7 +181,7 @@ describe(UserCommandHandler.name, () => {
       'mezon-admin-search',
       { role: UserRole.UK },
     );
-    expectReplyText(message as never, 'Role: Member');
+    expectReplyText(message as never, 'Role      : Member');
   });
 
   it('keeps an existing Administrator when clan search fails', async () => {
@@ -206,7 +206,7 @@ describe(UserCommandHandler.name, () => {
     } as never);
 
     expect(userService.upsertByMezonId).not.toHaveBeenCalled();
-    expectReplyText(message as never, 'Role: Administrator');
+    expectReplyText(message as never, 'Role      : Administrator');
   });
 
   it('prepares user deletion and requires confirm delete before soft delete', async () => {
