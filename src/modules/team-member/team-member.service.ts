@@ -146,7 +146,7 @@ export class TeamMemberService extends CRUDService<TeamMemberEntity> {
       existingMember.status = TeamMemberStatus.ACTIVE;
       existingMember.joinedAt = new Date();
       existingMember.invitedByUserId = invitedBy;
-      existingMember.deletedAt = null; // Important: clear deletedAt before saving
+      existingMember.deletedAt = null;
 
       return await this.teamMemberRepository.save(existingMember);
     }
