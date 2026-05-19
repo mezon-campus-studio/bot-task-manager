@@ -19,15 +19,6 @@ import {
 import UserEntity from './user.entity';
 import { UserService } from './user.service';
 
-/**
- * User command handler for the Mezon bot.
- *
- * Supported commands (prefix: *):
- *   *user me               – Show your own profile (name, role, current project)
- *   *user search <userId>  – Search for a user by mezonId or internal UUID
- *   *user info <userId>    – Look up a user by mezonId or internal UUID (ADMIN/PM only)
- *   *user create @username – Create user from clan member (pulls role from clan)
- */
 @Injectable()
 @UseGuards(NezonAuthGuard)
 export class UserCommandHandler {
@@ -55,6 +46,7 @@ export class UserCommandHandler {
           await this.showMe(ctx, message);
           return;
         case 'info':
+        case 'detail':
           await this.showUserInfo(args, message, ctx);
           return;
         case 'search':
@@ -64,7 +56,7 @@ export class UserCommandHandler {
           await this.createUserFromMention(message, ctx);
           return;
         case 'list':
-          await this.listUsers(message);
+          await this.listUsers(message, ctx);
           return;
         case 'delete':
           await this.deleteUser(args, message, ctx);
@@ -84,13 +76,13 @@ export class UserCommandHandler {
             message,
             [
               '👤 **User Commands:**',
-              '  `*user me` – View your own profile',
+              '  `*user me` – Show your profile and current project',
+              '  `*user create @username` – Add a user from clan mention',
+              '  `*user info @username|userId` – View user details (only Admin,PM can see roles)',
+              '  `*user search @username|userId` – Search for a user by username or ID (all users can search)',
               '  `*user list` – List all users',
-              '  `*user search <mezonId|userId>` – Search for a user',
-              '  `*user info <mezonId|userId>` – Look up another user (admin/PM only)',
-              '  `*user create @username` – Create user from clan member',
-              '  `*user delete <mezonId|userId|@username>` – Prepare delete confirmation',
-              '  `*user confirm delete <mezonId|userId|@username>` – Confirm user deletion',
+              '  `*user delete @username|userId` – Prepare delete confirmation',
+              '  `*user confirm delete @username|userId` – Confirm user deletion',
             ].join('\n'),
           );
       }
@@ -129,10 +121,6 @@ export class UserCommandHandler {
     );
   }
 
-  /**
-   * Look up any user by mezonId or internal UUID.
-   * Only available to admins.
-   */
   private async showUserInfo(
     args: string[],
     message: ManagedMessage,
@@ -140,10 +128,10 @@ export class UserCommandHandler {
   ): Promise<void> {
     const senderUser = (ctx as any).dbUser;
     const senderRole = Number(senderUser?.role);
-    if (senderRole !== UserRole.ADMIN) {
+    if (senderRole !== UserRole.ADMIN && senderRole !== UserRole.PM) {
       await this.reply(
         message,
-        '❌ This command is only available to administrators.',
+        '❌ This command is only available to **Administrator** or **Project Manager**.',
       );
       return;
     }
@@ -167,23 +155,34 @@ export class UserCommandHandler {
 
     user = await this.refreshUserRoleFromClan(user, ctx);
 
+    const statusIcon = this.getStatusIcon(user.status);
+    const roleLabel = this.getRoleLabel(user.role ?? UserRole.UK);
+    const roleIcon = this.getRoleIcon(user.role ?? UserRole.UK);
+    const isDeleted = user.status === UserStatus.DELETED;
+
     await this.reply(
       message,
       [
-        `👤 **User Info:**`,
-        `  Name: ${user.name ?? '—'}`,
-        `  Email: ${user.email ?? '—'}`,
-        `  Role: ${this.getRoleLabel(user.role ?? UserRole.UK)}`,
-        `  Status: ${user.status ?? '—'}`,
-        `  Mezon ID: ${user.mezonId}`,
+        `┌─────────────────────────────`,
+        `│ 👤 **User Info**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name      : ${user.name ?? '—'}`,
+        `│ 📧  Email     : ${user.email ?? '—'}`,
+        `│ ${roleIcon}  Role      : ${roleLabel}`,
+        `│ ${statusIcon}  Status    : ${this.getStatusLabel(user.status)}`,
+        `│ 🪪  Mezon ID  : \`${user.mezonId}\``,
+        ...(user.currentProjectId != null
+          ? [`│ 📁  Project   : #${user.currentProjectId}`]
+          : []),
+        ...(isDeleted && user.deletedAt != null
+          ? [`│ 🗑️  Deleted   : ${this.formatDate(user.deletedAt)}`]
+          : []),
+        `│ 📅  Joined    : ${this.formatDate(user.createdAt)}`,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
 
-  /**
-   * Search for a user by mezonId or internal UUID.
-   * Public command, shows basic info.
-   */
   private async searchUser(
     args: string[],
     message: ManagedMessage,
@@ -209,14 +208,22 @@ export class UserCommandHandler {
 
     user = await this.refreshUserRoleFromClan(user, ctx);
 
+    const statusIcon = this.getStatusIcon(user.status);
+    const roleLabel = this.getRoleLabel(user.role ?? UserRole.UK);
+    const roleIcon = this.getRoleIcon(user.role ?? UserRole.UK);
+
     await this.reply(
       message,
       [
-        `👤 **User Found:**`,
-        `  Name: ${user.name ?? '—'}`,
-        `  Role: ${this.getRoleLabel(user.role ?? UserRole.UK)}`,
-        `  Status: ${user.status ?? '—'}`,
-        `  Mezon ID: ${user.mezonId}`,
+        `┌─────────────────────────────`,
+        `│ 🔍 **Search Result**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name      : ${user.name ?? '—'}`,
+        `│ ${roleIcon}  Role      : ${roleLabel}`,
+        `│ ${statusIcon}  Status    : ${this.getStatusLabel(user.status)}`,
+        `│ 🪪  Mezon ID  : \`${user.mezonId}\``,
+        `│ 📅  Joined    : ${this.formatDate(user.createdAt)}`,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -338,21 +345,88 @@ export class UserCommandHandler {
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
-
-  private async listUsers(message: ManagedMessage): Promise<void> {
+  private async listUsers(
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
     const users = await this.userService.listAll();
 
     if (users.length === 0) {
       await this.reply(message, 'ℹ️ No users found.');
       return;
     }
-    const lines = users.map((u) => {
-      const roleLabel = this.getRoleLabel(u.role ?? UserRole.UK);
-      const status = u.status ?? '—';
-      return `  - ${u.name ?? '—'} (${u.mezonId}) | ${roleLabel} | ${status}`;
-    });
 
-    await this.reply(message, ['👤 **User List:**', ...lines].join('\n'));
+    // Fetch clan roles 1 lần duy nhất
+    let clanRoles: any[] = [];
+    try {
+      const clan = await ctx.getClan();
+      if (clan) {
+        const rolesData = await (clan as any).listRoles?.();
+        const roles =
+          rolesData?.roles?.roles ?? rolesData?.roles ?? rolesData ?? [];
+        if (Array.isArray(roles)) clanRoles = roles;
+      }
+    } catch (e) {
+      this.logger.debug(
+        `Could not fetch clan roles for list: ${(e as Error).message}`,
+      );
+    }
+
+    // Đồng bộ role từ clan
+    const refreshedUsers = await Promise.all(
+      users.map(async (u) => {
+        if (!u.mezonId || clanRoles.length === 0) return u;
+        const resolvedRole = resolveBestMezonRoleForUser(clanRoles, u.mezonId);
+        if (shouldSyncResolvedUserRole(u.role, resolvedRole)) {
+          return this.userService.upsertByMezonId(u.mezonId, {
+            role: resolvedRole,
+          });
+        }
+        return u;
+      }),
+    );
+
+    // Thứ tự hiển thị: ADMIN → PM → DEV → QA → Unknown
+    const ROLE_SORT_ORDER: Record<number, number> = {
+      [UserRole.ADMIN]: 0,
+      [UserRole.PM]: 1,
+      [UserRole.DEV]: 2,
+      [UserRole.QA]: 3,
+      [UserRole.UK]: 4,
+    };
+
+    const ROLE_HEADER: Record<number, string> = {
+      [UserRole.ADMIN]: '👑 **Administrator**',
+      [UserRole.PM]: '📋 **Project Manager**',
+      [UserRole.DEV]: '💻 **Developer**',
+      [UserRole.QA]: '🔍 **QA**',
+      [UserRole.UK]: '❓ **Unknown**',
+    };
+
+    // Group theo role
+    const grouped = new Map<number, typeof refreshedUsers>();
+    for (const u of refreshedUsers) {
+      const role = Number(u.role ?? UserRole.UK);
+      const key = role in ROLE_SORT_ORDER ? role : UserRole.UK;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key)!.push(u);
+    }
+
+    // Build output theo thứ tự
+    const lines: string[] = ['👤 **User List:**'];
+    const sortedKeys = [...grouped.keys()].sort(
+      (a, b) => (ROLE_SORT_ORDER[a] ?? 99) - (ROLE_SORT_ORDER[b] ?? 99),
+    );
+
+    for (const roleKey of sortedKeys) {
+      const group = grouped.get(roleKey)!;
+      lines.push(`\n${ROLE_HEADER[roleKey]} (${group.length})`);
+      for (const u of group) {
+        lines.push(`  - ${u.name ?? '—'} (${u.mezonId}) | ${u.status ?? '—'}`);
+      }
+    }
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async deleteUser(
@@ -482,6 +556,62 @@ export class UserCommandHandler {
       default:
         return 'Member';
     }
+  }
+
+  private getRoleIcon(
+    role: UserRole | string | number | null | undefined,
+  ): string {
+    switch (Number(role)) {
+      case UserRole.ADMIN:
+        return '👑';
+      case UserRole.PM:
+        return '📋';
+      case UserRole.DEV:
+        return '💻';
+      case UserRole.QA:
+        return '🔍';
+      default:
+        return '👤';
+    }
+  }
+
+  private getStatusIcon(
+    status: UserStatus | string | null | undefined,
+  ): string {
+    switch (status) {
+      case UserStatus.ACTIVE:
+        return '🟢';
+      case UserStatus.INACTIVE:
+        return '🟡';
+      case UserStatus.DELETED:
+        return '🔴';
+      default:
+        return '⚪';
+    }
+  }
+
+  private getStatusLabel(
+    status: UserStatus | string | null | undefined,
+  ): string {
+    switch (status) {
+      case UserStatus.ACTIVE:
+        return 'Active';
+      case UserStatus.INACTIVE:
+        return 'Inactive';
+      case UserStatus.DELETED:
+        return 'Deleted';
+      default:
+        return '—';
+    }
+  }
+
+  private formatDate(date: Date | string | null | undefined): string {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
   }
 
   private normalizeUserIdentifier(
