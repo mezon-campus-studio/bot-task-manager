@@ -6,8 +6,7 @@ import { SearchOrder } from '@src/common/enums';
 import { CRUDService } from '@src/common/utils/crud';
 import { NoteResourceType } from '@src/modules/note/enums';
 import NoteEntity from '@src/modules/note/note.entity';
-import { ProjectMemberStatus } from '@src/modules/project-member/project-member-status.enum';
-import { ProjectMemberService } from '@src/modules/project-member/project-member.service';
+import { ProjectService } from '@src/modules/project/project.service';
 import { TeamMemberStatus } from '@src/modules/team-member/enums/team-member-status.enum';
 import { TeamMemberService } from '@src/modules/team-member/team-member.service';
 import { TaskStatus } from './enums';
@@ -55,7 +54,7 @@ export class TaskService extends CRUDService<TaskEntity> {
   constructor(
     @InjectRepository(TaskEntity)
     private taskRepository: Repository<TaskEntity>,
-    private readonly projectMemberService: ProjectMemberService,
+    private readonly projectService: ProjectService,
     private readonly teamMemberService: TeamMemberService,
   ) {
     super(taskRepository);
@@ -167,20 +166,16 @@ export class TaskService extends CRUDService<TaskEntity> {
       return;
     }
 
-    const membership = await this.projectMemberService.findByProjectAndUser(
+    const canAccessProject = await this.projectService.canUserAccessProject(
       task.projectId,
       assigneeUserId,
     );
 
-    if (
-      membership == null ||
-      membership.status !== ProjectMemberStatus.ACTIVE
-    ) {
+    if (!canAccessProject) {
       this.logger.log({
         assigneeUserId,
-        log: 'Task assignee validation failed because project membership is not active',
+        log: 'Task assignee validation failed because project access is not active',
         projectId: task.projectId,
-        status: membership?.status ?? null,
         taskId: task.id,
       });
 
@@ -189,8 +184,7 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     this.logger.log({
       assigneeUserId,
-      log: 'Task assignee validation passed for project member',
-      membershipId: membership.id,
+      log: 'Task assignee validation passed for project access',
       projectId: task.projectId,
       taskId: task.id,
     });
@@ -216,6 +210,7 @@ export class TaskService extends CRUDService<TaskEntity> {
         dueAt: 'ASC',
         id: 'DESC',
       },
+      relations: ['assigneeUser', 'reporterUser'],
     });
 
     this.logger.log({
@@ -316,6 +311,7 @@ export class TaskService extends CRUDService<TaskEntity> {
 
     const result = await this.taskRepository.findOne({
       where: { id },
+      relations: ['assigneeUser', 'reporterUser'],
     });
 
     this.logger.log({ log: 'Got task by id result', taskId: id, result });

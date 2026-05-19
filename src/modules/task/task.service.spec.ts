@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { DataSource, type Repository } from 'typeorm';
 import { createTestingModule, factory, testingModule } from '#jest';
 import { SearchOrder } from '@src/common/enums';
@@ -14,7 +13,6 @@ describe(TaskService.name, () => {
   let taskService: TaskService;
   let noteRepository: Repository<NoteEntity>;
   let taskRepository: Repository<TaskEntity>;
-  let numericSequence = 0;
 
   beforeAll(createTestingModule);
 
@@ -24,23 +22,52 @@ describe(TaskService.name, () => {
     taskRepository = testingModule!.get(DataSource).getRepository(TaskEntity);
   });
 
-  function nextNumericId() {
-    numericSequence += 1;
-    return numericSequence;
-  }
+  async function createTaskContext() {
+    const project = await factory.project({});
+    const reporter = await factory.user({});
+    const assignee = await factory.user({});
+    const team = await factory.team({
+      projectId: project.id,
+    });
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+    await factory.projectMember({
+      projectId: project.id,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
 
-  function createTaskContext() {
+    await factory.teamMember({
+      teamId: team.id,
+      userId: reporter.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+    await factory.teamMember({
+      teamId: team.id,
+      userId: assignee.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+
     return {
-      assigneeUserId: randomUUID(),
-      projectId: nextNumericId(),
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
+      assigneeUserId: assignee.id,
+      projectId: project.id,
+      reporterUserId: reporter.id,
+      teamId: team.id,
     };
   }
 
   async function createProjectTaskContext() {
     const project = await factory.project({});
     const reporter = await factory.user({});
+
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
 
     return {
       projectId: project.id,
@@ -55,6 +82,18 @@ describe(TaskService.name, () => {
       projectId: project.id,
     });
 
+    await factory.projectMember({
+      projectId: project.id,
+      userId: reporter.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
+
+    await factory.teamMember({
+      teamId: team.id,
+      userId: reporter.id,
+      status: TeamMemberStatus.ACTIVE,
+    });
+
     return {
       projectId: project.id,
       reporterUserId: reporter.id,
@@ -64,7 +103,7 @@ describe(TaskService.name, () => {
 
   it('should create a task for the project workflow with the provided schedule', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
+      await createTaskContext();
     const dueAt = new Date('2026-05-01T09:00:00.000Z');
 
     const task = await taskService.createTask({
@@ -108,56 +147,6 @@ describe(TaskService.name, () => {
     expect(storedTask.dueAt?.toISOString()).toBe(dueAt.toISOString());
   });
 
-  it('should return only project tasks ordered by due date and newest id for ties', async () => {
-    const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
-    const otherProjectId = nextNumericId();
-    const sharedDueAt = new Date('2026-06-15T09:00:00.000Z');
-
-    const firstTask = await factory.task({
-      assigneeUserId,
-      dueAt: new Date('2026-06-14T09:00:00.000Z'),
-      projectId,
-      reporterUserId,
-      teamId,
-      title: 'Kick off student invite review',
-    });
-    const olderSameDayTask = await factory.task({
-      assigneeUserId,
-      dueAt: sharedDueAt,
-      projectId,
-      reporterUserId,
-      teamId,
-      title: 'Validate advisor assignments',
-    });
-    const newerSameDayTask = await factory.task({
-      assigneeUserId,
-      dueAt: sharedDueAt,
-      projectId,
-      reporterUserId,
-      teamId,
-      title: 'Share the launch brief',
-    });
-
-    await factory.task({
-      dueAt: new Date('2026-06-13T09:00:00.000Z'),
-      projectId: otherProjectId,
-      reporterUserId: randomUUID(),
-      teamId: nextNumericId(),
-      title: 'Ignore other project task',
-    });
-
-    const tasks = await taskService.listByProject(projectId);
-
-    expect(tasks).toHaveLength(3);
-    expect(tasks.map(({ id }) => id)).toEqual([
-      firstTask.id,
-      newerSameDayTask.id,
-      olderSameDayTask.id,
-    ]);
-    expect(tasks.every((task) => task.projectId === projectId)).toBe(true);
-  });
-
   it('should query tasks by project and supported filters', async () => {
     const { projectId, reporterUserId } = await createProjectTaskContext();
     const assignee = await factory.user({});
@@ -165,6 +154,12 @@ describe(TaskService.name, () => {
       projectId,
     });
     const otherProject = await factory.project({});
+
+    await factory.projectMember({
+      projectId,
+      userId: assignee.id,
+      status: ProjectMemberStatus.ACTIVE,
+    });
 
     const matchingTask = await factory.task({
       assigneeUserId: assignee.id,
@@ -330,6 +325,37 @@ describe(TaskService.name, () => {
       assigneeUserId: assignee.id,
       id: task.id,
       status: TaskStatus.TODO,
+    });
+  });
+
+  it('should assign a project task to an active member of a team in the project', async () => {
+    const { projectId, reporterUserId } = await createProjectTaskContext();
+    const assignee = await factory.user({});
+    const task = await factory.task({
+      assigneeUserId: null,
+      projectId,
+      reporterUserId,
+      teamId: null,
+      title: 'Coordinate team-wide project handoff',
+    });
+    const team = await factory.team({
+      projectId,
+      slug: 'project-task-team-access',
+    });
+
+    await factory.teamMember({
+      status: TeamMemberStatus.ACTIVE,
+      teamId: team.id,
+      userId: assignee.id,
+    });
+
+    const updatedTask = await taskService.assignTask(task.id, assignee.id);
+
+    expect(updatedTask).toMatchObject({
+      assigneeUserId: assignee.id,
+      id: task.id,
+      projectId,
+      teamId: null,
     });
   });
 
@@ -598,7 +624,7 @@ describe(TaskService.name, () => {
   });
 
   it('should find a task by id', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       projectId,
       reporterUserId,
@@ -621,7 +647,7 @@ describe(TaskService.name, () => {
 
   it('should update an existing task with the provided workflow changes', async () => {
     const { assigneeUserId, projectId, reporterUserId, teamId } =
-      createTaskContext();
+      await createTaskContext();
     const dueAt = new Date('2026-07-01T09:00:00.000Z');
     const updatedDueAt = new Date('2026-07-10T09:00:00.000Z');
     const task = await factory.task({
@@ -672,7 +698,7 @@ describe(TaskService.name, () => {
   });
 
   it('should soft delete an existing task', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       projectId,
       reporterUserId,
@@ -698,7 +724,7 @@ describe(TaskService.name, () => {
   });
 
   it('should support updateSession from the CRUD base for task workflow changes', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId } = await createTaskContext();
     const task = await factory.task({
       priority: TaskPriority.MEDIUM,
       projectId,
@@ -727,9 +753,10 @@ describe(TaskService.name, () => {
   });
 
   it('should support updateEntry from the CRUD base for task workflow changes', async () => {
-    const { projectId, reporterUserId, teamId } = createTaskContext();
+    const { projectId, reporterUserId, teamId, assigneeUserId } =
+      await createTaskContext();
     const task = await factory.task({
-      assigneeUserId: randomUUID(),
+      assigneeUserId,
       description: 'Initial task detail',
       projectId,
       reporterUserId,

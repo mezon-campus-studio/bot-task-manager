@@ -79,7 +79,6 @@ export class RoleService extends CRUDService<RoleEntity> {
     });
   }
 
-  // deleteRole //
   async deleteRole(id: number): Promise<void> {
     this.logger.log({
       log: 'Attempting to delete role',

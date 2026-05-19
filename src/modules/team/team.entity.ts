@@ -1,6 +1,14 @@
-import { Column, DeleteDateColumn, Entity, Index } from 'typeorm';
+import {
+  Column,
+  DeleteDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+} from 'typeorm';
 import { AbstractEntity } from '#src/common/database/abstract.entity.js';
 import { TeamStatus } from './enum/team-status.enum';
+import UserEntity from '../user/user.entity';
 
 @Entity('teams')
 @Index('teams_project_id_slug_key', ['projectId', 'slug'], { unique: true })
@@ -12,9 +20,13 @@ export default class TeamEntity extends AbstractEntity {
   @Column({ type: 'varchar' })
   name!: string;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', name: 'leader_id', nullable: true })
   @Index('IDX_teams_leader_id')
   leaderId!: string | null;
+
+  @ManyToOne(() => UserEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'leader_id' })
+  leader!: UserEntity | null;
 
   @Column({ type: 'varchar' })
   slug!: string;

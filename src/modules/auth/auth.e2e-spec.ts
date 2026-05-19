@@ -1,5 +1,6 @@
 import { JwtService } from '@nestjs/jwt';
 import { createTestingApp, http, testingModule } from '#jest';
+import { UserService } from '../user/user.service';
 
 describe('AuthController (e2e)', () => {
   beforeAll(createTestingApp);
@@ -17,10 +18,16 @@ describe('AuthController (e2e)', () => {
   });
 
   it('returns the JWT payload for an authenticated request', async () => {
+    const userService = testingModule!.get(UserService);
+    const user = await userService.upsertByMezonId('test-mezon-id', {
+      name: 'Tester',
+      email: 'tester@example.com',
+    });
+
     const jwtService = testingModule!.get(JwtService);
     const token = await jwtService.signAsync({
-      sub: 'user-1',
-      email: 'tester@example.com',
+      sub: user.id,
+      email: user.email,
     });
 
     await http()
@@ -31,9 +38,7 @@ describe('AuthController (e2e)', () => {
         expect(body).toMatchObject({
           data: {
             email: 'tester@example.com',
-            sub: 'user-1',
-            iat: expect.any(Number),
-            exp: expect.any(Number),
+            id: user.id,
           },
           statusCode: 200,
         });

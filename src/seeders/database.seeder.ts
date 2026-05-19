@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
+import ProjectEntity from '@src/modules/project/project.entity';
 import TaskEntity from '@src/modules/task/task.entity';
 import TeamEntity from '@src/modules/team/team.entity';
 import TicketEntity from '@src/modules/ticket/ticket.entity';
@@ -7,6 +9,7 @@ import UserEntity from '@src/modules/user/user.entity';
 import {
   channelMessage as channelMessageFactory,
   messageButtonClicked as messageButtonClickedFactory,
+  project as projectFactory,
   role as roleFactory,
   task as taskFactory,
   team as teamFactory,
@@ -21,7 +24,7 @@ import type { MessageButtonClicked } from 'mezon-sdk/dist/cjs/rtapi/realtime';
 export class DatabaseSeeder {
   private readonly logger = new Logger(DatabaseSeeder.name);
 
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(@InjectDataSource() private readonly dataSource: DataSource) {}
 
   async seed(options: SeedOptions = {}): Promise<SeedResult> {
     const {
@@ -32,6 +35,8 @@ export class DatabaseSeeder {
       tickets = 5,
       ticket = {},
       roles = 3,
+      projects = 2,
+      project = {},
       teams = 2,
       team = {},
     } = options;
@@ -41,20 +46,33 @@ export class DatabaseSeeder {
     await this.resetDatabase();
     const seededRoles = await this.createRoles(roles);
     const seededUsers = await this.createUsers(users, user);
-    const seededTasks = await this.createTasks(tasks, task);
-    const seededTickets = await this.createTickets(tickets, ticket);
+    const seededProjects = await this.createProjects(projects, {
+      ownerUserId: seededUsers[0].id,
+      ...project,
+    });
+    const seededTasks = await this.createTasks(tasks, {
+      projectId: seededProjects[0]?.id,
+      ...task,
+    });
+    const seededTickets = await this.createTickets(tickets, {
+      projectId: seededProjects[0]?.id,
+      ...ticket,
+    });
     const seededTeams = await this.createTeams(teams, {
       leaderId: seededUsers[0].id,
+      projectId: seededProjects[0]?.id,
       ...team,
     });
 
     this.logger.log(`Seeded ${seededUsers.length} users`);
+    this.logger.log(`Seeded ${seededProjects.length} projects`);
     this.logger.log(`Seeded ${seededTasks.length} tasks`);
     this.logger.log(`Seeded ${seededTickets.length} tickets`);
     this.logger.log(`Seeded ${seededTeams.length} teams`);
 
     return {
       roles: seededRoles,
+      projects: seededProjects,
       tasks: seededTasks,
       tickets: seededTickets,
       users: seededUsers,
@@ -72,6 +90,14 @@ export class DatabaseSeeder {
 
   async createTasks(count = 1, input: Partial<TaskEntity> = {}) {
     return taskFactory(
+      Array.from({ length: count }, () => ({
+        ...input,
+      })),
+    );
+  }
+
+  async createProjects(count = 1, input: Partial<ProjectEntity> = {}) {
+    return projectFactory(
       Array.from({ length: count }, () => ({
         ...input,
       })),
@@ -147,6 +173,8 @@ type SeedOptions = {
   users?: number;
   user?: Partial<UserEntity>;
   roles?: number;
+  project?: Partial<ProjectEntity>;
+  projects?: number;
   teams?: number;
   team?: Partial<TeamEntity>;
 };
@@ -155,6 +183,7 @@ type SeedResult = {
   tasks: TaskEntity[];
   tickets: TicketEntity[];
   users: UserEntity[];
+  projects: ProjectEntity[];
   roles: RoleEntity[];
   teams: TeamEntity[];
 };

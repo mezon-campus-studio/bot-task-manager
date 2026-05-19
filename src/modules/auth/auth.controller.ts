@@ -24,8 +24,8 @@ export class AuthController {
   }
 
   @Post('exchange')
-  async exchange() {
-    return this.authService.handleOAuthExchange();
+  async exchange(@Body() body: { code: string; state: string }) {
+    return this.authService.handleOAuthExchange(body.code, body.state);
   }
 
   @Post('refresh')

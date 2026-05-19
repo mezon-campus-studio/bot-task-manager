@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
+import { UserRole } from '@src/common/enums/user.enum';
 import { CRUDService } from '@src/common/utils/crud';
 import { UserStatus } from './enum/user-status.enum';
 import UserEntity from './user.entity';
@@ -8,6 +9,7 @@ import UserEntity from './user.entity';
 type UpsertUserMeta = {
   name?: string;
   email?: string;
+  role?: UserRole;
 };
 
 @Injectable()
@@ -156,20 +158,26 @@ export class UserService extends CRUDService<UserEntity> {
     return result;
   }
 
-  async findByMezonId(mezonId: string): Promise<UserEntity | null> {
+  async findByMezonId(
+    mezonId: string,
+    includeDeleted = false,
+  ): Promise<UserEntity | null> {
     this.logger.log({
       log: 'Attempting to find user by mezon id',
       mezonId,
+      includeDeleted,
     });
 
     const result = await this.userRepository.findOne({
       where: { mezonId },
+      withDeleted: includeDeleted,
     });
 
     if (result == null) {
       this.logger.log({
         log: 'Fallback user lookup result because user was not found by mezon id',
         mezonId,
+        includeDeleted,
       });
 
       return null;
@@ -178,6 +186,7 @@ export class UserService extends CRUDService<UserEntity> {
     this.logger.log({
       log: 'Got user by mezon id',
       mezonId,
+      includeDeleted,
       result: {
         id: result.id,
         email: result.email,
@@ -197,7 +206,7 @@ export class UserService extends CRUDService<UserEntity> {
       meta,
     });
 
-    const existingUser = await this.findByMezonId(mezonId);
+    const existingUser = await this.findByMezonId(mezonId, true);
 
     if (existingUser == null) {
       this.logger.log({
@@ -221,6 +230,27 @@ export class UserService extends CRUDService<UserEntity> {
       });
 
       return result;
+    }
+
+    if (existingUser.deletedAt != null) {
+      this.logger.log({
+        log: 'Existing user has deletedAt; recovering soft-delete',
+        mezonId,
+        existingUserId: existingUser.id,
+      });
+
+      existingUser.status = existingUser.status ?? UserStatus.ACTIVE;
+      existingUser.status = UserStatus.ACTIVE;
+
+      await this.userRepository.recover(existingUser);
+    } else if (existingUser.status === UserStatus.DELETED) {
+      this.logger.log({
+        log: 'Existing user status is DELETED; setting ACTIVE to avoid duplicate create',
+        mezonId,
+        existingUserId: existingUser.id,
+      });
+
+      existingUser.status = UserStatus.ACTIVE;
     }
 
     this.logger.log({
@@ -265,14 +295,29 @@ export class UserService extends CRUDService<UserEntity> {
     const statusFilter = includeDeleted
       ? {}
       : { status: Not(UserStatus.DELETED) };
+
+    const whereConditions: Array<
+      import('typeorm').FindOptionsWhere<UserEntity>
+    > = [
+      { mezonId: identifier, ...statusFilter },
+      { name: identifier, ...statusFilter },
+      { email: identifier, ...statusFilter },
+    ];
+
+    if (this.isUuid(identifier)) {
+      whereConditions.unshift({ id: identifier, ...statusFilter });
+    }
+
     return await this.userRepository.findOne({
-      where: [
-        { mezonId: identifier, ...statusFilter },
-        { name: identifier, ...statusFilter },
-        { email: identifier, ...statusFilter },
-      ],
+      where: whereConditions,
       withDeleted: includeDeleted,
     });
+  }
+
+  private isUuid(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    );
   }
 
   async softDeleteUser(identifier: string): Promise<void> {
@@ -395,5 +440,47 @@ export class UserService extends CRUDService<UserEntity> {
         updateAt: result.updatedAt,
       },
     });
+  }
+
+  async updateCurrentProject(
+    user: UserEntity,
+    currentProjectId: number | null,
+  ): Promise<UserEntity> {
+    this.logger.log({
+      log: 'Attempting to update user current project',
+      currentProjectId,
+      userId: user.id,
+    });
+
+    user.currentProjectId = currentProjectId;
+    const result = await this.userRepository.save(user);
+
+    this.logger.log({
+      log: 'User current project update result',
+      result: {
+        currentProjectId: result.currentProjectId,
+        id: result.id,
+      },
+    });
+
+    return result;
+  }
+
+  async listAll(): Promise<UserEntity[]> {
+    this.logger.log({
+      log: 'Attempting to list all users',
+    });
+
+    const users = await this.userRepository.find({
+      where: { status: Not(UserStatus.DELETED) },
+      order: { createdAt: 'DESC' },
+    });
+
+    this.logger.log({
+      log: 'Listed users',
+      resultCount: users.length,
+    });
+
+    return users;
   }
 }
