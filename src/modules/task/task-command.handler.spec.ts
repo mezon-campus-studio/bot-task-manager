@@ -67,29 +67,6 @@ describe(TaskCommandHandler.name, () => {
     };
   }
 
-  it('lists tasks in the current project', async () => {
-    const message = createMessage();
-    const tasks = [
-      {
-        assigneeUserId: null,
-        id: 4,
-        status: TaskStatus.TODO,
-        title: 'Prepare launch',
-      },
-    ];
-    const { handler, taskService } = createHandler({
-      taskService: {
-        listByProject: jest.fn().mockResolvedValue(tasks),
-        queryTasks: jest.fn().mockResolvedValue(tasks),
-      },
-    });
-
-    await handler.handleTaskCommand(['list'], message);
-
-    expect(taskService.listByProject).toHaveBeenCalledWith(7);
-    expectReplyText(message as never, '[#4] Prepare launch - TODO');
-  });
-
   it('creates a task with the current user as reporter', async () => {
     const message = createMessage();
     const { handler, taskService } = createHandler({

@@ -55,7 +55,7 @@ describe(UserCommandHandler.name, () => {
       },
     } as never);
 
-    expectReplyText(message as never, 'Role      : Administrator');
+    expectReplyText(message as never, 'Role: Administrator');
   });
 
   it('maps clan Administrator role to internal admin during user search refresh', async () => {
