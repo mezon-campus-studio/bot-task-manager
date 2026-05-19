@@ -1,6 +1,10 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+import {
   Args,
   AutoContext,
   Command,
@@ -56,7 +60,7 @@ export class UserCommandHandler {
           await this.createUserFromMention(message, ctx);
           return;
         case 'list':
-          await this.listUsers(message, ctx);
+          await this.listUsers(message, ctx, args);
           return;
         case 'delete':
           await this.deleteUser(args, message, ctx);
@@ -75,14 +79,17 @@ export class UserCommandHandler {
           await this.reply(
             message,
             [
-              '👤 **User Commands:**',
-              '  `*user me` – Show your profile and current project',
-              '  `*user create @username` – Add a user from clan mention',
-              '  `*user info @username|userId` – View user details (only Admin,PM can see roles)',
-              '  `*user search @username|userId` – Search for a user by username or ID (all users can search)',
-              '  `*user list` – List all users',
-              '  `*user delete @username|userId` – Prepare delete confirmation',
-              '  `*user confirm delete @username|userId` – Confirm user deletion',
+              `┌─────────────────────────────`,
+              `│ 👤 **User Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*user me\`                                       – Show your profile`,
+              `│ \`*user list [page]\`                              – List all users`,
+              `│ \`*user info <@username|userId>\`                  – View user details`,
+              `│ \`*user search <@username|userId>\`                – Search for a user`,
+              `│ \`*user create @username\`                         – Add a user from clan mention`,
+              `│ \`*user delete <@username|userId>\`                – Prepare deletion`,
+              `│ \`*user confirm delete <@username|userId>\`        – Confirm deletion`,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -228,11 +235,6 @@ export class UserCommandHandler {
     );
   }
 
-  /**
-   * Create a user from a clan member mention.
-   * Attempts to pull role information from the clan structure.
-   * Only PM and Admin can create users.
-   */
   private async createUserFromMention(
     message: ManagedMessage,
     ctx: NezonCommandContext,
@@ -348,15 +350,10 @@ export class UserCommandHandler {
   private async listUsers(
     message: ManagedMessage,
     ctx: NezonCommandContext,
+    args: string[] = [],
   ): Promise<void> {
-    const users = await this.userService.listAll();
+    const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
 
-    if (users.length === 0) {
-      await this.reply(message, 'ℹ️ No users found.');
-      return;
-    }
-
-    // Fetch clan roles 1 lần duy nhất
     let clanRoles: any[] = [];
     try {
       const clan = await ctx.getClan();
@@ -372,9 +369,15 @@ export class UserCommandHandler {
       );
     }
 
-    // Đồng bộ role từ clan
+    const allUsers = await this.userService.listAll();
+
+    if (allUsers.length === 0) {
+      await this.reply(message, 'ℹ️ No users found.');
+      return;
+    }
+
     const refreshedUsers = await Promise.all(
-      users.map(async (u) => {
+      allUsers.map(async (u) => {
         if (!u.mezonId || clanRoles.length === 0) return u;
         const resolvedRole = resolveBestMezonRoleForUser(clanRoles, u.mezonId);
         if (shouldSyncResolvedUserRole(u.role, resolvedRole)) {
@@ -386,7 +389,6 @@ export class UserCommandHandler {
       }),
     );
 
-    // Thứ tự hiển thị: ADMIN → PM → DEV → QA → Unknown
     const ROLE_SORT_ORDER: Record<number, number> = {
       [UserRole.ADMIN]: 0,
       [UserRole.PM]: 1,
@@ -396,35 +398,52 @@ export class UserCommandHandler {
     };
 
     const ROLE_HEADER: Record<number, string> = {
-      [UserRole.ADMIN]: '👑 **Administrator**',
-      [UserRole.PM]: '📋 **Project Manager**',
-      [UserRole.DEV]: '💻 **Developer**',
-      [UserRole.QA]: '🔍 **QA**',
-      [UserRole.UK]: '❓ **Unknown**',
+      [UserRole.ADMIN]: '👑 Administrator',
+      [UserRole.PM]: '📋 Project Manager',
+      [UserRole.DEV]: '💻 Developer',
+      [UserRole.QA]: '🔍 QA',
+      [UserRole.UK]: '❓ Unknown',
     };
 
-    // Group theo role
-    const grouped = new Map<number, typeof refreshedUsers>();
-    for (const u of refreshedUsers) {
-      const role = Number(u.role ?? UserRole.UK);
-      const key = role in ROLE_SORT_ORDER ? role : UserRole.UK;
+    const sorted = [...refreshedUsers].sort((a, b) => {
+      const ra = ROLE_SORT_ORDER[Number(a.role ?? UserRole.UK)] ?? 99;
+      const rb = ROLE_SORT_ORDER[Number(b.role ?? UserRole.UK)] ?? 99;
+      return ra !== rb ? ra - rb : (a.name ?? '').localeCompare(b.name ?? '');
+    });
+
+    const { items: pageUsers, meta } = paginate(sorted, page);
+
+    const grouped = new Map<number, typeof pageUsers>();
+    for (const u of pageUsers) {
+      const key = Number(u.role ?? UserRole.UK);
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key)!.push(u);
     }
 
-    // Build output theo thứ tự
-    const lines: string[] = ['👤 **User List:**'];
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 👤 **User List**`,
+      `├─────────────────────────────`,
+    ];
+
     const sortedKeys = [...grouped.keys()].sort(
       (a, b) => (ROLE_SORT_ORDER[a] ?? 99) - (ROLE_SORT_ORDER[b] ?? 99),
     );
 
     for (const roleKey of sortedKeys) {
       const group = grouped.get(roleKey)!;
-      lines.push(`\n${ROLE_HEADER[roleKey]} (${group.length})`);
+      lines.push(`│ ${ROLE_HEADER[roleKey]} (${group.length})`);
       for (const u of group) {
-        lines.push(`  - ${u.name ?? '—'} (${u.mezonId}) | ${u.status ?? '—'}`);
+        const statusIcon =
+          u.status === 'active' ? '🟢' : u.status === 'inactive' ? '🟡' : '🔴';
+        lines.push(`│   ${statusIcon} ${u.name ?? '—'}  \`${u.mezonId}\``);
       }
+      lines.push(`│`);
     }
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(`│ ${buildPaginationFooter(meta, '*user list')}`);
+    lines.push(`└─────────────────────────────`);
 
     await this.reply(message, lines.join('\n'));
   }

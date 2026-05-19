@@ -1,6 +1,10 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+import {
   Args,
   AutoContext,
   Command,
@@ -55,7 +59,7 @@ export class TeamCommandHandler {
     try {
       switch (action) {
         case 'list':
-          await this.listTeams(senderId, message);
+          await this.listTeams(senderId, message, args);
           return;
         case 'create':
           await this.createTeam(args, senderId, message, ctx);
@@ -80,14 +84,17 @@ export class TeamCommandHandler {
           await this.reply(
             message,
             [
-              '🏷️ **Team Commands:**',
-              '  `*team list` – List all teams in current project',
-              '  `*team create <slug> <name> [@leader]` – Create a new team',
-              '  `*team detail | info <teamId|slug|@slug>` – View team detail',
-              '  `*team delete <teamId|slug|@slug>` – Prepare delete confirmation',
-              '  `*team confirm delete <teamId|slug|@slug>` – Confirm delete',
-              '  `*team restore <slug>` – Restore a soft-deleted team',
-              '  `*team default <teamId|slug|@slug>` – Set default team for project',
+              `┌─────────────────────────────`,
+              `│ 🏷️ **Team Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*team list [page]\`                              – List all teams in current project`,
+              `│ \`*team create <slug> <name> [@leader]\`           – Create a new team`,
+              `│ \`*team detail <teamId|slug>\`                     – View team detail`,
+              `│ \`*team delete <teamId|slug>\`                     – Prepare deletion`,
+              `│ \`*team confirm delete <teamId|slug>\`             – Confirm deletion`,
+              `│ \`*team restore <slug>\`                           – Restore a soft-deleted team`,
+              `│ \`*team default <teamId|slug>\`                    – Set default team for project`,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -102,7 +109,10 @@ export class TeamCommandHandler {
   private async listTeams(
     senderId: string,
     message: ManagedMessage,
+    args: string[] = [],
   ): Promise<void> {
+    const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
@@ -113,20 +123,45 @@ export class TeamCommandHandler {
     if (!teams.length) {
       await this.reply(
         message,
-        `No teams found in project **${context.project.name}**.`,
+        [
+          `┌─────────────────────────────`,
+          `│ 🏷️ **Team List**`,
+          `├─────────────────────────────`,
+          `│ 📁 Project : ${context.project.name} (\`${context.project.slug}\`)`,
+          `├─────────────────────────────`,
+          `│ ℹ️  No teams found in this project.`,
+          `│ Use \`*team create <slug> <name>\` to create one.`,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
 
-    const lines = teams.map(
-      (t) =>
-        `  [#${t.id}] ${t.name} (${t.slug})${t.isDefault ? ' ⭐ default' : ''}`,
-    );
+    const { items: pageTeams, meta } = paginate(teams, page);
 
-    await this.reply(
-      message,
-      [`🏷️ Teams in **${context.project.name}**:`, ...lines].join('\n'),
-    );
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 🏷️ **Team List**`,
+      `├─────────────────────────────`,
+      `│ 📁 Project : ${context.project.name} (\`${context.project.slug}\`)`,
+      `├─────────────────────────────`,
+    ];
+
+    for (const t of pageTeams) {
+      const defaultTag = t.isDefault ? ' ⭐' : '';
+      lines.push(`│ [#${t.id}]${defaultTag} **${t.name}**`);
+      lines.push(`│      Slug   : \`${t.slug}\``);
+      if (t.leader?.name) {
+        lines.push(`│      Leader : ${t.leader.name}`);
+      }
+    }
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(`│ ${buildPaginationFooter(meta, '*team list')}`);
+    lines.push(`│ 💡 \`*team detail <id|slug>\` to view details`);
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async createTeam(
@@ -141,7 +176,14 @@ export class TeamCommandHandler {
     if (!slug || rawNameParts.length === 0) {
       await this.reply(
         message,
-        'Team slug and name are required.\nUsage: `*team create <slug> <name> [@leader]`,\nfor example: `*team create backend Backend Team @alice`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*team create <slug> <name> [@leader]\``,
+          `│ Example: \`*team create backend Backend Team @alice\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -157,10 +199,7 @@ export class TeamCommandHandler {
 
     const name = rawNameParts.join(' ').trim();
     if (!name) {
-      await this.reply(
-        message,
-        'Team name is required.\nUsage: `*team create <slug> <name> [@leader]`',
-      );
+      await this.reply(message, '❌ Team name is required.');
       return;
     }
 
@@ -173,12 +212,13 @@ export class TeamCommandHandler {
     if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
-        '❌ Only Administrator/Project managers can create teams.',
+        '❌ Only **Administrators** and **Project Managers** can create teams.',
       );
       return;
     }
 
     let leaderId = context.user.id;
+    let leaderName = dbUser.name ?? dbUser.mezonId;
 
     if (leaderIdentifier) {
       const resolvedLeaderIdentifier =
@@ -192,6 +232,7 @@ export class TeamCommandHandler {
         );
         if (leader) {
           leaderId = leader.id;
+          leaderName = leader.name ?? leader.mezonId;
         }
       }
     }
@@ -204,7 +245,19 @@ export class TeamCommandHandler {
 
     await this.reply(
       message,
-      `✅ Created team **${team.name}** (\`${team.slug}\`) in project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Team Created**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name    : ${team.name}`,
+        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🆔  ID      : #${team.id}`,
+        `│ 👤  Leader  : ${leaderName}`,
+        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*team detail ${team.slug}\` to view details`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -216,7 +269,7 @@ export class TeamCommandHandler {
     const identifier = args[1];
 
     if (!identifier) {
-      await this.reply(message, 'Usage: `*team detail <teamId|slug|@slug>`');
+      await this.reply(message, 'Usage: `*team detail <teamId|slug>`');
       return;
     }
 
@@ -233,22 +286,30 @@ export class TeamCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${identifier}** not found in project **${context.project.name}**.`,
+        `❌ Team **${identifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
 
+    const defaultTag = team.isDefault ? 'Yes ⭐' : 'No';
+
     await this.reply(
       message,
       [
-        `🏷️ **Team #${team.id}**`,
-        `  Name: ${team.name}`,
-        `  Slug: ${team.slug}`,
-        `  Default: ${team.isDefault ? 'Yes ⭐' : 'No'}`,
-        `  Leader Name: ${team.leader?.name ?? 'none'}`,
-        `  Created At: ${team.createdAt.toLocaleString()}`,
-        `  Updated At: ${team.updatedAt.toLocaleString()}`,
-        `  Project: ${context.project.name} (${context.project.slug})`,
+        `┌─────────────────────────────`,
+        `│ 🏷️ **Team Detail**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID        : #${team.id}`,
+        `│ 📛  Name      : ${team.name}`,
+        `│ 🔖  Slug      : \`${team.slug}\``,
+        `│ ⭐  Default   : ${defaultTag}`,
+        `│ 👤  Leader    : ${team.leader?.name ?? '—'}`,
+        `│ 📁  Project   : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📅  Created   : ${this.formatDate(team.createdAt)}`,
+        `│ 🔄  Updated   : ${this.formatDate(team.updatedAt)}`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*team delete ${team.slug}\` to remove this team`,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -262,10 +323,7 @@ export class TeamCommandHandler {
     const identifier = args[1];
 
     if (!identifier) {
-      await this.reply(
-        message,
-        'Usage: `*team delete <teamId|slug|@slug>`. To confirm deletion, run `*team confirm delete <team>`.',
-      );
+      await this.reply(message, 'Usage: `*team delete <teamId|slug>`');
       return;
     }
 
@@ -273,7 +331,7 @@ export class TeamCommandHandler {
     if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
-        '❌ Only project managers and administrators can delete teams.',
+        '❌ Only **Administrators** and **Project Managers** can delete teams.',
       );
       return;
     }
@@ -291,7 +349,7 @@ export class TeamCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${identifier}** not found in project **${context.project.name}**.`,
+        `❌ Team **${identifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -299,8 +357,18 @@ export class TeamCommandHandler {
     await this.reply(
       message,
       [
-        `🗑️ Are you sure you want to delete team **${team.name}** (\`${team.slug}\`)?`,
-        `Run: \`*team confirm delete ${team.id}\` to complete the deletion.`,
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Confirm Delete Team**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name    : ${team.name}`,
+        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🆔  ID      : #${team.id}`,
+        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `├─────────────────────────────`,
+        `│ ⚠️  This action **cannot be undone**.`,
+        `│ Run to confirm:`,
+        `│ \`*team confirm delete ${team.id}\``,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -315,10 +383,7 @@ export class TeamCommandHandler {
     const identifier = args[2];
 
     if (confirmAction !== 'delete' || !identifier) {
-      await this.reply(
-        message,
-        'Usage: `*team confirm delete <teamId|slug|@slug>`',
-      );
+      await this.reply(message, 'Usage: `*team confirm delete <teamId|slug>`');
       return;
     }
 
@@ -326,7 +391,7 @@ export class TeamCommandHandler {
     if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
-        '❌ Only project managers and administrators can delete teams.',
+        '❌ Only **Administrators** and **Project Managers** can delete teams.',
       );
       return;
     }
@@ -344,7 +409,7 @@ export class TeamCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${identifier}** not found in project **${context.project.name}**.`,
+        `❌ Team **${identifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -353,7 +418,16 @@ export class TeamCommandHandler {
 
     await this.reply(
       message,
-      `🗑️ Team **${team.name}** (\`${team.slug}\`) was deleted from project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Team Deleted**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name    : ${team.name}`,
+        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🆔  ID      : #${team.id}`,
+        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -366,7 +440,7 @@ export class TeamCommandHandler {
     const slug = args[1];
 
     if (!slug) {
-      await this.reply(message, '⚠️ Usage: `*team restore <slug>`');
+      await this.reply(message, 'Usage: `*team restore <slug>`');
       return;
     }
 
@@ -374,7 +448,7 @@ export class TeamCommandHandler {
     if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
-        '❌ Only Project Managers and Administrators can restore teams.',
+        '❌ Only **Administrators** and **Project Managers** can restore teams.',
       );
       return;
     }
@@ -391,7 +465,18 @@ export class TeamCommandHandler {
 
     await this.reply(
       message,
-      `✅ Successfully restored team **${restoredTeam.name}** (\`${restoredTeam.slug}\`) into project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Team Restored**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name    : ${restoredTeam.name}`,
+        `│ 🔖  Slug    : \`${restoredTeam.slug}\``,
+        `│ 🆔  ID      : #${restoredTeam.id}`,
+        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*team detail ${restoredTeam.slug}\` to view details`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -463,7 +548,7 @@ export class TeamCommandHandler {
     const identifier = args[1];
 
     if (!identifier) {
-      await this.reply(message, 'Usage: `*team default <teamId|slug|@slug>`');
+      await this.reply(message, 'Usage: `*team default <teamId|slug>`');
       return;
     }
 
@@ -471,7 +556,7 @@ export class TeamCommandHandler {
     if (!dbUser || !this.isProjectManagerOrAdmin(dbUser)) {
       await this.reply(
         message,
-        '❌ Only project managers and administrators can set default team.',
+        '❌ Only **Administrators** and **Project Managers** can set the default team.',
       );
       return;
     }
@@ -489,7 +574,7 @@ export class TeamCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${identifier}** not found in project **${context.project.name}**.`,
+        `❌ Team **${identifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -498,7 +583,16 @@ export class TeamCommandHandler {
 
     await this.reply(
       message,
-      `✅ Set **${team.name}** as the default team for project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ⭐ **Default Team Updated**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name    : ${team.name}`,
+        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🆔  ID      : #${team.id}`,
+        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -521,5 +615,14 @@ export class TeamCommandHandler {
 
   private async reply(message: ManagedMessage, content: string): Promise<void> {
     await message.reply(SmartMessage.text(content));
+  }
+
+  private formatDate(date: Date | string | null | undefined): string {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
   }
 }

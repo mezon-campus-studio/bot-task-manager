@@ -1,6 +1,11 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+
+import {
   Args,
   AutoContext,
   Command,
@@ -76,15 +81,20 @@ export class NoteCommandHandler {
           await this.reply(
             message,
             [
-              '📝 **Note Commands:**',
-              '  `*note list [resourceType] [resourceId]` – List notes',
-              '  `*note create <resourceType> <resourceId> <content...>` – Create a note',
-              '  `*note detail <id>` – View note detail',
-              '  `*note update <id> <content...>` – Update your note',
-              '  `*note delete <id>` – Prepare delete confirmation',
-              '  `*note confirm delete <id>` – Confirm note deletion',
-              '  `*note pin <id>` / `*note unpin <id>` – Pin or unpin a note',
-              '  `*note share <id>` / `*note unshare <id>` – Share or unshare your note',
+              `┌─────────────────────────────`,
+              `│ 📝 **Note Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*note list [type] [resourceId] [page]\`           – List notes`,
+              `│ \`*note create <type> <resourceId> <content...>\`   – Create a note`,
+              `│ \`*note detail <id>\`                               – View note detail`,
+              `│ \`*note update <id> <content...>\`                  – Update your note`,
+              `│ \`*note delete <id>\`                               – Prepare deletion`,
+              `│ \`*note confirm delete <id>\`                       – Confirm deletion`,
+              `│ \`*note pin <id>\` / \`*note unpin <id>\`             – Pin / Unpin`,
+              `│ \`*note share <id>\` / \`*note unshare <id>\`         – Share / Make private`,
+              `├─────────────────────────────`,
+              `│ Types: \`USER | PROJECT | TEAM | TASK | TICKET | EVENT\``,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -99,6 +109,7 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
+    const page = Math.max(1, parseInt(args[3] ?? '1', 10) || 1);
     const resourceType = this.parseResourceType(args[1]);
     const resourceId = args[2];
     const isFiltered = !!resourceType && !!resourceId;
@@ -120,66 +131,102 @@ export class NoteCommandHandler {
         )
       : await this.noteService.listByProject(context.projectId, filter);
 
+    const filterLabel = isFiltered ? `${resourceType} / ${resourceId}` : 'All';
+
     if (!notes.length) {
-      const where = isFiltered
-        ? `for ${resourceType} **${resourceId}** in project **${context.project.name}**`
-        : `in project **${context.project.name}**`;
-      await this.reply(message, `No notes found ${where}.`);
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ 📝 **Note List**`,
+          `├─────────────────────────────`,
+          `│ 📁 Project  : ${context.project.name}`,
+          `│ 🔎 Filter   : ${filterLabel}`,
+          `├─────────────────────────────`,
+          `│ ℹ️  No notes found.`,
+          `│ Use \`*note create <type> <resourceId> <content>\` to create one.`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
       return;
     }
 
-    const myNotes = notes.filter(
-      (note) => note.authorUserId === context.user.id,
-    );
-
+    const myNotes = notes.filter((n) => n.authorUserId === context.user.id);
     const sharedNotes = notes.filter(
-      (note) => note.authorUserId !== context.user.id && note.isShared === true,
+      (n) => n.authorUserId !== context.user.id && n.isShared,
     );
-
     const managerOnlyNotes = isManager
       ? notes.filter(
-          (note) =>
-            note.authorUserId !== context.user.id &&
-            note.isShared === false &&
-            note.resourceType !== NoteResourceType.USER,
+          (n) =>
+            n.authorUserId !== context.user.id &&
+            !n.isShared &&
+            n.resourceType !== NoteResourceType.USER,
         )
       : [];
 
-    const formatLine = (note: NoteEntity) => {
-      return `  [#${note.id}] - ${this.formatNoteFlags(note).toUpperCase()} - [Type: ${note.resourceType.toUpperCase()}] - [Resource: ${note.resourceId}] - [Author: ${note.authorUser?.name || 'Unknown'}] - [${note.createdAt.toLocaleString()}]`;
+    const { items: paginated, meta } = paginate(notes, page);
+
+    const formatNoteLine = (n: NoteEntity) => {
+      const pinTag = n.isPinned ? ' 📌' : '';
+      const shareTag = n.isShared ? '🌐' : '🔒';
+      const author = n.authorUser?.name ?? '—';
+      const preview = this.truncate(n.content, 50);
+      return [
+        `│ ${shareTag}${pinTag} **#${n.id}** [${n.resourceType}:${n.resourceId}]`,
+        `│     👤 ${author}  •  ${preview}`,
+      ];
     };
 
-    const outputLines: string[] = [];
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 📝 **Note List**`,
+      `├─────────────────────────────`,
+      `│ 📁 Project  : ${context.project.name}`,
+      `│ 🔎 Filter   : ${filterLabel}`,
+      `├─────────────────────────────`,
+    ];
 
-    const header = isFiltered
-      ? `📝 **Notes for ${resourceType} [${resourceId}] in project *${context.project.name}*:**`
-      : `📝 **All available notes in project *${context.project.name}*:**`;
-    outputLines.push(header);
-
-    outputLines.push('\n📌 **MY NOTES (Ghi chú của tôi):**');
-    if (myNotes.length > 0) {
-      outputLines.push(...myNotes.map(formatLine));
-    } else {
-      outputLines.push("  *(You haven't created any notes yet)*");
-    }
-
-    outputLines.push('\n🌐 **SHARED NOTES (Ghi chú được chia sẻ công khai):**');
-    if (sharedNotes.length > 0) {
-      outputLines.push(...sharedNotes.map(formatLine));
-    } else {
-      outputLines.push('  *(No public shared notes from others)*');
-    }
-
-    if (isManager) {
-      outputLines.push('\n🔒 **PRIVATE NOTES (Chỉ manager mới thấy):**');
-      if (managerOnlyNotes.length > 0) {
-        outputLines.push(...managerOnlyNotes.map(formatLine));
-      } else {
-        outputLines.push('  *(No private notes from others)*');
+    if (myNotes.length) {
+      lines.push(`│ 📌 **My Notes**`);
+      for (const n of paginated.filter(
+        (n) => n.authorUserId === context.user.id,
+      )) {
+        lines.push(...formatNoteLine(n));
       }
+      lines.push(`│`);
     }
 
-    await this.reply(message, outputLines.join('\n'));
+    if (sharedNotes.length) {
+      lines.push(`│ 🌐 **Shared Notes**`);
+      for (const n of paginated.filter(
+        (n) => n.authorUserId !== context.user.id && n.isShared,
+      )) {
+        lines.push(...formatNoteLine(n));
+      }
+      lines.push(`│`);
+    }
+
+    if (isManager && managerOnlyNotes.length) {
+      lines.push(`│ 🔒 **Private Notes (Manager view)**`);
+      for (const n of paginated.filter(
+        (n) =>
+          n.authorUserId !== context.user.id &&
+          !n.isShared &&
+          n.resourceType !== NoteResourceType.USER,
+      )) {
+        lines.push(...formatNoteLine(n));
+      }
+      lines.push(`│`);
+    }
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(
+      `│ ${buildPaginationFooter(meta, isFiltered ? `*note list ${args[1]} ${resourceId}` : '*note list')}`,
+    );
+    lines.push(`│ 💡 \`*note detail <id>\` to view full content`);
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async createNote(
@@ -194,7 +241,15 @@ export class NoteCommandHandler {
     if (!resourceType || !resourceId || !content) {
       await this.reply(
         message,
-        'Usage: `*note create <USER|PROJECT|TEAM|TASK|TICKET|EVENT> <resourceId> <content...>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*note create <type> <resourceId> <content...>\``,
+          `│ Types : \`USER | PROJECT | TEAM | TASK | TICKET | EVENT\``,
+          `│ Example: \`*note create TASK 12 This needs more testing\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -217,7 +272,19 @@ export class NoteCommandHandler {
 
     await this.reply(
       message,
-      `✅ Created note **#${note.id}** for ${resourceType} **${resourceId}** in project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Note Created**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${note.id}`,
+        `│ 🗂️  Resource : ${note.resourceType} / ${note.resourceId}`,
+        `│ 🌐  Shared   : ${note.isShared ? 'Yes' : 'No (Private)'}`,
+        `│ 📁  Project  : ${context.project.name}`,
+        `│ 📄  Content  : ${this.truncate(note.content, 80)}`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*note pin ${note.id}\` to pin  •  \`*note share ${note.id}\` to share`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -239,43 +306,51 @@ export class NoteCommandHandler {
     if (!note) return;
 
     const isManager = this.isManager(context);
+    const isOwnNote = note.authorUserId === context.user.id;
 
-    if (!isManager) {
-      const isOwnNote = note.authorUserId === context.user.id;
-
-      const isVisibleOtherNote = note.isShared === true;
-
-      if (!isOwnNote && !isVisibleOtherNote) {
-        await this.reply(
-          message,
-          '❌ You do not have permission to view this note.',
-        );
-        return;
-      }
+    if (!isManager && !isOwnNote && !note.isShared) {
+      await this.reply(
+        message,
+        `❌ You don't have permission to view this note.`,
+      );
+      return;
     }
 
     if (
       isManager &&
-      note.authorUserId !== context.user.id &&
+      !isOwnNote &&
       note.resourceType === NoteResourceType.USER &&
       !note.isShared
     ) {
       await this.reply(
         message,
-        '❌ You do not have permission to view this note.',
+        `❌ You don't have permission to view this note.`,
       );
       return;
     }
 
+    const pinTag = note.isPinned ? '📌 Pinned' : 'Not pinned';
+    const shareTag = note.isShared ? '🌐 Shared' : '🔒 Private';
+
     await this.reply(
       message,
       [
-        `📄 Note #${note.id}`,
-        `  Resource: ${note.resourceType} ${note.resourceId}`,
-        `  Author: ${note.authorUser?.name ?? note.authorUserId}`,
-        `  Pinned: ${note.isPinned ? 'yes' : 'no'}`,
-        `  Shared: ${note.isShared ? 'yes' : 'no'}`,
-        `  Content: ${note.content}`,
+        `┌─────────────────────────────`,
+        `│ 📝 **Note Detail**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${note.id}`,
+        `│ 🗂️  Resource : ${note.resourceType} / ${note.resourceId}`,
+        `│ 👤  Author   : ${note.authorUser?.name ?? '—'}`,
+        `│ 📌  Pin      : ${pinTag}`,
+        `│ 🌐  Share    : ${shareTag}`,
+        `│ 📅  Created  : ${this.formatDate(note.createdAt)}`,
+        `│ 🔄  Updated  : ${this.formatDate(note.updatedAt)}`,
+        `├─────────────────────────────`,
+        `│ 📄 **Content:**`,
+        `│ ${note.content}`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*note update ${note.id} <content>\` to edit`,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -298,25 +373,43 @@ export class NoteCommandHandler {
     if (!note) return;
 
     if (note.authorUserId !== context.user.id) {
-      await this.reply(message, '❌ You can only update your own notes.');
+      await this.reply(message, `❌ You can only update your own notes.`);
       return;
     }
 
     const content = args.slice(2).join(' ').trim();
     if (!content) {
-      await this.reply(message, 'Usage: `*note update <id> <content...>`');
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*note update <id> <content...>\``,
+          `│ Example: \`*note update 5 Updated content here\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
       return;
     }
 
     const updated = await this.noteService.updateNote(note.id, { content });
     if (!updated) {
-      await this.reply(message, `Note #${note.id} not found.`);
+      await this.reply(message, `❌ Note **#${note.id}** not found.`);
       return;
     }
 
     await this.reply(
       message,
-      `✅ Updated note **#${updated.id}**: ${this.truncate(updated.content, 80)}`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Note Updated**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID      : #${updated.id}`,
+        `│ 🗂️  Resource: ${updated.resourceType} / ${updated.resourceId}`,
+        `│ 📄  Content : ${this.truncate(updated.content, 80)}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -340,7 +433,7 @@ export class NoteCommandHandler {
     if (!this.canDelete(note, context)) {
       await this.reply(
         message,
-        '❌ You do not have permission to delete this note.',
+        `❌ You don't have permission to delete this note.`,
       );
       return;
     }
@@ -348,8 +441,18 @@ export class NoteCommandHandler {
     await this.reply(
       message,
       [
-        `🗑️ Are you sure you want to delete note **#${note.id}**?`,
-        `Run: \`*note confirm delete ${note.id}\` to complete the deletion.`,
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Confirm Delete Note**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${note.id}`,
+        `│ 🗂️  Resource : ${note.resourceType} / ${note.resourceId}`,
+        `│ 👤  Author   : ${note.authorUser?.name ?? '—'}`,
+        `│ 📄  Content  : ${this.truncate(note.content, 60)}`,
+        `├─────────────────────────────`,
+        `│ ⚠️  This action **cannot be undone**.`,
+        `│ Run to confirm:`,
+        `│ \`*note confirm delete ${note.id}\``,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -374,13 +477,25 @@ export class NoteCommandHandler {
     if (!this.canDelete(note, context)) {
       await this.reply(
         message,
-        '❌ You do not have permission to delete this note.',
+        `❌ You don't have permission to delete this note.`,
       );
       return;
     }
 
     await this.noteService.deleteNote(note.id);
-    await this.reply(message, `🗑️ Deleted note **#${note.id}**.`);
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Note Deleted**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${note.id}`,
+        `│ 🗂️  Resource : ${note.resourceType} / ${note.resourceId}`,
+        `│ 📁  Project  : ${context.project.name}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
   }
 
   private async setNotePinned(
@@ -407,7 +522,7 @@ export class NoteCommandHandler {
     if (note.resourceType === NoteResourceType.USER && !isOwner) {
       await this.reply(
         message,
-        '❌ You do not have permission to pin/unpin this personal note.',
+        `❌ You don't have permission to pin/unpin this personal note.`,
       );
       return;
     }
@@ -415,20 +530,28 @@ export class NoteCommandHandler {
     if (!isOwner && !isManager) {
       await this.reply(
         message,
-        '❌ Only the note owner or a manager can pin/unpin notes.',
+        `❌ Only the note owner or a manager can pin/unpin notes.`,
       );
       return;
     }
 
     const updated = await this.noteService.pinNote(note.id, isPinned);
     if (!updated) {
-      await this.reply(message, `Note #${note.id} not found.`);
+      await this.reply(message, `❌ Note **#${note.id}** not found.`);
       return;
     }
 
     await this.reply(
       message,
-      `✅ Note **#${updated.id}** is now ${updated.isPinned ? 'pinned' : 'unpinned'}.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ${updated.isPinned ? '📌 **Note Pinned**' : '📌 **Note Unpinned**'}`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${updated.id}`,
+        `│ 🗂️  Resource : ${updated.resourceType} / ${updated.resourceId}`,
+        `│ 📌  Pin      : ${updated.isPinned ? 'Pinned' : 'Not pinned'}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -453,24 +576,40 @@ export class NoteCommandHandler {
     if (note.authorUserId !== context.user.id) {
       await this.reply(
         message,
-        '❌ Only the note owner can change the sharing setting.',
+        `❌ Only the note owner can change the sharing setting.`,
       );
       return;
     }
 
     const updated = await this.noteService.shareNote(note.id, isShared);
     if (!updated) {
-      await this.reply(message, `Note #${note.id} not found.`);
+      await this.reply(message, `❌ Note **#${note.id}** not found.`);
       return;
     }
 
     await this.reply(
       message,
-      `✅ Note **#${updated.id}** is now ${updated.isShared ? 'shared' : 'private'}.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ${updated.isShared ? '🌐 **Note Shared**' : '🔒 **Note Made Private**'}`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${updated.id}`,
+        `│ 🗂️  Resource : ${updated.resourceType} / ${updated.resourceId}`,
+        `│ 🌐  Share    : ${updated.isShared ? 'Shared' : 'Private'}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
   // ─── helpers ────────────────────────────────────────────────────────────────
+  private formatDate(date: Date | string | null | undefined): string {
+    if (!date) return '—';
+    return new Date(date).toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
 
   private async getRequiredNote(
     rawNoteId: string | undefined,
@@ -536,14 +675,6 @@ export class NoteCommandHandler {
     if (!value) return null;
     const id = Number(value);
     return Number.isInteger(id) && id > 0 ? id : null;
-  }
-
-  private formatNoteFlags(note: NoteEntity): string {
-    const flags = [
-      note.isPinned ? 'pinned' : null,
-      note.isShared ? 'shared' : 'private',
-    ].filter(Boolean);
-    return `[${flags.join(', ')}]`;
   }
 
   private truncate(value: string, maxLength: number): string {

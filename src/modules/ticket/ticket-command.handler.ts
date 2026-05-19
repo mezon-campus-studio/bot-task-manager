@@ -1,6 +1,10 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+import {
   Args,
   AutoContext,
   Command,
@@ -61,6 +65,7 @@ export class TicketCommandHandler {
           await this.createTicket(args, senderId, message);
           return;
         case 'detail':
+        case 'info':
           await this.detailTicket(args, senderId, message);
           return;
         case 'status':
@@ -86,15 +91,20 @@ export class TicketCommandHandler {
           await this.reply(
             message,
             [
-              '📋 **Ticket Commands:**',
-              '  `*ticket list` – List tickets in current project',
-              '  `*ticket create <title>` – Create a ticket',
-              '  `*ticket detail <id>` – View ticket detail',
-              '  `*ticket status <id> <open|in_progress|resolved|closed>` – Update status',
-              '  `*ticket assign <id> <userId|@username>` – Assign ticket to user',
-              '  `*ticket resolve <id>` – Mark ticket as resolved',
-              '  `*ticket delete <id>` – Prepare delete confirmation',
-              '  `*ticket confirm delete <id>` – Confirm ticket deletion',
+              `┌─────────────────────────────`,
+              `│ 🎫 **Ticket Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*ticket list [page]\`                            – List tickets in current project`,
+              `│ \`*ticket create <title> [--desc <description>]\`  – Create a ticket`,
+              `│ \`*ticket detail <id>\`                            – View ticket detail`,
+              `│ \`*ticket status <id> <status>\`                   – Update status`,
+              `│ \`*ticket assign <id> <userId|@username>\`         – Assign ticket to user`,
+              `│ \`*ticket resolve <id>\`                           – Mark ticket as resolved`,
+              `│ \`*ticket delete <id>\`                            – Prepare deletion`,
+              `│ \`*ticket confirm delete <id>\`                    – Confirm deletion`,
+              `├─────────────────────────────`,
+              `│ Statuses: \`OPEN | IN_PROGRESS | RESOLVED | CLOSED\``,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -105,11 +115,13 @@ export class TicketCommandHandler {
   }
 
   private async listTickets(
-    _args: string[],
+    args: string[],
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
     try {
+      const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+
       const context =
         await this.projectContextService.getRequiredCurrentProjectByMezonId(
           senderId,
@@ -128,21 +140,65 @@ export class TicketCommandHandler {
       if (tickets.length === 0) {
         await this.reply(
           message,
-          `ℹ️ No tickets found in project **${context.project.name}**.`,
+          [
+            `┌─────────────────────────────`,
+            `│ 🎫 **Ticket List**`,
+            `├─────────────────────────────`,
+            `│ 📁 Project : ${context.project.name}`,
+            `├─────────────────────────────`,
+            `│ ℹ️  No tickets found in this project.`,
+            `│ Use \`*ticket create <title>\` to create one.`,
+            `└─────────────────────────────`,
+          ].join('\n'),
         );
         return;
       }
 
-      const responseLines = [
-        `🎫 **Tickets for Project: ${context.project.name}**`,
-        `| ID | Title | Status | Assignee |`,
-        ...tickets.map(
-          (t) =>
-            `| #${t.id} | ${t.title} | \`${t.status}\` | ${t.assigneeUser?.name ?? 'Unassigned'} |`,
-        ),
+      const STATUS_ICON: Record<string, string> = {
+        [TicketStatus.OPEN]: '🟡',
+        [TicketStatus.IN_PROGRESS]: '🔵',
+        [TicketStatus.RESOLVED]: '✅',
+        [TicketStatus.CLOSED]: '⬛',
+      };
+
+      const STATUS_ORDER: string[] = [
+        TicketStatus.OPEN,
+        TicketStatus.IN_PROGRESS,
+        TicketStatus.RESOLVED,
+        TicketStatus.CLOSED,
       ];
 
-      await this.reply(message, responseLines.join('\n'));
+      tickets.sort(
+        (a, b) =>
+          STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) ||
+          a.id - b.id,
+      );
+
+      const { items: pageTickets, meta } = paginate(tickets, page);
+
+      const lines: string[] = [
+        `┌─────────────────────────────`,
+        `│ 🎫 **Ticket List**`,
+        `├─────────────────────────────`,
+        `│ 📁 Project : ${context.project.name}`,
+        `├─────────────────────────────`,
+      ];
+
+      for (const t of pageTickets) {
+        const icon = STATUS_ICON[t.status] ?? '❓';
+        const assignee = t.assigneeUser?.name ?? 'Unassigned';
+        lines.push(`│ ${icon} **#${t.id}** ${t.title}`);
+        lines.push(
+          `│     👤 Assignee : ${assignee}  |  🔖 ${t.severity ?? 'unknown'}`,
+        );
+      }
+
+      lines.push(`├─────────────────────────────`);
+      lines.push(`│ ${buildPaginationFooter(meta, '*ticket list')}`);
+      lines.push(`│ 💡 \`*ticket detail <id>\` to view details`);
+      lines.push(`└─────────────────────────────`);
+
+      await this.reply(message, lines.join('\n'));
     } catch (error) {
       this.logger.error('List tickets failed', (error as Error)?.stack);
       await this.reply(message, this.getErrorMessage(error));
@@ -154,12 +210,46 @@ export class TicketCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const title = args.slice(1).join(' ').trim();
+    const raw = args.slice(1).join(' ').trim();
+
+    if (!raw) {
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*ticket create <title> --desc <description>\``,
+          `│ Example: \`*ticket create Login bug --desc Page crashes on submit\``,
+          `│ \`*ticket create <title> [--desc <description>]\`  – Create a ticket`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    // Tách title và description qua flag --desc
+    const descIndex = raw.indexOf('--desc');
+    let title: string;
+    let description: string | undefined;
+
+    if (descIndex !== -1) {
+      title = raw.slice(0, descIndex).trim();
+      description = raw.slice(descIndex + 6).trim() || undefined;
+    } else {
+      title = raw;
+    }
 
     if (!title) {
       await this.reply(
         message,
-        'Ticket title is required.\nUsage: `*ticket create <title>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Title is required**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*ticket create <title> [--desc <description>]\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -173,11 +263,27 @@ export class TicketCommandHandler {
       projectId: context.projectId,
       reporterUserId: context.user.id,
       title,
+      description,
     });
 
     await this.reply(
       message,
-      `✅ Created ticket **#${ticket.id}: ${ticket.title}** in project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Ticket Created**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${ticket.id}`,
+        `│ 📝  Title    : ${ticket.title}`,
+        `│ 🟡  Status   : ${ticket.status ?? TicketStatus.OPEN}`,
+        `│ 👤  Reporter : ${context.user.name ?? senderId}`,
+        `│ 📁  Project  : ${context.project.name}`,
+        ticket.description
+          ? `│ 📄  Desc     : ${ticket.description}`
+          : `│ 📄  Desc     : —`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*ticket assign ${ticket.id} @user\` to assign`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -189,10 +295,7 @@ export class TicketCommandHandler {
     const ticketId = this.parseId(args[1]);
 
     if (ticketId == null) {
-      await this.reply(
-        message,
-        'Valid ticket ID is required.\nUsage: `*ticket detail <id>`',
-      );
+      await this.reply(message, 'Usage: `*ticket detail <id>`');
       return;
     }
 
@@ -209,7 +312,7 @@ export class TicketCommandHandler {
     if (!ticket) {
       await this.reply(
         message,
-        `Ticket #${ticketId} not found in current project.`,
+        `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -222,20 +325,48 @@ export class TicketCommandHandler {
     ) {
       await this.reply(
         message,
-        `❌ You have no permission to view details for this ticket.`,
+        `❌ You don't have permission to view this ticket.`,
       );
       return;
     }
 
+    const STATUS_ICON: Record<string, string> = {
+      [TicketStatus.OPEN]: '🟡',
+      [TicketStatus.IN_PROGRESS]: '🔵',
+      [TicketStatus.RESOLVED]: '✅',
+      [TicketStatus.CLOSED]: '⬛',
+    };
+
+    const SEVERITY_ICON: Record<string, string> = {
+      low: '🟢',
+      medium: '🟡',
+      high: '🟠',
+      critical: '🔴',
+    };
+
+    const statusIcon = STATUS_ICON[ticket.status] ?? '❓';
+    const severityIcon =
+      SEVERITY_ICON[String(ticket.severity).toLowerCase()] ?? '❔';
+
     await this.reply(
       message,
       [
-        `📄 **Ticket #${ticket.id}**`,
-        `  Title: ${ticket.title}`,
-        `  Status: ${ticket.status ?? 'open'}`,
-        `  Severity: ${ticket.severity ?? 'unknown'}`,
-        `  Assignee: ${ticket.assigneeUser?.name ?? 'unassigned'}`,
-        `  Reporter: ${ticket.reporterUser?.name ?? 'unknown'}`,
+        `┌─────────────────────────────`,
+        `│ 🎫 **Ticket Detail**`,
+        `├─────────────────────────────`,
+        `│ 🆔  ID       : #${ticket.id}`,
+        `│ 📝  Title    : ${ticket.title}`,
+        `│ ${statusIcon}  Status   : ${ticket.status ?? TicketStatus.OPEN}`,
+        `│ ${severityIcon}  Severity : ${ticket.severity ?? '—'}`,
+        `│ 👤  Assignee : ${ticket.assigneeUser?.name ?? 'Unassigned'}`,
+        `│ 📝  Reporter : ${ticket.reporterUser?.name ?? '—'}`,
+        `│ 📁  Project  : ${context.project.name}`,
+        ticket.description
+          ? `│ 📄  Desc     : ${ticket.description}`
+          : `│ 📄  Desc     : —`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*ticket status ${ticket.id} <status>\` to update`,
+        `└─────────────────────────────`,
       ].join('\n'),
     );
   }
@@ -252,21 +383,33 @@ export class TicketCommandHandler {
         ? String(rawStatus).trim().toUpperCase()
         : undefined;
 
-      const newStatus = normalizedStatus as TicketStatus | undefined;
+      const validStatuses = Object.values(TicketStatus) as string[];
 
-      if (!ticketId || !rawStatus || !newStatus) {
+      if (!ticketId || !rawStatus || !normalizedStatus) {
         await this.reply(
           message,
-          'Usage: `*ticket status <id> <open|in_progress|resolved|closed>`',
+          [
+            `┌─────────────────────────────`,
+            `│ ❌ **Missing required fields**`,
+            `├─────────────────────────────`,
+            `│ Usage: \`*ticket status <id> <status>\``,
+            `│ Valid : \`${validStatuses.join(' | ')}\``,
+            `└─────────────────────────────`,
+          ].join('\n'),
         );
         return;
       }
 
-      const validStatuses = Object.values(TicketStatus) as string[];
-      if (!validStatuses.includes(newStatus)) {
+      if (!validStatuses.includes(normalizedStatus)) {
         await this.reply(
           message,
-          `Invalid status. Valid values: ${validStatuses.join(', ')}`,
+          [
+            `┌─────────────────────────────`,
+            `│ ❌ **Unknown status:** \`${rawStatus}\``,
+            `├─────────────────────────────`,
+            `│ Valid : \`${validStatuses.join(' | ')}\``,
+            `└─────────────────────────────`,
+          ].join('\n'),
         );
         return;
       }
@@ -280,8 +423,12 @@ export class TicketCommandHandler {
         context.projectId,
         ticketId,
       );
+
       if (!ticket) {
-        await this.reply(message, `❌ Ticket #${ticketId} not found.`);
+        await this.reply(
+          message,
+          `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
+        );
         return;
       }
 
@@ -293,20 +440,35 @@ export class TicketCommandHandler {
       ) {
         await this.reply(
           message,
-          `❌ You have no permission to update the status of this ticket.`,
+          `❌ You don't have permission to update this ticket.`,
         );
         return;
       }
-      const projectId = context.projectId;
 
       const updated = await this.ticketService.updateStatus(
-        projectId,
+        context.projectId,
         ticketId,
-        newStatus,
+        normalizedStatus as TicketStatus,
       );
+
+      const STATUS_ICON: Record<string, string> = {
+        [TicketStatus.OPEN]: '🟡',
+        [TicketStatus.IN_PROGRESS]: '🔵',
+        [TicketStatus.RESOLVED]: '✅',
+        [TicketStatus.CLOSED]: '⬛',
+      };
+
       await this.reply(
         message,
-        `✅ Ticket #${ticketId} status updated to \`${updated.status}\`.`,
+        [
+          `┌─────────────────────────────`,
+          `│ ✅ **Status Updated**`,
+          `├─────────────────────────────`,
+          `│ 🆔  Ticket  : #${updated.id} — ${updated.title}`,
+          `│ ${STATUS_ICON[updated.status] ?? '❓'}  Status  : ${updated.status}`,
+          `│ 📁  Project : ${context.project.name}`,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
     } catch (error) {
       this.logger.error('Update ticket status failed', (error as Error)?.stack);
@@ -321,39 +483,45 @@ export class TicketCommandHandler {
   ): Promise<void> {
     const ticketId = Number(args[1]);
     const mentionArg = args[2];
+
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
     if (!this.isProjectManagerOrAdmin(context.user)) {
-      await this.reply(
-        message,
-        `❌ Only project managers and administrators can assign tickets.`,
-      );
+      await this.reply(message, `❌ Only **PM / Admin** can assign tickets.`);
       return;
     }
+
     if (Number.isNaN(ticketId) || !mentionArg) {
       await this.reply(
         message,
-        '⚠️ Usage: `*ticket assign <ticketId> @mention`\nExample: `*ticket assign 12 @Bao`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*ticket assign <id> @mention\``,
+          `│ Example: \`*ticket assign 12 @Bao\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
 
-    const targetUserIdentifier =
+    const targetIdentifier =
       this.getMentionedUserIdentifier(mentionArg, message) ||
       mentionArg.replace(/^@/, '').trim();
 
     const assigneeUser = await this.userService.findByIdentifier(
-      targetUserIdentifier,
+      targetIdentifier,
       false,
     );
 
     if (!assigneeUser) {
       await this.reply(
         message,
-        `❌ User "${mentionArg}" not found or has been deleted from the system.`,
+        `❌ User **"${mentionArg}"** not found or has been removed from the system.`,
       );
       return;
     }
@@ -368,18 +536,26 @@ export class TicketCommandHandler {
       if (!updatedTicket) {
         await this.reply(
           message,
-          `❌ Ticket **#${ticketId}** not found in the current project (**${context.project.name}**).`,
+          `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
         );
         return;
       }
 
       await this.reply(
         message,
-        `✅ Ticket **#${ticketId}** has been assigned to **${assigneeUser.name}**.`,
+        [
+          `┌─────────────────────────────`,
+          `│ ✅ **Ticket Assigned**`,
+          `├─────────────────────────────`,
+          `│ 🆔  Ticket  : #${updatedTicket.id} — ${updatedTicket.title}`,
+          `│ 👤  Assignee: ${assigneeUser.name ?? assigneeUser.mezonId}`,
+          `│ 📁  Project : ${context.project.name}`,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
     } catch (error) {
       this.logger.warn('Failed to assign ticket', (error as Error)?.stack);
-      await this.reply(message, `❌ Failed: ${this.getErrorMessage(error)}`);
+      await this.reply(message, `❌ ${this.getErrorMessage(error)}`);
     }
   }
 
@@ -402,10 +578,7 @@ export class TicketCommandHandler {
         );
 
       if (!this.isProjectManagerOrAdmin(context.user)) {
-        await this.reply(
-          message,
-          `❌ Only project managers and administrators can delete tickets.`,
-        );
+        await this.reply(message, `❌ Only **PM / Admin** can delete tickets.`);
         return;
       }
 
@@ -417,7 +590,7 @@ export class TicketCommandHandler {
       if (!ticket) {
         await this.reply(
           message,
-          `Ticket #${ticketId} not found in current project.`,
+          `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
         );
         return;
       }
@@ -425,8 +598,17 @@ export class TicketCommandHandler {
       await this.reply(
         message,
         [
-          `🗑️ Are you sure you want to delete ticket **#${ticket.id}: ${ticket.title}**?`,
-          `Run: \`*ticket confirm delete ${ticket.id}\` to complete the deletion.`,
+          `┌─────────────────────────────`,
+          `│ 🗑️ **Confirm Delete Ticket**`,
+          `├─────────────────────────────`,
+          `│ 🆔  ID    : #${ticket.id}`,
+          `│ 📝  Title : ${ticket.title}`,
+          `│ 📁  Project : ${context.project.name}`,
+          `├─────────────────────────────`,
+          `│ ⚠️  This action **cannot be undone**.`,
+          `│ Run to confirm:`,
+          `│ \`*ticket confirm delete ${ticket.id}\``,
+          `└─────────────────────────────`,
         ].join('\n'),
       );
     } catch (error) {
@@ -454,10 +636,7 @@ export class TicketCommandHandler {
         );
 
       if (!this.isProjectManagerOrAdmin(context.user)) {
-        await this.reply(
-          message,
-          `❌ Only project managers and administrators can delete tickets.`,
-        );
+        await this.reply(message, `❌ Only **PM / Admin** can delete tickets.`);
         return;
       }
 
@@ -469,16 +648,30 @@ export class TicketCommandHandler {
       if (!ticket) {
         await this.reply(
           message,
-          `Ticket #${ticketId} not found in current project.`,
+          `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
         );
         return;
       }
 
       await this.ticketService.deleteTicket(context.projectId, ticketId);
 
-      await this.reply(message, `🗑️ Ticket **#${ticketId}** has been deleted.`);
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ 🗑️ **Ticket Deleted**`,
+          `├─────────────────────────────`,
+          `│ 🆔  ID    : #${ticket.id}`,
+          `│ 📝  Title : ${ticket.title}`,
+          `│ 📁  Project : ${context.project.name}`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
     } catch (error) {
-      this.logger.error('Delete ticket failed', (error as Error)?.stack);
+      this.logger.error(
+        'Confirm delete ticket failed',
+        (error as Error)?.stack,
+      );
       await this.reply(message, this.getErrorMessage(error));
     }
   }
@@ -509,7 +702,7 @@ export class TicketCommandHandler {
       if (!ticket) {
         await this.reply(
           message,
-          `Ticket #${ticketId} not found in current project.`,
+          `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
         );
         return;
       }
@@ -522,7 +715,7 @@ export class TicketCommandHandler {
       ) {
         await this.reply(
           message,
-          '❌ You have no permission to resolve this ticket.',
+          `❌ You don't have permission to resolve this ticket.`,
         );
         return;
       }
@@ -530,22 +723,28 @@ export class TicketCommandHandler {
       const updated = await this.ticketService.updateTicket(
         context.projectId,
         ticketId,
-        {
-          status: TicketStatus.RESOLVED,
-        },
+        { status: TicketStatus.RESOLVED },
       );
 
       if (!updated) {
         await this.reply(
           message,
-          `Ticket #${ticketId} not found in current project.`,
+          `❌ Ticket **#${ticketId}** not found in project **${context.project.name}**.`,
         );
         return;
       }
 
       await this.reply(
         message,
-        `✅ Ticket **#${updated.id}: ${updated.title}** has been marked as resolved.`,
+        [
+          `┌─────────────────────────────`,
+          `│ ✅ **Ticket Resolved**`,
+          `├─────────────────────────────`,
+          `│ 🆔  ID      : #${updated.id}`,
+          `│ 📝  Title   : ${updated.title}`,
+          `│ 📁  Project : ${context.project.name}`,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
     } catch (error) {
       this.logger.error('Resolve ticket failed', (error as Error)?.stack);

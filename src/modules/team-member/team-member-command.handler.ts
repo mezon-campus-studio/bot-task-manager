@@ -1,6 +1,10 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
 import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+import {
   Args,
   AutoContext,
   Command,
@@ -13,6 +17,7 @@ import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 import { ProjectContextService } from '@src/modules/project/project-context.service';
 import { TeamService } from '@src/modules/team/team.service';
 import { UserService } from '@src/modules/user/user.service';
+import { TeamMemberStatus } from './enums/team-member-status.enum';
 import { TeamMemberService } from './team-member.service';
 
 /**
@@ -63,10 +68,13 @@ export class TeamMemberCommandHandler {
           await this.reply(
             message,
             [
-              '👥 **Member Commands:**',
-              '  `*member list <teamId|slug|@slug>` – List members of a team',
-              '  `*member add <teamId|slug|@slug> <userId|@username>` – Add user to team',
-              '  `*member remove <teamId|slug|@slug> <userId|@username>` – Remove user from team',
+              `┌─────────────────────────────`,
+              `│ 👥 **Member Commands**`,
+              `├─────────────────────────────`,
+              `│ \`*member list <teamId|slug> [--page N]\`            – List members of a team`,
+              `│ \`*member add <teamId|slug> <userId|@username>\`     – Add user to team`,
+              `│ \`*member remove <teamId|slug> <userId|@username>\`  – Remove user from team`,
+              `└─────────────────────────────`,
             ].join('\n'),
           );
       }
@@ -83,8 +91,25 @@ export class TeamMemberCommandHandler {
   ): Promise<void> {
     const teamIdentifier = args[1];
 
-    if (!teamIdentifier) {
-      await this.reply(message, 'Usage: `*member list <teamId|slug|@slug>`');
+    const pageFlagIndex = args.indexOf('--page');
+    const page =
+      pageFlagIndex !== -1
+        ? Math.max(1, parseInt(args[pageFlagIndex + 1] ?? '1', 10) || 1)
+        : 1;
+
+    if (!teamIdentifier || teamIdentifier === '--page') {
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*member list <teamId|slug> [--page N]\``,
+          `│ Example: \`*member list 4\``,
+          `│          \`*member list backend --page 2\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
       return;
     }
 
@@ -101,39 +126,73 @@ export class TeamMemberCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${teamIdentifier}** not found in your current project **${context.project.name}**.`,
+        `❌ Team **${teamIdentifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
 
-    const teamId = team.id;
-
-    const members =
-      await this.teamMemberService.findActiveMembersByTeamId(teamId);
+    const members = await this.teamMemberService.findActiveMembersByTeamId(
+      team.id,
+    );
 
     if (!members.length) {
       await this.reply(
         message,
-        `No active members found in team #${teamId} (${team.name}).`,
+        [
+          `┌─────────────────────────────`,
+          `│ 👥 **Team Members**`,
+          `├─────────────────────────────`,
+          `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+          `│ 📁  Project : ${context.project.name}`,
+          `├─────────────────────────────`,
+          `│ ℹ️  No active members found.`,
+          `│ Use \`*member add ${team.slug} @username\` to add one.`,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
 
-    const responseLines = [
-      `👥 **Members of Team: ${team.name}** (team #${teamId})`,
-      `| No. | Name | Status | Mezon ID |`,
-      ...members.map((m, i) => {
-        let userName = m.user?.name ?? 'Unknown';
-        const mezonId = m.user?.mezonId ?? 'N/A';
-        if (team.leaderId && m.userId === team.leaderId) {
-          userName = `👑 ${userName} (Leader)`;
-        }
+    const { items: pageMembers, meta } = paginate(members, page);
 
-        return `| ${i + 1} | **${userName}** | ${m.status} | \`${mezonId}\` |`;
-      }),
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 👥 **Team Members**`,
+      `├─────────────────────────────`,
+      `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+      `│ 📁  Project : ${context.project.name}`,
+      `├─────────────────────────────`,
     ];
 
-    await this.reply(message, [...responseLines].join('\n'));
+    const offset = (meta.page - 1) * meta.pageSize;
+    for (let i = 0; i < pageMembers.length; i++) {
+      const m = pageMembers[i];
+      const isLeader = team.leaderId != null && m.userId === team.leaderId;
+      const nameRaw = m.user?.name ?? 'Unknown';
+      const nameTag = isLeader
+        ? `👑 **${nameRaw}** *(Leader)*`
+        : `**${nameRaw}**`;
+      const statusIcon =
+        m.status === TeamMemberStatus.ACTIVE
+          ? '🟢'
+          : m.status === TeamMemberStatus.REMOVED
+            ? '🔴'
+            : '⚪';
+
+      lines.push(`│ ${offset + i + 1}. ${nameTag}`);
+      lines.push(`│     ${statusIcon} Status   : ${m.status}`);
+      lines.push(`│     🪪 Mezon ID : \`${m.user?.mezonId ?? 'N/A'}\``);
+      if (i < pageMembers.length - 1) lines.push(`│`);
+    }
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(
+      `│ ${buildPaginationFooter(meta, `*member list ${teamIdentifier}`)}`,
+    );
+    lines.push(`│ 💡 \`*member add ${team.slug} @user\` to add a member`);
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
   }
 
   private async addMember(
@@ -145,7 +204,7 @@ export class TeamMemberCommandHandler {
     if (!this.isProjectManagerOrAdmin(ctx)) {
       await this.reply(
         message,
-        'Only project managers and administrators can add team members.',
+        '❌ Only **Administrators** and **Project Managers** can add team members.',
       );
       return;
     }
@@ -156,7 +215,14 @@ export class TeamMemberCommandHandler {
     if (!teamIdentifier || !targetUserIdRaw) {
       await this.reply(
         message,
-        'Usage: `*member add <teamId|slug|@slug> <userId|@username>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*member add <teamId|slug> <userId|@username>\``,
+          `│ Example: \`*member add backend @alice\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -174,7 +240,7 @@ export class TeamMemberCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${teamIdentifier}** not found in your current project **${context.project.name}**.`,
+        `❌ Team **${teamIdentifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -183,14 +249,13 @@ export class TeamMemberCommandHandler {
       this.getMentionedUserIdentifier(targetUserIdRaw, message) ??
       targetUserIdRaw.replace(/^@/, '').trim();
 
-    // Resolve the target user
     const targetUser =
       await this.userService.findByIdentifier(resolvedTargetUserId);
 
     if (!targetUser) {
       await this.reply(
         message,
-        `User **${targetUserIdRaw}** not found in the system.`,
+        `❌ User **${targetUserIdRaw}** not found in the system.`,
       );
       return;
     }
@@ -204,7 +269,18 @@ export class TeamMemberCommandHandler {
 
     await this.reply(
       message,
-      `✅ User **${targetUser.name ?? targetUser.mezonId}** added to team **${team.name}** in project **${context.project.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Member Added**`,
+        `├─────────────────────────────`,
+        `│ 👤  User    : ${targetUser.name ?? targetUser.mezonId}`,
+        `│ 🪪  Mezon ID: \`${targetUser.mezonId}\``,
+        `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+        `│ 📁  Project : ${context.project.name}`,
+        `├─────────────────────────────`,
+        `│ 💡 \`*member list ${team.slug}\` to view all members`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
@@ -220,7 +296,14 @@ export class TeamMemberCommandHandler {
     if (!teamIdentifier || !targetUserIdRaw) {
       await this.reply(
         message,
-        'Usage: `*member remove <teamId|slug|@slug> <userId|@username>`',
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: \`*member remove <teamId|slug> <userId|@username>\``,
+          `│ Example: \`*member remove backend @alice\``,
+          `└─────────────────────────────`,
+        ].join('\n'),
       );
       return;
     }
@@ -228,7 +311,7 @@ export class TeamMemberCommandHandler {
     if (!this.isProjectManagerOrAdmin(ctx)) {
       await this.reply(
         message,
-        'Only project managers and administrators can remove team members.',
+        '❌ Only **Administrators** and **Project Managers** can remove team members.',
       );
       return;
     }
@@ -246,7 +329,7 @@ export class TeamMemberCommandHandler {
     if (!team) {
       await this.reply(
         message,
-        `Team **${teamIdentifier}** not found in your current project **${context.project.name}**.`,
+        `❌ Team **${teamIdentifier}** not found in project **${context.project.name}**.`,
       );
       return;
     }
@@ -255,14 +338,13 @@ export class TeamMemberCommandHandler {
       this.getMentionedUserIdentifier(targetUserIdRaw, message) ??
       targetUserIdRaw.replace(/^@/, '').trim();
 
-    // Resolve the target user
     const targetUser =
       await this.userService.findByIdentifier(resolvedTargetUserId);
 
     if (!targetUser) {
       await this.reply(
         message,
-        `User **${targetUserIdRaw}** not found in the system.`,
+        `❌ User **${targetUserIdRaw}** not found in the system.`,
       );
       return;
     }
@@ -275,7 +357,16 @@ export class TeamMemberCommandHandler {
 
     await this.reply(
       message,
-      `🗑️ User **${targetUser.name ?? targetUser.mezonId}** removed from team **${team.name}**.`,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Member Removed**`,
+        `├─────────────────────────────`,
+        `│ 👤  User    : ${targetUser.name ?? targetUser.mezonId}`,
+        `│ 🪪  Mezon ID: \`${targetUser.mezonId}\``,
+        `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+        `│ 📁  Project : ${context.project.name}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
     );
   }
 
