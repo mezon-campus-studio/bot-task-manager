@@ -91,11 +91,15 @@ export class TeamMemberCommandHandler {
   ): Promise<void> {
     const teamIdentifier = args[1];
 
-    const pageFlagIndex = args.indexOf('--page');
-    const page =
-      pageFlagIndex !== -1
-        ? Math.max(1, parseInt(args[pageFlagIndex + 1] ?? '1', 10) || 1)
-        : 1;
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
+    );
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+    } else {
+      page = Math.max(1, parseInt(args[2] ?? '1', 10) || 1);
+    }
 
     if (!teamIdentifier || teamIdentifier === '--page') {
       await this.reply(

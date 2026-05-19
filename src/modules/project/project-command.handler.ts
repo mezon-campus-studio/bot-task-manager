@@ -78,7 +78,7 @@ export class ProjectCommandHandler {
               `┌─────────────────────────────`,
               `│ 📁 **Project Commands**`,
               `├─────────────────────────────`,
-              `│ \`*project list [page]\`                              – List all accessible projects`,
+              `│ \`*project list [--page N]\`                              – List all accessible projects`,
               `│ \`*project create <slug> <name...>\`                  – Create a new project`,
               `│ \`*project use <projectId|slug>\`                     – Select a project to work with`,
               `│ \`*project current\`                                  – Show current selected project`,
@@ -111,8 +111,16 @@ export class ProjectCommandHandler {
       return;
     }
 
-    const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
+    );
 
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+    } else {
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    }
     const [accessibleProjects, ownedProjects, allProjects] = await Promise.all([
       this.projectService.listAccessibleProjectsForUser(dbUser.id),
       this.projectService.findByOwnerUserId(dbUser.id),

@@ -83,7 +83,7 @@ export class UserCommandHandler {
               `│ 👤 **User Commands**`,
               `├─────────────────────────────`,
               `│ \`*user me\`                                       – Show your profile`,
-              `│ \`*user list [page]\`                              – List all users`,
+              `│ \`*user list [--page <number>]\`                   – List all users`,
               `│ \`*user info <@username|userId>\`                  – View user details`,
               `│ \`*user search <@username|userId>\`                – Search for a user`,
               `│ \`*user create @username\`                         – Add a user from clan mention`,
@@ -352,7 +352,16 @@ export class UserCommandHandler {
     ctx: NezonCommandContext,
     args: string[] = [],
   ): Promise<void> {
-    const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
+    );
+
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+    } else {
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    }
 
     let clanRoles: any[] = [];
     try {

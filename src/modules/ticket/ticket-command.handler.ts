@@ -94,7 +94,7 @@ export class TicketCommandHandler {
               `┌─────────────────────────────`,
               `│ 🎫 **Ticket Commands**`,
               `├─────────────────────────────`,
-              `│ \`*ticket list [page]\`                            – List tickets in current project`,
+              `│ \`*ticket list [--page <number>]\`                 – List tickets in current project`,
               `│ \`*ticket create <title> [--desc <description>]\`  – Create a ticket`,
               `│ \`*ticket detail <id>\`                            – View ticket detail`,
               `│ \`*ticket status <id> <status>\`                   – Update status`,
@@ -120,7 +120,16 @@ export class TicketCommandHandler {
     message: ManagedMessage,
   ): Promise<void> {
     try {
-      const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+      let page = 1;
+      const pageFlagIndex = args.findIndex(
+        (arg) => arg.toLowerCase() === '--page',
+      );
+
+      if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+        page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+      } else {
+        page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+      }
 
       const context =
         await this.projectContextService.getRequiredCurrentProjectByMezonId(

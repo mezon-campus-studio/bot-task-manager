@@ -111,7 +111,16 @@ export class TeamCommandHandler {
     message: ManagedMessage,
     args: string[] = [],
   ): Promise<void> {
-    const page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
+    );
+
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+    } else {
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    }
 
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(

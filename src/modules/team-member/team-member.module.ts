@@ -6,7 +6,6 @@ import { TeamModule } from '@src/modules/team/team.module';
 import TeamMemberEntity from '@src/modules/team-member/team-member.entity';
 import { UserModule } from '@src/modules/user/user.module';
 import { TeamMemberCommandHandler } from './team-member-command.handler';
-import { TeamMemberController } from './team-member.controller';
 import { TeamMemberService } from './team-member.service';
 
 @Module({
@@ -17,7 +16,6 @@ import { TeamMemberService } from './team-member.service';
     forwardRef(() => ProjectModule),
     AuthModule,
   ],
-  controllers: [TeamMemberController],
   providers: [TeamMemberService, TeamMemberCommandHandler],
   exports: [TeamMemberService],
 })

@@ -8,7 +8,6 @@ import { UserModule } from '@src/modules/user/user.module';
 import { ProjectCommandHandler } from './project-command.handler';
 import { ProjectContextService } from './project-context.service';
 import { ProjectOnboardingService } from './project-onboarding.service';
-import { ProjectController } from './project.controller';
 import ProjectEntity from './project.entity';
 import { ProjectService } from './project.service';
 
@@ -21,7 +20,6 @@ import { ProjectService } from './project.service';
     forwardRef(() => TeamModule),
     forwardRef(() => TeamMemberModule),
   ],
-  controllers: [ProjectController],
   providers: [
     ProjectCommandHandler,
     ProjectContextService,

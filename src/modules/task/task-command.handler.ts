@@ -98,8 +98,10 @@ export class TaskCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    // Syntax: *task list [--page N] [--status <status>] [--q <keyword>]
-    const page = this.parseFlagNumber(args, '--page', 1);
+    let page = this.parseFlagNumber(args, '--page', 0);
+    if (page === 0) {
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    }
     const statusRaw = this.parseFlagString(args, '--status');
     const keyword = this.parseFlagString(args, '--q');
     const status = statusRaw ? this.parseStatus(statusRaw) : undefined;

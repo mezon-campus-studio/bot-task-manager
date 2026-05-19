@@ -84,7 +84,7 @@ export class NoteCommandHandler {
               `┌─────────────────────────────`,
               `│ 📝 **Note Commands**`,
               `├─────────────────────────────`,
-              `│ \`*note list [type] [resourceId] [page]\`           – List notes`,
+              `│ \`*note list [type] [resourceId] [--page N]\`           – List notes`,
               `│ \`*note create <type> <resourceId> <content...>\`   – Create a note`,
               `│ \`*note detail <id>\`                               – View note detail`,
               `│ \`*note update <id> <content...>\`                  – Update your note`,
@@ -109,7 +109,6 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
-    const page = Math.max(1, parseInt(args[3] ?? '1', 10) || 1);
     const resourceType = this.parseResourceType(args[1]);
     const resourceId = args[2];
     const isFiltered = !!resourceType && !!resourceId;
@@ -118,6 +117,21 @@ export class NoteCommandHandler {
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
+
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
+    );
+
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+    } else {
+      if (isFiltered) {
+        page = Math.max(1, parseInt(args[3] ?? '1', 10) || 1);
+      } else {
+        page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+      }
+    }
 
     const filter = this.buildListFilter(context);
     const isManager = this.isManager(context);
