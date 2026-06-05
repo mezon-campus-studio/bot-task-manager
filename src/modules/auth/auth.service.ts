@@ -152,4 +152,27 @@ export class AuthService {
   async validateUser(userId: string): Promise<UserEntity | null> {
     return this.userService.findById(userId);
   }
+
+  /**
+   * Extract JWT payload without verification (for logout)
+   */
+  decodeToken(token: string): any {
+    try {
+      return this.jwtService.decode(token);
+    } catch (error) {
+      this.logger.error('Failed to decode token:', error);
+      throw new BadRequestException('Invalid token format');
+    }
+  }
+
+  /**
+   * Get token expiration timestamp
+   */
+  getTokenExpiration(token: string): Date {
+    const payload = this.decodeToken(token);
+    if (!payload.exp) {
+      throw new BadRequestException('Token has no expiration');
+    }
+    return new Date(payload.exp * 1000);
+  }
 }

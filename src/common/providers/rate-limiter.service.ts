@@ -25,7 +25,7 @@ export class RateLimiterService {
    */
   isAllowed(
     userId: string,
-    limit: number = 10,
+    limit: number = 30,
     windowMs: number = 60000,
   ): boolean {
     const now = Date.now();

@@ -422,7 +422,7 @@ export async function addValuesToEnumInMigration(
   );
 
   const newValues = [...new Set(existingValues.concat(values))];
-  const valueParameters = newValues.map((v, i) => `$${i + 1}`).join(', ');
+  const valueParameters = newValues.map((_, i) => `$${i + 1}`).join(', ');
 
   await queryRunner.query(
     `CREATE TYPE "public"."${enumName}" AS ENUM(${valueParameters})`,
@@ -456,7 +456,7 @@ export async function addValuesToEnumInMigrationV2({
     [],
   );
   const newValuesArray = [...new Set(existingValues.concat(values))];
-  const valueParameters = newValuesArray.map((v, i) => `$${i + 1}`).join(', ');
+  const valueParameters = newValuesArray.map((_, i) => `$${i + 1}`).join(', ');
 
   await queryRunner.query(
     `ALTER TYPE "public"."${enumName}" RENAME TO "${enumName}_old"`,
@@ -510,7 +510,7 @@ export async function removeValuesFromEnumInMigration(
     throw new Error('All enum values are removed!');
   }
 
-  const valueParameters = filteredValues.map((v, i) => `$${i + 1}`).join(', ');
+  const valueParameters = filteredValues.map((_, i) => `$${i + 1}`).join(', ');
 
   await queryRunner.query(
     `CREATE TYPE "public"."${enumName}" AS ENUM(${valueParameters})`,
@@ -548,7 +548,7 @@ export async function removeValuesFromEnumInMigrationV2({
     throw new Error('All enum values are removed!');
   }
 
-  const valueParameters = filteredValues.map((v, i) => `$${i + 1}`).join(', ');
+  const valueParameters = filteredValues.map((_, i) => `$${i + 1}`).join(', ');
 
   await queryRunner.query(
     `CREATE TYPE "public"."${enumName}_old" AS ENUM(${valueParameters})`,
