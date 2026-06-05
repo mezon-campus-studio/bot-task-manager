@@ -1,5 +1,6 @@
 import { Injectable, Logger, UseGuards } from '@nestjs/common';
 import { ChannelMessage, Events } from 'mezon-sdk';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   AutoContext,
   Command,
@@ -9,17 +10,11 @@ import {
 } from '@src/libs/nezon';
 import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 
-/**
- * Main channel message handler.
- *
- * - Handles raw channel messages (non-command)
- * - Provides *ping and *help commands for testing/discovery
- */
 @Injectable()
 export default class ChannelMessageHandler {
   private readonly logger = new Logger(ChannelMessageHandler.name);
 
-  constructor() {}
+  constructor(private rateLimiter: RateLimiterService) {}
 
   // ─── General message listener ───────────────────────────────────────────────
 
@@ -42,16 +37,34 @@ export default class ChannelMessageHandler {
 
   // ─── *ping ──────────────────────────────────────────────────────────────────
 
-  /**
-   * Simple health-check command.
-   * Usage: *ping
-   */
   @Command('ping')
   @UseGuards(NezonAuthGuard)
   async handlePing(
     @AutoContext('message') message: ManagedMessage,
   ): Promise<void> {
-    this.logger.log(`*ping from sender: ${message.senderId}`);
+    const senderId = message.senderId;
+
+    if (!senderId) {
+      this.logger.warn('*ping received without senderId');
+      return;
+    }
+
+    if (!this.rateLimiter.isAllowed(senderId)) {
+      if (this.rateLimiter.shouldNotifyLimitExceeded(senderId)) {
+        this.logger.warn(
+          `Rate limit exceeded for user ${senderId} on *ping command`,
+        );
+        await message.reply(
+          SmartMessage.text(
+            '⚠️ Too many commands. Please wait before sending another command.',
+          ),
+        );
+      }
+
+      return;
+    }
+
+    this.logger.log(`*ping from sender: ${senderId}`);
     await message.reply(
       SmartMessage.text('🏓 Pong! Bot is alive and running.'),
     );

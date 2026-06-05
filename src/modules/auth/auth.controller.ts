@@ -8,6 +8,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -23,6 +24,7 @@ export class AuthController {
     return { url: oauthUrl };
   }
 
+  @Throttle({ global: { limit: 5, ttl: 60000 } })
   @Post('exchange')
   async exchange(@Body() body: { code: string; state: string }) {
     return this.authService.handleOAuthExchange(body.code, body.state);
