@@ -404,7 +404,8 @@ export async function renameEnumInMigration(
   newValue: string,
 ) {
   return queryRunner.query(
-    `ALTER TYPE "public"."${enumName}" RENAME VALUE '${oldValue}' TO '${newValue}'`,
+    `ALTER TYPE "public"."${enumName}" RENAME VALUE $1 TO $2`,
+    [oldValue, newValue],
   );
 }
 
@@ -420,12 +421,12 @@ export async function addValuesToEnumInMigration(
     [],
   );
 
-  const newValues = [...new Set(existingValues.concat(values))]
-    .map((value) => `'${value}'`)
-    .join(', ');
+  const newValues = [...new Set(existingValues.concat(values))];
+  const valueParameters = newValues.map((v, i) => `$${i + 1}`).join(', ');
 
   await queryRunner.query(
-    `CREATE TYPE "public"."${enumName}" AS ENUM(${newValues})`,
+    `CREATE TYPE "public"."${enumName}" AS ENUM(${valueParameters})`,
+    newValues,
   );
 }
 
@@ -444,7 +445,8 @@ export async function addValuesToEnumInMigrationV2({
     .query(
       `SELECT atttypid::regtype AS enum_name
        FROM pg_attribute
-       WHERE attrelid = '${tableName}'::regclass AND attname = '${columnName}';`,
+       WHERE attrelid = $1::regclass AND attname = $2;`,
+      [tableName, columnName],
     )
     .then((res) => res[0].enum_name as string);
 
@@ -453,15 +455,15 @@ export async function addValuesToEnumInMigrationV2({
     enumName,
     [],
   );
-  const newValues = [...new Set(existingValues.concat(values))]
-    .map((value) => `'${value}'`)
-    .join(', ');
+  const newValuesArray = [...new Set(existingValues.concat(values))];
+  const valueParameters = newValuesArray.map((v, i) => `$${i + 1}`).join(', ');
 
   await queryRunner.query(
     `ALTER TYPE "public"."${enumName}" RENAME TO "${enumName}_old"`,
   );
   await queryRunner.query(
-    `CREATE TYPE "public"."${enumName}" AS ENUM(${newValues})`,
+    `CREATE TYPE "public"."${enumName}" AS ENUM(${valueParameters})`,
+    newValuesArray,
   );
   await queryRunner.query(
     `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" TYPE "public"."${enumName}" USING "${columnName}"::"text"::"public"."${enumName}"`,
@@ -503,14 +505,16 @@ export async function removeValuesFromEnumInMigration(
     existingEnumName,
     values,
   );
-  const newValues = filteredValues.map((value) => `'${value}'`).join(', ');
 
-  if (newValues.length === 0) {
+  if (filteredValues.length === 0) {
     throw new Error('All enum values are removed!');
   }
 
+  const valueParameters = filteredValues.map((v, i) => `$${i + 1}`).join(', ');
+
   await queryRunner.query(
-    `CREATE TYPE "public"."${enumName}" AS ENUM(${newValues})`,
+    `CREATE TYPE "public"."${enumName}" AS ENUM(${valueParameters})`,
+    filteredValues,
   );
 }
 
@@ -529,7 +533,8 @@ export async function removeValuesFromEnumInMigrationV2({
     .query(
       `SELECT atttypid::regtype AS enum_name
        FROM pg_attribute
-       WHERE attrelid = '${tableName}'::regclass AND attname = '${columnName}';`,
+       WHERE attrelid = $1::regclass AND attname = $2;`,
+      [tableName, columnName],
     )
     .then((res) => res[0].enum_name as string);
 
@@ -538,14 +543,16 @@ export async function removeValuesFromEnumInMigrationV2({
     enumName,
     values,
   );
-  const newValues = filteredValues.map((value) => `'${value}'`).join(', ');
 
-  if (newValues.length === 0) {
+  if (filteredValues.length === 0) {
     throw new Error('All enum values are removed!');
   }
 
+  const valueParameters = filteredValues.map((v, i) => `$${i + 1}`).join(', ');
+
   await queryRunner.query(
-    `CREATE TYPE "public"."${enumName}_old" AS ENUM(${newValues})`,
+    `CREATE TYPE "public"."${enumName}_old" AS ENUM(${valueParameters})`,
+    filteredValues,
   );
   await queryRunner.query(
     `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" TYPE "public"."${enumName}_old" ` +
