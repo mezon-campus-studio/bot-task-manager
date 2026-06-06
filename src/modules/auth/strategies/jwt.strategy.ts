@@ -20,10 +20,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    // Check if token is blacklisted
-    const jti = payload.jti || payload.sub;
-    const isBlacklisted =
-      await this.tokenBlacklistService.isTokenBlacklisted(jti);
+    // Check if token is blacklisted by its unique jti
+    if (!payload.jti) {
+      throw new UnauthorizedException('Token missing required claims');
+    }
+
+    const isBlacklisted = await this.tokenBlacklistService.isTokenBlacklisted(
+      payload.jti,
+    );
 
     if (isBlacklisted) {
       throw new UnauthorizedException('Token has been revoked');

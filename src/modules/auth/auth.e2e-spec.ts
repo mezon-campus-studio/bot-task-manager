@@ -28,6 +28,7 @@ describe('AuthController (e2e)', () => {
     const token = await jwtService.signAsync({
       sub: user.id,
       email: user.email,
+      jti: 'test-jti-' + Date.now(),
     });
 
     await http()
