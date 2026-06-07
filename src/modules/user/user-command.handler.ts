@@ -1,4 +1,12 @@
-import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  UseGuards,
+  Inject,
+} from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
@@ -33,6 +41,7 @@ export class UserCommandHandler {
   constructor(
     private readonly userService: UserService,
     private rateLimiter: RateLimiterService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   @Command('user')
@@ -224,10 +233,45 @@ export class UserCommandHandler {
     }
 
     const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
-    let user = await this.userService.findByIdentifier(identifier, true);
+
+    // Resolve clan member mezonIds to scope the search (INFO-018)
+    let clanMezonIds: string[] | null = null;
+    try {
+      const clan = await ctx.getClan();
+      if (clan) {
+        const membersData = await (clan as any).listMembers?.();
+        const members: any[] =
+          membersData?.clan_members ??
+          membersData?.members ??
+          membersData ??
+          [];
+        if (Array.isArray(members) && members.length > 0) {
+          clanMezonIds = members
+            .map((m: any) => String(m.user_id ?? m.id ?? ''))
+            .filter(Boolean);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(
+        `Could not fetch clan members for search scoping, falling back to global search: ${(e as Error).message}`,
+      );
+    }
+
+    let user =
+      clanMezonIds !== null
+        ? await this.userService.findByIdentifierWithinClan(
+            identifier,
+            clanMezonIds,
+          )
+        : await this.userService.findByIdentifier(identifier);
 
     if (!user) {
-      await this.reply(message, `❌ User **${identifier}** not found.`);
+      // Provide a neutral message that does not confirm whether
+      // the user exists outside the clan (avoids cross-clan enumeration)
+      await this.reply(
+        message,
+        `❌ User **${rawIdentifier}** not found in this clan.`,
+      );
       return;
     }
 
@@ -502,6 +546,10 @@ export class UserCommandHandler {
       return;
     }
 
+    // Create a pending deletion record with a 5-minute TTL (300,000 milliseconds)
+    const key = `pending_delete:${user.id}`;
+    await this.cacheManager.set(key, 'true', 5 * 60 * 1000);
+
     await this.reply(
       message,
       [
@@ -538,7 +586,25 @@ export class UserCommandHandler {
       return;
     }
 
+    // Verify that a valid pending deletion request exists and has not expired
+    const key = `pending_delete:${user.id}`;
+    const pendingDelete = await this.cacheManager.get(key);
+
+    if (!pendingDelete) {
+      await this.reply(
+        message,
+        [
+          `No pending deletion request found.`,
+          `Please run *user delete first.`,
+        ].join('\n'),
+      );
+      return;
+    }
+
     await this.userService.softDeleteUser(identifier);
+    // Cleanup the pending deletion state
+    await this.cacheManager.del(key);
+
     await this.reply(
       message,
       `🗑️ User **${user.name ?? user.mezonId}** was deleted.`,

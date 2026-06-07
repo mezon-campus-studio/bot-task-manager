@@ -39,8 +39,7 @@ export default async function bootstrapConfig(app: INestApplication) {
     new ValidationPipe({
       transform: true,
       whitelist: true,
-      forbidNonWhitelisted: false,
-      skipMissingProperties: true,
+      forbidNonWhitelisted: true,
       exceptionFactory: (validationErrors = []) => {
         const errors = validationErrors.map((error) => ({
           field: error.property,

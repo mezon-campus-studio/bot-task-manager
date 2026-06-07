@@ -314,6 +314,39 @@ export class UserService extends CRUDService<UserEntity> {
     });
   }
 
+  /**
+   * Same as findByIdentifier, but restricts results to users whose mezonId
+   * is present in the provided allowedMezonIds list (i.e. clan members).
+   * Returns null if the found user is not a member of the clan.
+   */
+  async findByIdentifierWithinClan(
+    identifier: string,
+    allowedMezonIds: string[],
+  ): Promise<UserEntity | null> {
+    this.logger.log({
+      log: 'Attempting to find user by identifier within clan scope',
+      identifier,
+      allowedMezonIdsCount: allowedMezonIds.length,
+    });
+
+    const user = await this.findByIdentifier(identifier);
+
+    if (!user) {
+      return null;
+    }
+
+    if (!allowedMezonIds.includes(user.mezonId)) {
+      this.logger.log({
+        log: 'User found but excluded: not a member of the current clan',
+        identifier,
+        userMezonId: user.mezonId,
+      });
+      return null;
+    }
+
+    return user;
+  }
+
   private isUuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       value,

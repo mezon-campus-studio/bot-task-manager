@@ -305,4 +305,75 @@ describe(UserService.name, () => {
     const checkUser = await userService.findByIdentifier('Mezon-123');
     expect(checkUser?.status).toBe(UserStatus.ACTIVE);
   });
+
+  describe('findByIdentifierWithinClan (INFO-018)', () => {
+    it('returns the user when their mezonId is in the allowed list', async () => {
+      const user = await factory.user({
+        mezonId: 'clan-scoped-01',
+        name: 'Clan Member',
+        email: 'clan-scoped-01@example.com',
+      });
+
+      const result = await userService.findByIdentifierWithinClan(
+        'clan-scoped-01',
+        ['clan-scoped-01', 'another-member'],
+      );
+
+      expect(result).toMatchObject({ id: user.id, mezonId: 'clan-scoped-01' });
+    });
+
+    it('returns null when user exists but their mezonId is not in the allowed list', async () => {
+      await factory.user({
+        mezonId: 'outsider-scoped-01',
+        name: 'Outsider',
+        email: 'outsider-scoped-01@example.com',
+      });
+
+      const result = await userService.findByIdentifierWithinClan(
+        'outsider-scoped-01',
+        ['some-other-member'],
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the user does not exist at all', async () => {
+      const result = await userService.findByIdentifierWithinClan(
+        'nonexistent-user',
+        ['nonexistent-user'],
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('returns null when the allowed list is empty', async () => {
+      await factory.user({
+        mezonId: 'empty-clan-user',
+        name: 'Empty Clan User',
+        email: 'empty-clan@example.com',
+      });
+
+      const result = await userService.findByIdentifierWithinClan(
+        'empty-clan-user',
+        [],
+      );
+
+      expect(result).toBeNull();
+    });
+
+    it('can find user by name within clan scope', async () => {
+      const user = await factory.user({
+        mezonId: 'clan-by-name-mezon',
+        name: 'ClanMemberByName',
+        email: 'clan-by-name@example.com',
+      });
+
+      const result = await userService.findByIdentifierWithinClan(
+        'ClanMemberByName',
+        ['clan-by-name-mezon'],
+      );
+
+      expect(result).toMatchObject({ id: user.id, name: 'ClanMemberByName' });
+    });
+  });
 });
