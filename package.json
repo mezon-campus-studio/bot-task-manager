@@ -40,7 +40,8 @@
     "test:coverage": "yarn test --coverage",
     "test:debug": "node --inspect-brk --expose-gc ./node_modules/jest/bin/jest -c jest.config.ts --runInBand",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "postinstall": "cd node_modules/redis-memory-server && node ./scripts/postinstall || true"
   },
   "imports": {
     "#src/*": "./dist/src/*",
