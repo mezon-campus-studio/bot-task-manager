@@ -95,7 +95,7 @@ describe(AuthService.name, () => {
     );
     expect(parsedUrl.searchParams.get('response_type')).toBe('code');
     expect(parsedUrl.searchParams.get('scope')).toBe('openid offline');
-    expect(parsedUrl.searchParams.get('state')).toHaveLength(36);
+    expect(parsedUrl.searchParams.get('state')).toHaveLength(32);
   });
 
   it('fetches user info with the encoded access token payload', async () => {

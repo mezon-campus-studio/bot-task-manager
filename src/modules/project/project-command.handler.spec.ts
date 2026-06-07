@@ -60,15 +60,18 @@ describe(ProjectCommandHandler.name, () => {
     const message = createMessage();
     const { handler, projectService } = createHandler({
       projectService: {
-        listAccessibleProjectsForUser: jest.fn().mockResolvedValue([
-          { id: 10, name: 'Backend Campus', slug: 'backend' },
-          { id: 11, name: 'Frontend Campus', slug: 'frontend' },
-        ]),
+        // Hãy đảm bảo hàm này trả về mảng dữ liệu mock của bạn giống như trước
+        listAccessibleProjectsForUser: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 10, name: 'Backend Campus', slug: 'backend' },
+          ]),
         findByOwnerUserId: jest
           .fn()
           .mockResolvedValue([
             { id: 10, name: 'Backend Campus', slug: 'backend' },
           ]),
+        // Giữ nguyên listProjects cho trường hợp nếu cần, hoặc xóa đi
         listProjects: jest.fn().mockResolvedValue([
           { id: 10, name: 'Backend Campus', slug: 'backend' },
           { id: 11, name: 'Frontend Campus', slug: 'frontend' },
@@ -77,17 +80,19 @@ describe(ProjectCommandHandler.name, () => {
     });
 
     await handler.handleProjectCommand(['list'], message, {
-      dbUser: { id: 'user-1' },
+      dbUser: { id: 'user-1', role: UserRole.DEV }, // User thường (DEV)
     } as never);
 
+    // THAY ĐỔI TẠI ĐÂY: Kỳ vọng gọi hàm listAccessibleProjectsForUser thay vì listProjects
     expect(projectService.listAccessibleProjectsForUser).toHaveBeenCalledWith(
       'user-1',
     );
-    expect(projectService.listProjects).toHaveBeenCalledTimes(1);
+    expect(projectService.listAccessibleProjectsForUser).toHaveBeenCalledTimes(
+      1,
+    );
+
     expectReplyText(message as never, '[#10] ⭐ **Backend Campus**');
     expectReplyText(message as never, 'Slug : `backend`');
-    expectReplyText(message as never, '[#11] **Frontend Campus**');
-    expectReplyText(message as never, 'Slug : `frontend`');
   });
 
   it('prints an empty-state message when no projects exist', async () => {
@@ -95,15 +100,16 @@ describe(ProjectCommandHandler.name, () => {
     const { handler } = createHandler({
       projectService: {
         listAccessibleProjectsForUser: jest.fn().mockResolvedValue([]),
+        findByOwnerUserId: jest.fn().mockResolvedValue([]),
         listProjects: jest.fn().mockResolvedValue([]),
       },
     });
 
     await handler.handleProjectCommand(['list'], message, {
-      dbUser: { id: 'user-1' },
+      dbUser: { id: 'user-1', role: UserRole.DEV },
     } as never);
 
-    expectReplyText(message as never, 'No projects found.');
+    expectReplyText(message as never, 'No accessible projects found.');
   });
 
   it('prepares project deletion and requires a confirmation command', async () => {
