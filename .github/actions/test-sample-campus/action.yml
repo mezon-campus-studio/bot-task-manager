@@ -21,6 +21,12 @@ inputs:
   db-database:
     description: Bootstrap PostgreSQL database name.
     required: true
+  redis-host:
+    description: Redis host.
+    required: true
+  redis-port:
+    description: Redis port.
+    required: true
   test-command:
     description: Jest command to execute.
     required: false
@@ -35,11 +41,12 @@ runs:
       env:
         CI: 'true'
         NO_POSTGRES: 'true'
-        NO_REDIS: 'true'
         DB_HOST: ${{ inputs.db-host }}
         DB_PORT: ${{ inputs.db-port }}
         DB_USERNAME: ${{ inputs.db-username }}
         DB_PASSWORD: ${{ inputs.db-password }}
         DB_DATABASE: ${{ inputs.db-database }}
+        REDIS_HOST: ${{ inputs.redis-host }}
+        REDIS_PORT: ${{ inputs.redis-port }}
         NEZON_DISABLE_BOOTSTRAP: 'true'
       run: ${{ inputs.test-command }}

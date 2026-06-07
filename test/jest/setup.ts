@@ -8,7 +8,7 @@ import {
   isContainerRuntimeUnavailable,
   startPostgres,
 } from './postgres';
-import { NO_REDIS, startRedis } from './redis';
+import { getRedisConfig } from './redis';
 import teardownJest from './teardown';
 
 function assignDatabaseGlobals(
@@ -85,6 +85,12 @@ export default async function setupJest(
 
   projectConfig.globals.__DB_NAME_PREFIX__ = databaseNamePrefix;
 
+  // Configure Redis from environment (localhost:6379 by default, or
+  // injected by CI via REDIS_HOST / REDIS_PORT).
+  const redisConfig = getRedisConfig();
+  projectConfig.globals.__REDIS_HOST__ = redisConfig.host;
+  projectConfig.globals.__REDIS_PORT__ = redisConfig.port;
+
   try {
     const promises: Promise<unknown>[] = [];
 
@@ -115,15 +121,6 @@ export default async function setupJest(
               globalConfig.maxWorkers,
             );
           }),
-      );
-    }
-
-    if (!NO_REDIS) {
-      promises.push(
-        startRedis().then((redis) => {
-          projectConfig.globals.__REDIS_HOST__ = redis.ip;
-          projectConfig.globals.__REDIS_PORT__ = redis.port;
-        }),
       );
     }
 
