@@ -7917,6 +7917,11 @@ lodash.clonedeep@^4.5.0:
   resolved "https://registry.yarnpkg.com/lodash.clonedeep/-/lodash.clonedeep-4.5.0.tgz#e23f3f9c4f8fbdde872529c1071857a086e5ccef"
   integrity sha512-H5ZhCF25riFd9uB5UCkVKo61m3S/xZk1x4wA6yp/L3RFP6Z/eHH1ymQcGLo7J3GMPfm0V/7m1tryHuGVxpqEBQ==
 
+lodash.defaultsdeep@^4.6.1:
+  version "4.6.1"
+  resolved "https://registry.yarnpkg.com/lodash.defaultsdeep/-/lodash.defaultsdeep-4.6.1.tgz#512e9bd721d272d94e3d3a63653fa17516741ca6"
+  integrity sha512-3j8wdDzYuWO3lM3Reg03MuQR957t287Rpcxp1njpEa8oDrikb+FwGdW3n+FELh/A6qib6yPit0j/pv9G/yeAqA==
+
 lodash.includes@^4.3.0:
   version "4.3.0"
   resolved "https://registry.yarnpkg.com/lodash.includes/-/lodash.includes-4.3.0.tgz#60bb98a87cb923c68ca1e51325483314849f553f"
@@ -9299,10 +9304,10 @@ readdirp@~3.6.0:
   dependencies:
     picomatch "^2.2.1"
 
-redis-memory-server@^0.16.1:
-  version "0.16.1"
-  resolved "https://registry.yarnpkg.com/redis-memory-server/-/redis-memory-server-0.16.1.tgz#10f7cb8d59c858e0a87cb7110b10fa74a3e2a200"
-  integrity sha512-+FfNDWAxuWx8RopTu09eBoiGPr6jLgVf1RVXWVMAc27/RT+vOqpjia3M6Q/Ex5dLu/PZfoWZotlM2iHiAgDdsg==
+redis-memory-server@^0.14.0:
+  version "0.14.1"
+  resolved "https://registry.yarnpkg.com/redis-memory-server/-/redis-memory-server-0.14.1.tgz#790845dd7ffd194577d137bb69bc0b8c78c16c92"
+  integrity sha512-18aoXxvUrbBSAmZ42nC4yEEBRmGA4Hew11Zk64dpgtW6du71218GvBn0h6zDKIR/gOcZhkpqYoDjJ4zIw5nsuA==
   dependencies:
     camelcase "^6.3.0"
     cross-spawn "^7.0.3"
@@ -9313,10 +9318,12 @@ redis-memory-server@^0.16.1:
     get-port "^5.1.1"
     https-proxy-agent "^7.0.0"
     lockfile "^1.0.4"
+    lodash.defaultsdeep "^4.6.1"
     rimraf "^5.0.1"
     semver "^7.5.3"
-    tar "^7.5.4"
+    tar "^6.1.15"
     tmp "^0.2.1"
+    uuid "^8.3.2"
 
 redis@^4.7.0:
   version "4.7.1"
@@ -10434,7 +10441,7 @@ tar-stream@^3.0.0, tar-stream@^3.1.5:
     fast-fifo "^1.2.0"
     streamx "^2.15.0"
 
-tar@^7.5.11, tar@^7.5.4:
+tar@^6.1.15, tar@^7.5.11:
   version "7.5.16"
   resolved "https://registry.yarnpkg.com/tar/-/tar-7.5.16.tgz#f11e063afed4554f758049d082909e37d6b53ced"
   integrity sha512-56adEpPMouktRlBLXiaYFFzZ/3+JXa8P9n7WbR+ibIjtviN55mEaOkiysCnPnWm+7kkui1Dn8J9l+g6zV8731w==
