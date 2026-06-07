@@ -47,15 +47,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -71,8 +62,6 @@ jobs:
           db-username: postgres
           db-password: postgres
           db-database: ${{ env.SAMPLE_CAMPUS_BOOTSTRAP_DB }}
-          redis-host: 127.0.0.1
-          redis-port: '6379'
 
       - name: Upload JUnit report
         if: always()
