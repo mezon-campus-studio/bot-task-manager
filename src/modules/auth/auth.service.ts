@@ -1,4 +1,4 @@
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
@@ -98,9 +98,8 @@ export class AuthService {
 
   async getOauthUrl(): Promise<string> {
     const oauthConfig = this.appConfigService.oauthConfig;
-    const state = randomUUID();
+    const state = randomBytes(16).toString('hex');
 
-    // Store state in cache for CSRF validation
     await this.cacheManager.set(
       `${this.OAUTH_STATE_PREFIX}${state}`,
       true,
@@ -119,7 +118,6 @@ export class AuthService {
   }
 
   async handleOAuthExchange(code: string, state: string): Promise<any> {
-    // Validate OAuth state to prevent CSRF
     const stateKey = `${this.OAUTH_STATE_PREFIX}${state}`;
     const storedState = await this.cacheManager.get(stateKey);
 
@@ -129,7 +127,6 @@ export class AuthService {
       );
     }
 
-    // Delete state immediately to prevent replay attacks
     await this.cacheManager.del(stateKey);
 
     const tokenData = await this.exchangeCode(code, state);
@@ -205,9 +202,6 @@ export class AuthService {
     return this.userService.findById(userId);
   }
 
-  /**
-   * Extract JWT payload without verification (for logout)
-   */
   decodeToken(token: string): any {
     try {
       return this.jwtService.decode(token);
@@ -217,9 +211,6 @@ export class AuthService {
     }
   }
 
-  /**
-   * Get token expiration timestamp
-   */
   getTokenExpiration(token: string): Date {
     const payload = this.decodeToken(token);
     if (!payload.exp) {
