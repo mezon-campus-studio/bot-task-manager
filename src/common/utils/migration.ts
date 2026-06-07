@@ -422,11 +422,10 @@ export async function addValuesToEnumInMigration(
   );
 
   const newValues = [...new Set(existingValues.concat(values))];
-  const valueParameters = newValues.map((_, i) => `$${i + 1}`).join(', ');
+  const enumValuesString = newValues.map((val) => `'${val}'`).join(', ');
 
   await queryRunner.query(
-    `CREATE TYPE "public"."${enumName}" AS ENUM(${valueParameters})`,
-    newValues,
+    `CREATE TYPE "public"."${enumName}" AS ENUM(${enumValuesString})`,
   );
 }
 

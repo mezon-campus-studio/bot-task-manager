@@ -5,12 +5,14 @@ import {
   Inject,
   Injectable,
   Logger,
+  UnauthorizedException,
   forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Cache } from 'cache-manager';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import UserEntity from '@src/modules/user/user.entity';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 import { UserService } from '../user/user.service';
 
 export interface ExchangeCodeData {
@@ -40,6 +42,7 @@ export class AuthService {
     private userService: UserService,
     private jwtService: JwtService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async exchangeCode(code: string, state: string): Promise<ExchangeCodeData> {
@@ -153,8 +156,20 @@ export class AuthService {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.appConfigService.jwtConfig.refreshSecret,
       });
+
+      if (payload.jti) {
+        const isBlacklisted =
+          await this.tokenBlacklistService.isTokenBlacklisted(payload.jti);
+        if (isBlacklisted) {
+          throw new UnauthorizedException('Refresh token has been revoked');
+        }
+      }
+
       return this.signToken(payload.sub, payload.email);
     } catch (e) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
       throw new BadRequestException('Invalid refresh token');
     }
   }

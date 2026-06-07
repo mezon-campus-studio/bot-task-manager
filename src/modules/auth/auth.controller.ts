@@ -60,7 +60,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Request() req) {
+  async logout(@Request() req, @Body() body: RefreshTokenDto) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new UnauthorizedException('No valid authorization token');
@@ -79,8 +79,28 @@ export class AuthController {
       payload.jti,
       expiresAt,
       payload.sub,
-      'User logout',
+      'User logout - Access Token',
     );
+
+    if (body.refresh_token) {
+      try {
+        const refreshPayload = this.authService.decodeToken(body.refresh_token);
+        const refreshExpiresAt = this.authService.getTokenExpiration(
+          body.refresh_token,
+        );
+
+        if (refreshPayload && refreshPayload.jti) {
+          await this.tokenBlacklistService.blacklistToken(
+            refreshPayload.jti,
+            refreshExpiresAt,
+            refreshPayload.sub,
+            'User logout - Refresh Token',
+          );
+        }
+      } catch (error) {
+        throw new UnauthorizedException('Invalid refresh token provided');
+      }
+    }
 
     return { success: true, message: 'Logged out successfully' };
   }
