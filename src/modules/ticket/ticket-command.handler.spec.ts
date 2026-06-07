@@ -1,6 +1,11 @@
 import { UserRole } from '#src/common/enums/index.js';
 import { TicketCommandHandler } from './ticket-command.handler';
 
+const mockRateLimiter = {
+  isAllowed: jest.fn().mockReturnValue(true),
+  shouldNotifyLimitExceeded: jest.fn().mockReturnValue(false),
+};
+
 describe(TicketCommandHandler.name, () => {
   function expectReplyText(message: { reply: jest.Mock }, text: string): void {
     expect(message.reply).toHaveBeenCalledWith(
@@ -66,6 +71,7 @@ describe(TicketCommandHandler.name, () => {
         ticketService as never,
         projectContextService as never,
         userService as never,
+        mockRateLimiter as never,
       ),
       projectContextService,
       ticketService,

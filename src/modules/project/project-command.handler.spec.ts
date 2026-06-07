@@ -1,6 +1,11 @@
 import { UserRole } from '@src/common/enums/user.enum';
 import { ProjectCommandHandler } from './project-command.handler';
 
+const mockRateLimiter = {
+  isAllowed: jest.fn().mockReturnValue(true),
+  shouldNotifyLimitExceeded: jest.fn().mockReturnValue(false),
+};
+
 describe(ProjectCommandHandler.name, () => {
   function expectReplyText(message: { reply: jest.Mock }, text: string): void {
     expect(message.reply).toHaveBeenCalledWith(
@@ -44,6 +49,7 @@ describe(ProjectCommandHandler.name, () => {
       handler: new ProjectCommandHandler(
         projectContextService as never,
         projectService as never,
+        mockRateLimiter as never,
       ),
       projectContextService,
       projectService,

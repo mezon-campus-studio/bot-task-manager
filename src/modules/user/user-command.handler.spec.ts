@@ -1,6 +1,11 @@
 import { UserRole } from '@src/common/enums/user.enum';
 import { UserCommandHandler } from './user-command.handler';
 
+const mockRateLimiter = {
+  isAllowed: jest.fn().mockReturnValue(true),
+  shouldNotifyLimitExceeded: jest.fn().mockReturnValue(false),
+};
+
 describe(UserCommandHandler.name, () => {
   function expectReplyText(message: { reply: jest.Mock }, text: string): void {
     expect(message.reply).toHaveBeenCalledWith(
@@ -35,7 +40,10 @@ describe(UserCommandHandler.name, () => {
     };
 
     return {
-      handler: new UserCommandHandler(userService as never),
+      handler: new UserCommandHandler(
+        userService as never,
+        mockRateLimiter as never,
+      ),
       userService,
     };
   }
