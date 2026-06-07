@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -31,6 +32,7 @@ export class RoleCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const senderId = message.senderId;
     if (!senderId) {
       await this.reply(message, 'Cannot resolve command sender.');
@@ -276,7 +278,7 @@ export class RoleCommandHandler {
       message,
       [
         `🗑️ Are you sure you want to delete role **#${role.id}: ${role.name}**?`,
-        `Run: \`*role confirm delete ${role.id}\` to complete the deletion.`,
+        `Run: *role confirm delete ${role.id} to complete the deletion.`,
       ].join('\n'),
     );
   }

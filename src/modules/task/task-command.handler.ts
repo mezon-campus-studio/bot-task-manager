@@ -1,5 +1,6 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '#src/common/enums/user.enum.js';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import { buildPaginationFooter } from '@src/common/utils/pagination.util';
 import {
@@ -33,6 +34,7 @@ export class TaskCommandHandler {
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
 
@@ -89,15 +91,15 @@ export class TaskCommandHandler {
               `┌─────────────────────────────`,
               `│ 🧩 **Task Commands**`,
               `├─────────────────────────────`,
-              `│ \`*task list [--page N] [--status <s>] [--q <kw>]\`  – List tasks`,
-              `│ \`*task create <title> [--desc <description>]\`       – Create a task`,
-              `│ \`*task detail <id>\`                                 – View task detail`,
-              `│ \`*task status <id> <status>\`                        – Update status`,
-              `│ \`*task assign <id> <userId|@username>\`              – Assign task`,
-              `│ \`*task delete <id>\`                                 – Prepare deletion`,
-              `│ \`*task confirm delete <id>\`                         – Confirm deletion`,
+              `│ *task list [--page N] [--status <s>] [--q <kw>]  – List tasks`,
+              `│ *task create <title> [--desc <description>]       – Create a task`,
+              `│ *task detail <id>                                 – View task detail`,
+              `│ *task status <id> <status>                        – Update status`,
+              `│ *task assign <id> <userId|@username>              – Assign task`,
+              `│ *task delete <id>                                 – Prepare deletion`,
+              `│ *task confirm delete <id>                         – Confirm deletion`,
               `├─────────────────────────────`,
-              `│ Statuses: \`todo | in_progress | done | cancelled\``,
+              `│ Statuses: todo | in_progress | done | cancelled`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -164,7 +166,7 @@ export class TaskCommandHandler {
 
     if (!tasks.length) {
       lines.push(`│ ℹ️  No tasks found.`);
-      lines.push(`│ Use \`*task create <title>\` to create one.`);
+      lines.push(`│ Use *task create <title> to create one.`);
     } else {
       const STATUS_ICON: Record<string, string> = {
         [TaskStatus.TODO]: '⬜',
@@ -205,7 +207,7 @@ export class TaskCommandHandler {
 
     lines.push(`├─────────────────────────────`);
     lines.push(`│ ${buildPaginationFooter(meta, paginationCmd)}`);
-    lines.push(`│ 💡 \`*task detail <id>\` to view details`);
+    lines.push(`│ 💡 *task detail <id> to view details`);
     lines.push(`└─────────────────────────────`);
 
     await this.reply(message, lines.join('\n'));
@@ -225,9 +227,9 @@ export class TaskCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*task create <title> [--desc <description>]\``,
-          `│ Example: \`*task create Fix login bug --desc Page crashes on submit\``,
-          `│ \`*task create <title> [--desc <description>]\`  – Create a task`,
+          `│ Usage: *task create <title> [--desc <description>]`,
+          `│ Example: *task create Fix login bug --desc Page crashes on submit`,
+          `│ *task create <title> [--desc <description>]  – Create a task`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -252,7 +254,7 @@ export class TaskCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Title is required**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*task create <title> [--desc <description>]\``,
+          `│ Usage: *task create <title> [--desc <description>]`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -286,7 +288,7 @@ export class TaskCommandHandler {
           ? `│ 📄  Desc     : ${task.description}`
           : `│ 📄  Desc     : —`,
         `├─────────────────────────────`,
-        `│ 💡 \`*task assign ${task.id} @user\` to assign`,
+        `│ 💡 *task assign ${task.id} @user to assign`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -356,7 +358,7 @@ export class TaskCommandHandler {
     lines.push(`│ 🔄  Updated   : ${this.formatDate(task.updatedAt)}`);
     lines.push(`├─────────────────────────────`);
     lines.push(
-      `│ 💡 \`*task status ${task.id} <todo|in_progress|done|cancelled>\``,
+      `│ 💡 *task status ${task.id} <todo|in_progress|done|cancelled>`,
     );
     lines.push(`└─────────────────────────────`);
 
@@ -378,9 +380,9 @@ export class TaskCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Invalid arguments**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*task status <id> <status>\``,
-          `│ Statuses: \`todo\` → \`in_progress\` → \`done\``,
-          `│           \`todo\` or \`in_progress\` → \`cancelled\``,
+          `│ Usage: *task status <id> <status>`,
+          `│ Statuses: todo → in_progress → done`,
+          `│           todo or in_progress → cancelled`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -458,8 +460,8 @@ export class TaskCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*task assign <id> <userId|@username>\``,
-          `│ Example: \`*task assign 12 @alice\``,
+          `│ Usage: *task assign <id> <userId|@username>`,
+          `│ Example: *task assign 12 @alice`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -517,7 +519,7 @@ export class TaskCommandHandler {
         `├─────────────────────────────`,
         `│ 🆔  Task    : #${task.id} ${task.title}`,
         `│ 👤  Assignee: ${targetUser.name ?? targetUser.mezonId}`,
-        `│ 🪪  Mezon ID: \`${targetUser.mezonId}\``,
+        `│ 🪪  Mezon ID: ${targetUser.mezonId}`,
         `│ 📁  Project : ${context.project.name}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -575,7 +577,7 @@ export class TaskCommandHandler {
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
         `│ Run to confirm:`,
-        `│ \`*task confirm delete ${existingTask.id}\``,
+        `│ *task confirm delete ${existingTask.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
     );

@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -40,6 +41,7 @@ export class UserCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
 
@@ -99,13 +101,13 @@ export class UserCommandHandler {
               `┌─────────────────────────────`,
               `│ 👤 **User Commands**`,
               `├─────────────────────────────`,
-              `│ \`*user me\`                                       – Show your profile`,
-              `│ \`*user list [--page <number>]\`                   – List all users`,
-              `│ \`*user info <@username|userId>\`                  – View user details`,
-              `│ \`*user search <@username|userId>\`                – Search for a user`,
-              `│ \`*user create @username\`                         – Add a user from clan mention`,
-              `│ \`*user delete <@username|userId>\`                – Prepare deletion`,
-              `│ \`*user confirm delete <@username|userId>\`        – Confirm deletion`,
+              `│ *user me                                       – Show your profile`,
+              `│ *user list [--page <number>]                   – List all users`,
+              `│ *user info <@username|userId>                  – View user details`,
+              `│ *user search <@username|userId>                – Search for a user`,
+              `│ *user create @username                         – Add a user from clan mention`,
+              `│ *user delete <@username|userId>                – Prepare deletion`,
+              `│ *user confirm delete <@username|userId>        – Confirm deletion`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -193,7 +195,7 @@ export class UserCommandHandler {
         `│ 📧  Email     : ${user.email ?? '—'}`,
         `│ ${roleIcon}  Role      : ${roleLabel}`,
         `│ ${statusIcon}  Status    : ${this.getStatusLabel(user.status)}`,
-        `│ 🪪  Mezon ID  : \`${user.mezonId}\``,
+        `│ 🪪  Mezon ID  : ${user.mezonId}`,
         ...(user.currentProjectId != null
           ? [`│ 📁  Project   : #${user.currentProjectId}`]
           : []),
@@ -244,7 +246,7 @@ export class UserCommandHandler {
         `│ 📛  Name      : ${user.name ?? '—'}`,
         `│ ${roleIcon}  Role      : ${roleLabel}`,
         `│ ${statusIcon}  Status    : ${this.getStatusLabel(user.status)}`,
-        `│ 🪪  Mezon ID  : \`${user.mezonId}\``,
+        `│ 🪪  Mezon ID  : ${user.mezonId}`,
         `│ 📅  Joined    : ${this.formatDate(user.createdAt)}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -461,7 +463,7 @@ export class UserCommandHandler {
       for (const u of group) {
         const statusIcon =
           u.status === 'active' ? '🟢' : u.status === 'inactive' ? '🟡' : '🔴';
-        lines.push(`│   ${statusIcon} ${u.name ?? '—'}  \`${u.mezonId}\``);
+        lines.push(`│   ${statusIcon} ${u.name ?? '—'}  ${u.mezonId}`);
       }
       lines.push(`│`);
     }
@@ -504,7 +506,7 @@ export class UserCommandHandler {
       message,
       [
         `🗑️ Are you sure you want to delete user **${user.name ?? user.mezonId}**?`,
-        `Run: \`*user confirm delete ${identifier}\` to complete the deletion.`,
+        `Run: *user confirm delete ${identifier} to complete the deletion.`,
       ].join('\n'),
     );
   }

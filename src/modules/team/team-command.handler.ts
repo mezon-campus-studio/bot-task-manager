@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -45,6 +46,7 @@ export class TeamCommandHandler {
     @Context() ctx: NezonCommandContext,
     @AutoContext('message') message: ManagedMessage,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
     const dbUser = (ctx as any).dbUser;
@@ -102,13 +104,13 @@ export class TeamCommandHandler {
               `┌─────────────────────────────`,
               `│ 🏷️ **Team Commands**`,
               `├─────────────────────────────`,
-              `│ \`*team list [page]\`                              – List all teams in current project`,
-              `│ \`*team create <slug> <name> [@leader]\`           – Create a new team`,
-              `│ \`*team detail <teamId|slug>\`                     – View team detail`,
-              `│ \`*team delete <teamId|slug>\`                     – Prepare deletion`,
-              `│ \`*team confirm delete <teamId|slug>\`             – Confirm deletion`,
-              `│ \`*team restore <slug>\`                           – Restore a soft-deleted team`,
-              `│ \`*team default <teamId|slug>\`                    – Set default team for project`,
+              `│ *team list [page]                              – List all teams in current project`,
+              `│ *team create <slug> <name> [@leader]           – Create a new team`,
+              `│ *team detail <teamId|slug>                     – View team detail`,
+              `│ *team delete <teamId|slug>                     – Prepare deletion`,
+              `│ *team confirm delete <teamId|slug>             – Confirm deletion`,
+              `│ *team restore <slug>                           – Restore a soft-deleted team`,
+              `│ *team default <teamId|slug>                    – Set default team for project`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -149,10 +151,10 @@ export class TeamCommandHandler {
           `┌─────────────────────────────`,
           `│ 🏷️ **Team List**`,
           `├─────────────────────────────`,
-          `│ 📁 Project : ${context.project.name} (\`${context.project.slug}\`)`,
+          `│ 📁 Project : ${context.project.name} (${context.project.slug})`,
           `├─────────────────────────────`,
           `│ ℹ️  No teams found in this project.`,
-          `│ Use \`*team create <slug> <name>\` to create one.`,
+          `│ Use *team create <slug> <name> to create one.`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -165,14 +167,14 @@ export class TeamCommandHandler {
       `┌─────────────────────────────`,
       `│ 🏷️ **Team List**`,
       `├─────────────────────────────`,
-      `│ 📁 Project : ${context.project.name} (\`${context.project.slug}\`)`,
+      `│ 📁 Project : ${context.project.name} (${context.project.slug})`,
       `├─────────────────────────────`,
     ];
 
     for (const t of pageTeams) {
       const defaultTag = t.isDefault ? ' ⭐' : '';
       lines.push(`│ [#${t.id}]${defaultTag} **${t.name}**`);
-      lines.push(`│      Slug   : \`${t.slug}\``);
+      lines.push(`│      Slug   : ${t.slug}`);
       if (t.leader?.name) {
         lines.push(`│      Leader : ${t.leader.name}`);
       }
@@ -180,7 +182,7 @@ export class TeamCommandHandler {
 
     lines.push(`├─────────────────────────────`);
     lines.push(`│ ${buildPaginationFooter(meta, '*team list')}`);
-    lines.push(`│ 💡 \`*team detail <id|slug>\` to view details`);
+    lines.push(`│ 💡 *team detail <id|slug> to view details`);
     lines.push(`└─────────────────────────────`);
 
     await this.reply(message, lines.join('\n'));
@@ -202,8 +204,8 @@ export class TeamCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*team create <slug> <name> [@leader]\``,
-          `│ Example: \`*team create backend Backend Team @alice\``,
+          `│ Usage: *team create <slug> <name> [@leader]`,
+          `│ Example: *team create backend Backend Team @alice`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -272,12 +274,12 @@ export class TeamCommandHandler {
         `│ ✅ **Team Created**`,
         `├─────────────────────────────`,
         `│ 📛  Name    : ${team.name}`,
-        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🔖  Slug    : ${team.slug}`,
         `│ 🆔  ID      : #${team.id}`,
         `│ 👤  Leader  : ${leaderName}`,
-        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📁  Project : ${context.project.name} (${context.project.slug})`,
         `├─────────────────────────────`,
-        `│ 💡 \`*team detail ${team.slug}\` to view details`,
+        `│ 💡 *team detail ${team.slug} to view details`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -323,14 +325,14 @@ export class TeamCommandHandler {
         `├─────────────────────────────`,
         `│ 🆔  ID        : #${team.id}`,
         `│ 📛  Name      : ${team.name}`,
-        `│ 🔖  Slug      : \`${team.slug}\``,
+        `│ 🔖  Slug      : ${team.slug}`,
         `│ ⭐  Default   : ${defaultTag}`,
         `│ 👤  Leader    : ${team.leader?.name ?? '—'}`,
-        `│ 📁  Project   : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📁  Project   : ${context.project.name} (${context.project.slug})`,
         `│ 📅  Created   : ${this.formatDate(team.createdAt)}`,
         `│ 🔄  Updated   : ${this.formatDate(team.updatedAt)}`,
         `├─────────────────────────────`,
-        `│ 💡 \`*team delete ${team.slug}\` to remove this team`,
+        `│ 💡 *team delete ${team.slug} to remove this team`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -383,13 +385,13 @@ export class TeamCommandHandler {
         `│ 🗑️ **Confirm Delete Team**`,
         `├─────────────────────────────`,
         `│ 📛  Name    : ${team.name}`,
-        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🔖  Slug    : ${team.slug}`,
         `│ 🆔  ID      : #${team.id}`,
-        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📁  Project : ${context.project.name} (${context.project.slug})`,
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
         `│ Run to confirm:`,
-        `│ \`*team confirm delete ${team.id}\``,
+        `│ *team confirm delete ${team.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -445,9 +447,9 @@ export class TeamCommandHandler {
         `│ 🗑️ **Team Deleted**`,
         `├─────────────────────────────`,
         `│ 📛  Name    : ${team.name}`,
-        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🔖  Slug    : ${team.slug}`,
         `│ 🆔  ID      : #${team.id}`,
-        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📁  Project : ${context.project.name} (${context.project.slug})`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -492,11 +494,11 @@ export class TeamCommandHandler {
         `│ ✅ **Team Restored**`,
         `├─────────────────────────────`,
         `│ 📛  Name    : ${restoredTeam.name}`,
-        `│ 🔖  Slug    : \`${restoredTeam.slug}\``,
+        `│ 🔖  Slug    : ${restoredTeam.slug}`,
         `│ 🆔  ID      : #${restoredTeam.id}`,
-        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📁  Project : ${context.project.name} (${context.project.slug})`,
         `├─────────────────────────────`,
-        `│ 💡 \`*team detail ${restoredTeam.slug}\` to view details`,
+        `│ 💡 *team detail ${restoredTeam.slug} to view details`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -610,9 +612,9 @@ export class TeamCommandHandler {
         `│ ⭐ **Default Team Updated**`,
         `├─────────────────────────────`,
         `│ 📛  Name    : ${team.name}`,
-        `│ 🔖  Slug    : \`${team.slug}\``,
+        `│ 🔖  Slug    : ${team.slug}`,
         `│ 🆔  ID      : #${team.id}`,
-        `│ 📁  Project : ${context.project.name} (\`${context.project.slug}\`)`,
+        `│ 📁  Project : ${context.project.name} (${context.project.slug})`,
         `└─────────────────────────────`,
       ].join('\n'),
     );

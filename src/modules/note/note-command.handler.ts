@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -35,6 +36,7 @@ export class NoteCommandHandler {
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
 
@@ -99,16 +101,16 @@ export class NoteCommandHandler {
               `┌─────────────────────────────`,
               `│ 📝 **Note Commands**`,
               `├─────────────────────────────`,
-              `│ \`*note list [type] [resourceId] [--page N]\`           – List notes`,
-              `│ \`*note create <type> <resourceId> <content...>\`   – Create a note`,
-              `│ \`*note detail <id>\`                               – View note detail`,
-              `│ \`*note update <id> <content...>\`                  – Update your note`,
-              `│ \`*note delete <id>\`                               – Prepare deletion`,
-              `│ \`*note confirm delete <id>\`                       – Confirm deletion`,
-              `│ \`*note pin <id>\` / \`*note unpin <id>\`             – Pin / Unpin`,
-              `│ \`*note share <id>\` / \`*note unshare <id>\`         – Share / Make private`,
+              `│ *note list [type] [resourceId] [--page N]           – List notes`,
+              `│ *note create <type> <resourceId> <content...>   – Create a note`,
+              `│ *note detail <id>                               – View note detail`,
+              `│ *note update <id> <content...>                  – Update your note`,
+              `│ *note delete <id>                               – Prepare deletion`,
+              `│ *note confirm delete <id>                       – Confirm deletion`,
+              `│ *note pin <id> / *note unpin <id>             – Pin / Unpin`,
+              `│ *note share <id> / *note unshare <id>         – Share / Make private`,
               `├─────────────────────────────`,
-              `│ Types: \`USER | PROJECT | TEAM | TASK | TICKET | EVENT\``,
+              `│ Types: USER | PROJECT | TEAM | TASK | TICKET | EVENT`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -173,7 +175,7 @@ export class NoteCommandHandler {
           `│ 🔎 Filter   : ${filterLabel}`,
           `├─────────────────────────────`,
           `│ ℹ️  No notes found.`,
-          `│ Use \`*note create <type> <resourceId> <content>\` to create one.`,
+          `│ Use *note create <type> <resourceId> <content> to create one.`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -252,7 +254,7 @@ export class NoteCommandHandler {
     lines.push(
       `│ ${buildPaginationFooter(meta, isFiltered ? `*note list ${args[1]} ${resourceId}` : '*note list')}`,
     );
-    lines.push(`│ 💡 \`*note detail <id>\` to view full content`);
+    lines.push(`│ 💡 *note detail <id> to view full content`);
     lines.push(`└─────────────────────────────`);
 
     await this.reply(message, lines.join('\n'));
@@ -274,9 +276,9 @@ export class NoteCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*note create <type> <resourceId> <content...>\``,
-          `│ Types : \`USER | PROJECT | TEAM | TASK | TICKET | EVENT\``,
-          `│ Example: \`*note create TASK 12 This needs more testing\``,
+          `│ Usage: *note create <type> <resourceId> <content...>`,
+          `│ Types : USER | PROJECT | TEAM | TASK | TICKET | EVENT`,
+          `│ Example: *note create TASK 12 This needs more testing`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -311,7 +313,7 @@ export class NoteCommandHandler {
         `│ 📁  Project  : ${context.project.name}`,
         `│ 📄  Content  : ${this.truncate(note.content, 80)}`,
         `├─────────────────────────────`,
-        `│ 💡 \`*note pin ${note.id}\` to pin  •  \`*note share ${note.id}\` to share`,
+        `│ 💡 *note pin ${note.id} to pin  •  *note share ${note.id} to share`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -378,7 +380,7 @@ export class NoteCommandHandler {
         `│ 📄 **Content:**`,
         `│ ${note.content}`,
         `├─────────────────────────────`,
-        `│ 💡 \`*note update ${note.id} <content>\` to edit`,
+        `│ 💡 *note update ${note.id} <content> to edit`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -414,8 +416,8 @@ export class NoteCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*note update <id> <content...>\``,
-          `│ Example: \`*note update 5 Updated content here\``,
+          `│ Usage: *note update <id> <content...>`,
+          `│ Example: *note update 5 Updated content here`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -480,7 +482,7 @@ export class NoteCommandHandler {
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
         `│ Run to confirm:`,
-        `│ \`*note confirm delete ${note.id}\``,
+        `│ *note confirm delete ${note.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
     );

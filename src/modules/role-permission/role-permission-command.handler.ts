@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -33,6 +34,7 @@ export class RolePermissionCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const senderId = message.senderId;
     if (!senderId) {
       await this.reply(message, 'Cannot resolve command sender.');
