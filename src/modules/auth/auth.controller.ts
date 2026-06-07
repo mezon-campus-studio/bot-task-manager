@@ -2,60 +2,106 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
   Request,
-  Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
+import { ExchangeTokenDto } from './dtos/exchange-token.dto';
+import { RefreshTokenDto } from './dtos/refresh-token.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 
 @Controller('auth')
 @ApiTags('Authentication')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
+  ) {}
 
   @Get('oauth/url')
   async getOAuthUrl() {
-    const oauthUrl = this.authService.getOauthUrl();
+    const oauthUrl = await this.authService.getOauthUrl();
     return { url: oauthUrl };
   }
 
+  @Throttle({ global: { limit: 5, ttl: 60000 } })
   @Post('exchange')
-  async exchange(@Body() body: { code: string; state: string }) {
+  async exchange(@Body() body: ExchangeTokenDto) {
     return this.authService.handleOAuthExchange(body.code, body.state);
   }
 
+  @Throttle({ global: { limit: 10, ttl: 60000 } })
   @Post('refresh')
-  async refresh(
-    @Body() body: { refresh_token: string },
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    try {
-      const tokens = await this.authService.handleRefreshToken(
-        body.refresh_token,
-      );
-
-      return {
-        tokens,
-      };
-    } catch (error) {
-      res.status(401);
-      return { success: false, message: error.message };
-    }
+  async refresh(@Body() body: RefreshTokenDto) {
+    return this.authService.handleRefreshToken(body.refresh_token);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   async getProfile(@Request() req) {
-    return req.user;
+    const user = req.user;
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      role: user.role,
+      status: user.status,
+    };
   }
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout() {
-    return { message: 'Logged out successfully' };
+  @HttpCode(HttpStatus.OK)
+  async logout(@Request() req, @Body() body: RefreshTokenDto) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw new UnauthorizedException('No valid authorization token');
+    }
+
+    const token = authHeader.substring(7);
+
+    const payload = this.authService.decodeToken(token);
+    const expiresAt = this.authService.getTokenExpiration(token);
+
+    if (!payload.jti) {
+      throw new UnauthorizedException('Token missing required claims');
+    }
+
+    await this.tokenBlacklistService.blacklistToken(
+      payload.jti,
+      expiresAt,
+      payload.sub,
+      'User logout - Access Token',
+    );
+
+    if (body.refresh_token) {
+      try {
+        const refreshPayload = this.authService.decodeToken(body.refresh_token);
+        const refreshExpiresAt = this.authService.getTokenExpiration(
+          body.refresh_token,
+        );
+
+        if (refreshPayload && refreshPayload.jti) {
+          await this.tokenBlacklistService.blacklistToken(
+            refreshPayload.jti,
+            refreshExpiresAt,
+            refreshPayload.sub,
+            'User logout - Refresh Token',
+          );
+        }
+      } catch (error) {
+        throw new UnauthorizedException('Invalid refresh token provided');
+      }
+    }
+
+    return { success: true, message: 'Logged out successfully' };
   }
 }

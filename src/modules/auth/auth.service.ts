@@ -1,13 +1,18 @@
+import { randomUUID } from 'crypto';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
   BadRequestException,
   Inject,
   Injectable,
   Logger,
+  UnauthorizedException,
   forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Cache } from 'cache-manager';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import UserEntity from '@src/modules/user/user.entity';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 import { UserService } from '../user/user.service';
 
 export interface ExchangeCodeData {
@@ -28,11 +33,16 @@ export interface UserInfoData {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
+  private readonly OAUTH_STATE_PREFIX = 'oauth_state:';
+  private readonly OAUTH_STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
   constructor(
     private appConfigService: AppConfigService,
     @Inject(forwardRef(() => UserService))
     private userService: UserService,
     private jwtService: JwtService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly tokenBlacklistService: TokenBlacklistService,
   ) {}
 
   async exchangeCode(code: string, state: string): Promise<ExchangeCodeData> {
@@ -86,20 +96,42 @@ export class AuthService {
     return data;
   }
 
-  getOauthUrl(): string {
+  async getOauthUrl(): Promise<string> {
     const oauthConfig = this.appConfigService.oauthConfig;
+    const state = randomUUID();
+
+    // Store state in cache for CSRF validation
+    await this.cacheManager.set(
+      `${this.OAUTH_STATE_PREFIX}${state}`,
+      true,
+      this.OAUTH_STATE_TTL_MS,
+    );
+
     const params = new URLSearchParams({
       client_id: oauthConfig.clientId,
       redirect_uri: oauthConfig.redirectUri,
       response_type: 'code',
       scope: 'openid offline',
-      state: crypto.randomUUID().substring(0, 10),
+      state,
     });
 
     return `${oauthConfig.baseUri}/oauth2/auth?${params.toString()}`;
   }
 
   async handleOAuthExchange(code: string, state: string): Promise<any> {
+    // Validate OAuth state to prevent CSRF
+    const stateKey = `${this.OAUTH_STATE_PREFIX}${state}`;
+    const storedState = await this.cacheManager.get(stateKey);
+
+    if (!storedState) {
+      throw new BadRequestException(
+        'Invalid or expired OAuth state. Please try again.',
+      );
+    }
+
+    // Delete state immediately to prevent replay attacks
+    await this.cacheManager.del(stateKey);
+
     const tokenData = await this.exchangeCode(code, state);
     const userInfo = await this.userInfo(tokenData.access_token);
 
@@ -124,23 +156,43 @@ export class AuthService {
       const payload = await this.jwtService.verifyAsync(refreshToken, {
         secret: this.appConfigService.jwtConfig.refreshSecret,
       });
+
+      if (payload.jti) {
+        const isBlacklisted =
+          await this.tokenBlacklistService.isTokenBlacklisted(payload.jti);
+        if (isBlacklisted) {
+          throw new UnauthorizedException('Refresh token has been revoked');
+        }
+      }
+
       return this.signToken(payload.sub, payload.email);
     } catch (e) {
+      if (e instanceof UnauthorizedException) {
+        throw e;
+      }
       throw new BadRequestException('Invalid refresh token');
     }
   }
 
   async signToken(userId: string, email: string | null) {
-    const payload = { sub: userId, email };
+    const accessJti = randomUUID();
+    const refreshJti = randomUUID();
+
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.signAsync(payload, {
-        expiresIn: '1h',
-        secret: this.appConfigService.jwtConfig.secret,
-      }),
-      this.jwtService.signAsync(payload, {
-        expiresIn: '7d',
-        secret: this.appConfigService.jwtConfig.refreshSecret,
-      }),
+      this.jwtService.signAsync(
+        { sub: userId, email, jti: accessJti },
+        {
+          expiresIn: '1h',
+          secret: this.appConfigService.jwtConfig.secret,
+        },
+      ),
+      this.jwtService.signAsync(
+        { sub: userId, email, jti: refreshJti },
+        {
+          expiresIn: '7d',
+          secret: this.appConfigService.jwtConfig.refreshSecret,
+        },
+      ),
     ]);
 
     return {
@@ -151,5 +203,28 @@ export class AuthService {
 
   async validateUser(userId: string): Promise<UserEntity | null> {
     return this.userService.findById(userId);
+  }
+
+  /**
+   * Extract JWT payload without verification (for logout)
+   */
+  decodeToken(token: string): any {
+    try {
+      return this.jwtService.decode(token);
+    } catch (error) {
+      this.logger.error('Failed to decode token:', error);
+      throw new BadRequestException('Invalid token format');
+    }
+  }
+
+  /**
+   * Get token expiration timestamp
+   */
+  getTokenExpiration(token: string): Date {
+    const payload = this.decodeToken(token);
+    if (!payload.exp) {
+      throw new BadRequestException('Token has no expiration');
+    }
+    return new Date(payload.exp * 1000);
   }
 }

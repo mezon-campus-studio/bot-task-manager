@@ -2,6 +2,7 @@ import { Logger, Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule as NestScheduleModule } from '@nestjs/schedule';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { MezonClient } from 'mezon-sdk';
 import { DatabaseModule } from '@src/common/database/database.module';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
@@ -25,6 +26,13 @@ import { UserModule } from './modules/user/user.module';
 import { UserRoleAssignmentModule } from './modules/user-role-assignment/user-role-assignment.module';
 @Module({
   imports: [
+    ThrottlerModule.forRoot([
+      {
+        name: 'global',
+        ttl: 60000,
+        limit: 30,
+      },
+    ]),
     SharedModule,
     DatabaseModule,
     NezonModule.forRootAsync({
@@ -50,6 +58,10 @@ import { UserRoleAssignmentModule } from './modules/user-role-assignment/user-ro
   ],
   controllers: [HealthController],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: NezonAuthGuard,

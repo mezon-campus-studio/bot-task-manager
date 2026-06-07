@@ -7,6 +7,7 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { NezonAuthGuard } from './guards/nezon-auth.guard';
 import { NezonRolesGuard } from './guards/nezon-roles.guard';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -15,18 +16,24 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule.registerAsync({
       useFactory: (appConfigService: AppConfigService) => ({
         secret: appConfigService.jwtConfig.secret,
-        signOptions: { expiresIn: '15m' },
       }),
       inject: [AppConfigService],
     }),
     forwardRef(() => UserModule),
   ],
-  providers: [AuthService, JwtStrategy, NezonAuthGuard, NezonRolesGuard],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    NezonAuthGuard,
+    NezonRolesGuard,
+    TokenBlacklistService,
+  ],
   controllers: [AuthController],
   exports: [
     AuthService,
     NezonAuthGuard,
     NezonRolesGuard,
+    TokenBlacklistService,
     forwardRef(() => UserModule),
   ],
 })

@@ -1,5 +1,6 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   Args,
   AutoContext,
@@ -19,7 +20,10 @@ import { RoleService } from './role.service';
 export class RoleCommandHandler {
   private readonly logger = new Logger(RoleCommandHandler.name);
 
-  constructor(private readonly roleService: RoleService) {}
+  constructor(
+    private readonly roleService: RoleService,
+    private rateLimiter: RateLimiterService,
+  ) {}
 
   @Command('role')
   async handleRoleCommand(
@@ -27,6 +31,25 @@ export class RoleCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    const senderId = message.senderId;
+    if (!senderId) {
+      await this.reply(message, 'Cannot resolve command sender.');
+      return;
+    }
+
+    if (!this.rateLimiter.isAllowed(senderId)) {
+      if (this.rateLimiter.shouldNotifyLimitExceeded(senderId)) {
+        this.logger.warn(
+          `Rate limit exceeded for user ${senderId} on *role command`,
+        );
+        await this.reply(
+          message,
+          '⚠️ Too many commands. Please wait before sending another command.',
+        );
+      }
+      return;
+    }
+
     const action = args[0]?.toLowerCase();
 
     try {

@@ -1,4 +1,5 @@
 import { Injectable, Logger, UseGuards } from '@nestjs/common';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   Args,
   AutoContext,
@@ -13,11 +14,30 @@ import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
 export class HelpCommandHandler {
   private readonly logger = new Logger(HelpCommandHandler.name);
 
+  constructor(private rateLimiter: RateLimiterService) {}
+
   @Command('help')
   async handleHelpCommand(
     @Args() args: string[],
     @AutoContext('message') message: ManagedMessage,
   ): Promise<void> {
+    const senderId = message.senderId;
+
+    if (senderId && !this.rateLimiter.isAllowed(senderId)) {
+      if (this.rateLimiter.shouldNotifyLimitExceeded(senderId)) {
+        this.logger.warn(
+          `Rate limit exceeded for user ${senderId} on *help command`,
+        );
+        await message.reply(
+          SmartMessage.text(
+            '⚠️ Too many commands. Please wait before sending another command.',
+          ),
+        );
+      }
+
+      return;
+    }
+
     const category = args[0]?.toLowerCase();
 
     try {

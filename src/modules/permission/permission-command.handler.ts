@@ -1,5 +1,6 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   Args,
   AutoContext,
@@ -18,7 +19,10 @@ import { PermissionService } from './permission.service';
 export class PermissionCommandHandler {
   private readonly logger = new Logger(PermissionCommandHandler.name);
 
-  constructor(private readonly permissionService: PermissionService) {}
+  constructor(
+    private readonly permissionService: PermissionService,
+    private rateLimiter: RateLimiterService,
+  ) {}
 
   @Command('permission')
   async handlePermissionCommand(
@@ -26,6 +30,25 @@ export class PermissionCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    const senderId = message.senderId;
+    if (!senderId) {
+      await this.reply(message, 'Cannot resolve command sender.');
+      return;
+    }
+
+    if (!this.rateLimiter.isAllowed(senderId)) {
+      if (this.rateLimiter.shouldNotifyLimitExceeded(senderId)) {
+        this.logger.warn(
+          `Rate limit exceeded for user ${senderId} on *permission command`,
+        );
+        await this.reply(
+          message,
+          '⚠️ Too many commands. Please wait before sending another command.',
+        );
+      }
+      return;
+    }
+
     const action = args[0]?.toLowerCase();
 
     try {

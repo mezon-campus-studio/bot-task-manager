@@ -1,5 +1,6 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '@src/common/enums/user.enum';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
   paginate,
@@ -25,6 +26,7 @@ export class ProjectCommandHandler {
   constructor(
     private readonly projectContextService: ProjectContextService,
     private readonly projectService: ProjectService,
+    private rateLimiter: RateLimiterService,
   ) {}
 
   @Command('project')
@@ -38,6 +40,19 @@ export class ProjectCommandHandler {
 
     if (!senderId) {
       await this.reply(message, 'Cannot resolve command sender.');
+      return;
+    }
+
+    if (!this.rateLimiter.isAllowed(senderId)) {
+      if (this.rateLimiter.shouldNotifyLimitExceeded(senderId)) {
+        this.logger.warn(
+          `Rate limit exceeded for user ${senderId} on *project command`,
+        );
+        await this.reply(
+          message,
+          '⚠️ Too many commands. Please wait before sending another command.',
+        );
+      }
       return;
     }
 

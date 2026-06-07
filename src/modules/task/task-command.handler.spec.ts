@@ -2,6 +2,11 @@ import { UserRole } from '#src/common/enums/user.enum.js';
 import { TaskStatus } from './enums';
 import { TaskCommandHandler } from './task-command.handler';
 
+const mockRateLimiter = {
+  isAllowed: jest.fn().mockReturnValue(true),
+  shouldNotifyLimitExceeded: jest.fn().mockReturnValue(false),
+};
+
 describe(TaskCommandHandler.name, () => {
   function expectReplyText(message: { reply: jest.Mock }, text: string): void {
     expect(message.reply).toHaveBeenCalledWith(
@@ -60,6 +65,7 @@ describe(TaskCommandHandler.name, () => {
         taskService as never,
         projectContextService as never,
         userService as never,
+        mockRateLimiter as never,
       ),
       projectContextService,
       taskService,
