@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -50,6 +51,7 @@ export class TicketCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() _ctx: NezonCommandContext,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
 
@@ -109,16 +111,16 @@ export class TicketCommandHandler {
               `┌─────────────────────────────`,
               `│ 🎫 **Ticket Commands**`,
               `├─────────────────────────────`,
-              `│ \`*ticket list [--page <number>]\`                 – List tickets in current project`,
-              `│ \`*ticket create <title> [--desc <description>]\`  – Create a ticket`,
-              `│ \`*ticket detail <id>\`                            – View ticket detail`,
-              `│ \`*ticket status <id> <status>\`                   – Update status`,
-              `│ \`*ticket assign <id> <userId|@username>\`         – Assign ticket to user`,
-              `│ \`*ticket resolve <id>\`                           – Mark ticket as resolved`,
-              `│ \`*ticket delete <id>\`                            – Prepare deletion`,
-              `│ \`*ticket confirm delete <id>\`                    – Confirm deletion`,
+              `│ *ticket list [--page <number>]                 – List tickets in current project`,
+              `│ *ticket create <title> [--desc <description>]  – Create a ticket`,
+              `│ *ticket detail <id>                            – View ticket detail`,
+              `│ *ticket status <id> <status>                   – Update status`,
+              `│ *ticket assign <id> <userId|@username>         – Assign ticket to user`,
+              `│ *ticket resolve <id>                           – Mark ticket as resolved`,
+              `│ *ticket delete <id>                            – Prepare deletion`,
+              `│ *ticket confirm delete <id>                    – Confirm deletion`,
               `├─────────────────────────────`,
-              `│ Statuses: \`OPEN | IN_PROGRESS | RESOLVED | CLOSED\``,
+              `│ Statuses: OPEN | IN_PROGRESS | RESOLVED | CLOSED`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -171,7 +173,7 @@ export class TicketCommandHandler {
             `│ 📁 Project : ${context.project.name}`,
             `├─────────────────────────────`,
             `│ ℹ️  No tickets found in this project.`,
-            `│ Use \`*ticket create <title>\` to create one.`,
+            `│ Use *ticket create <title> to create one.`,
             `└─────────────────────────────`,
           ].join('\n'),
         );
@@ -219,7 +221,7 @@ export class TicketCommandHandler {
 
       lines.push(`├─────────────────────────────`);
       lines.push(`│ ${buildPaginationFooter(meta, '*ticket list')}`);
-      lines.push(`│ 💡 \`*ticket detail <id>\` to view details`);
+      lines.push(`│ 💡 *ticket detail <id> to view details`);
       lines.push(`└─────────────────────────────`);
 
       await this.reply(message, lines.join('\n'));
@@ -243,9 +245,9 @@ export class TicketCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*ticket create <title> --desc <description>\``,
-          `│ Example: \`*ticket create Login bug --desc Page crashes on submit\``,
-          `│ \`*ticket create <title> [--desc <description>]\`  – Create a ticket`,
+          `│ Usage: *ticket create <title> --desc <description>`,
+          `│ Example: *ticket create Login bug --desc Page crashes on submit`,
+          `│ *ticket create <title> [--desc <description>]  – Create a ticket`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -270,7 +272,7 @@ export class TicketCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Title is required**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*ticket create <title> [--desc <description>]\``,
+          `│ Usage: *ticket create <title> [--desc <description>]`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -304,7 +306,7 @@ export class TicketCommandHandler {
           ? `│ 📄  Desc     : ${ticket.description}`
           : `│ 📄  Desc     : —`,
         `├─────────────────────────────`,
-        `│ 💡 \`*ticket assign ${ticket.id} @user\` to assign`,
+        `│ 💡 *ticket assign ${ticket.id} @user to assign`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -388,7 +390,7 @@ export class TicketCommandHandler {
           ? `│ 📄  Desc     : ${ticket.description}`
           : `│ 📄  Desc     : —`,
         `├─────────────────────────────`,
-        `│ 💡 \`*ticket status ${ticket.id} <status>\` to update`,
+        `│ 💡 *ticket status ${ticket.id} <status> to update`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -415,8 +417,8 @@ export class TicketCommandHandler {
             `┌─────────────────────────────`,
             `│ ❌ **Missing required fields**`,
             `├─────────────────────────────`,
-            `│ Usage: \`*ticket status <id> <status>\``,
-            `│ Valid : \`${validStatuses.join(' | ')}\``,
+            `│ Usage: *ticket status <id> <status>`,
+            `│ Valid : ${validStatuses.join(' | ')}`,
             `└─────────────────────────────`,
           ].join('\n'),
         );
@@ -428,9 +430,9 @@ export class TicketCommandHandler {
           message,
           [
             `┌─────────────────────────────`,
-            `│ ❌ **Unknown status:** \`${rawStatus}\``,
+            `│ ❌ **Unknown status:** ${rawStatus}`,
             `├─────────────────────────────`,
-            `│ Valid : \`${validStatuses.join(' | ')}\``,
+            `│ Valid : ${validStatuses.join(' | ')}`,
             `└─────────────────────────────`,
           ].join('\n'),
         );
@@ -524,8 +526,8 @@ export class TicketCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*ticket assign <id> @mention\``,
-          `│ Example: \`*ticket assign 12 @Bao\``,
+          `│ Usage: *ticket assign <id> @mention`,
+          `│ Example: *ticket assign 12 @Bao`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -630,7 +632,7 @@ export class TicketCommandHandler {
           `├─────────────────────────────`,
           `│ ⚠️  This action **cannot be undone**.`,
           `│ Run to confirm:`,
-          `│ \`*ticket confirm delete ${ticket.id}\``,
+          `│ *ticket confirm delete ${ticket.id}`,
           `└─────────────────────────────`,
         ].join('\n'),
       );

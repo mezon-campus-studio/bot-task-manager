@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -35,6 +36,7 @@ export class ProjectCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
 
@@ -93,13 +95,13 @@ export class ProjectCommandHandler {
               `┌─────────────────────────────`,
               `│ 📁 **Project Commands**`,
               `├─────────────────────────────`,
-              `│ \`*project list [--page N]\`                              – List all accessible projects`,
-              `│ \`*project create <slug> <name...>\`                  – Create a new project`,
-              `│ \`*project use <projectId|slug>\`                     – Select a project to work with`,
-              `│ \`*project current\`                                  – Show current selected project`,
-              `│ \`*project exit\`                                     – Exit current project`,
-              `│ \`*project delete <projectId|slug>\`                  – Prepare delete confirmation`,
-              `│ \`*project confirm delete <projectId|slug>\`          – Confirm project deletion`,
+              `│ *project list [--page N]                              – List all accessible projects`,
+              `│ *project create <slug> <name...>                  – Create a new project`,
+              `│ *project use <projectId|slug>                     – Select a project to work with`,
+              `│ *project current                                  – Show current selected project`,
+              `│ *project exit                                     – Exit current project`,
+              `│ *project delete <projectId|slug>                  – Prepare delete confirmation`,
+              `│ *project confirm delete <projectId|slug>          – Confirm project deletion`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -136,36 +138,29 @@ export class ProjectCommandHandler {
     } else {
       page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
     }
-    const [accessibleProjects, ownedProjects, allProjects] = await Promise.all([
-      this.projectService.listAccessibleProjectsForUser(dbUser.id),
-      this.projectService.findByOwnerUserId(dbUser.id),
-      this.projectService.listProjects(),
-    ]);
 
-    const ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
-    const otherProjects = allProjects.filter(
-      (p) => !accessibleProjects.some((ap) => ap.id === p.id),
-    );
+    const isAdmin = Number(dbUser.role) === UserRole.ADMIN;
 
-    type ProjectRow = {
-      project: (typeof accessibleProjects)[0];
-      section: 'yours' | 'other';
-    };
+    let accessibleProjects: any[] = [];
+    let ownedProjectIds = new Set<number>();
 
-    const allRows: ProjectRow[] = [
-      ...accessibleProjects.map((p) => ({
-        project: p,
-        section: 'yours' as const,
-      })),
-      ...otherProjects.map((p) => ({ project: p, section: 'other' as const })),
-    ];
+    if (isAdmin) {
+      accessibleProjects = await this.projectService.listProjects();
+    } else {
+      const [projects, ownedProjects] = await Promise.all([
+        this.projectService.listAccessibleProjectsForUser(dbUser.id),
+        this.projectService.findByOwnerUserId(dbUser.id),
+      ]);
+      accessibleProjects = projects;
+      ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
+    }
 
-    if (allRows.length === 0) {
-      await this.reply(message, 'ℹ️ No projects found.');
+    if (accessibleProjects.length === 0) {
+      await this.reply(message, 'ℹ️ No accessible projects found.');
       return;
     }
 
-    const { items: pageRows, meta } = paginate(allRows, page);
+    const { items: pageProjects, meta } = paginate(accessibleProjects, page);
 
     const lines: string[] = [
       `┌─────────────────────────────`,
@@ -173,31 +168,23 @@ export class ProjectCommandHandler {
       `├─────────────────────────────`,
     ];
 
-    const yoursOnPage = pageRows.filter((r) => r.section === 'yours');
-    const otherOnPage = pageRows.filter((r) => r.section === 'other');
-
-    if (yoursOnPage.length > 0) {
-      lines.push(`│ 🔓 **Your Projects**`);
-      for (const { project: p } of yoursOnPage) {
-        const ownerTag = ownedProjectIds.has(p.id) ? ' ⭐' : '';
-        lines.push(`│   [#${p.id}]${ownerTag} **${p.name}**`);
-        lines.push(`│        Slug : \`${p.slug}\``);
-        if (p.description) lines.push(`│        Desc : ${p.description}`);
-      }
+    if (isAdmin) {
+      lines.push(`│ 🌐 **All System Projects (Admin View)**`);
+    } else {
+      lines.push(`│ 🔓 **Your Accessible Projects**`);
     }
 
-    if (otherOnPage.length > 0) {
-      if (yoursOnPage.length > 0) lines.push(`│`);
-      lines.push(`│ 🌐 **Other Projects**`);
-      for (const { project: p } of otherOnPage) {
-        lines.push(`│   [#${p.id}] **${p.name}**`);
-        lines.push(`│        Slug : \`${p.slug}\``);
-      }
+    for (const p of pageProjects) {
+      const isOwner = ownedProjectIds.has(p.id) || isAdmin;
+      const ownerTag = isOwner ? ' ⭐' : '';
+      lines.push(`│   [#${p.id}]${ownerTag} **${p.name}**`);
+      lines.push(`│        Slug : ${p.slug}`);
+      if (p.description) lines.push(`│        Desc : ${p.description}`);
     }
 
     lines.push(`├─────────────────────────────`);
     lines.push(`│ ${buildPaginationFooter(meta, '*project list')}`);
-    lines.push(`│ 💡 \`*project use <slug|id>\` to select`);
+    lines.push(`│ 💡 *project use <slug|id> to select`);
     lines.push(`└─────────────────────────────`);
 
     await this.reply(message, lines.join('\n'));
@@ -234,8 +221,8 @@ export class ProjectCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*project create <slug> <name...>\``,
-          `│ Example: \`*project create my-app My Application\``,
+          `│ Usage: *project create <slug> <name...>`,
+          `│ Example: *project create my-app My Application`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -261,11 +248,11 @@ export class ProjectCommandHandler {
         `│ ✅ **Project Created**`,
         `├─────────────────────────────`,
         `│ 📛  Name  : ${project.name}`,
-        `│ 🔖  Slug  : \`${project.slug}\``,
+        `│ 🔖  Slug  : ${project.slug}`,
         `│ 🆔  ID    : #${project.id}`,
         `│ 👤  Owner : ${dbUser.name ?? dbUser.mezonId}`,
         `├─────────────────────────────`,
-        `│ 💡 Use \`*project use ${project.slug}\` to select it`,
+        `│ 💡 Use *project use ${project.slug} to select it`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -308,12 +295,12 @@ export class ProjectCommandHandler {
         `│ 🗑️ **Confirm Delete Project**`,
         `├─────────────────────────────`,
         `│ 📛  Name : ${project.name}`,
-        `│ 🔖  Slug : \`${project.slug}\``,
+        `│ 🔖  Slug : ${project.slug}`,
         `│ 🆔  ID   : #${project.id}`,
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
         `│ Run to confirm:`,
-        `│ \`*project confirm delete ${project.id}\``,
+        `│ *project confirm delete ${project.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -365,7 +352,7 @@ export class ProjectCommandHandler {
         `│ 🗑️ **Project Deleted**`,
         `├─────────────────────────────`,
         `│ 📛  Name : ${project.name}`,
-        `│ 🔖  Slug : \`${project.slug}\``,
+        `│ 🔖  Slug : ${project.slug}`,
         `│ 🆔  ID   : #${project.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -399,10 +386,10 @@ export class ProjectCommandHandler {
         `│ ✅ **Project Selected**`,
         `├─────────────────────────────`,
         `│ 📛  Name : ${context.project.name}`,
-        `│ 🔖  Slug : \`${context.project.slug}\``,
+        `│ 🔖  Slug : ${context.project.slug}`,
         `│ 🆔  ID   : #${context.project.id}`,
         `├─────────────────────────────`,
-        `│ 💡 Use \`*project exit\` to deselect`,
+        `│ 💡 Use *project exit to deselect`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -423,7 +410,7 @@ export class ProjectCommandHandler {
           `│ 📁 **Current Project**`,
           `├─────────────────────────────`,
           `│ ℹ️  No project selected.`,
-          `│ Use \`*project use <slug|id>\` to select one.`,
+          `│ Use *project use <slug|id> to select one.`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -437,10 +424,10 @@ export class ProjectCommandHandler {
         `│ 📁 **Current Project**`,
         `├─────────────────────────────`,
         `│ 📛  Name : ${context.project.name}`,
-        `│ 🔖  Slug : \`${context.project.slug}\``,
+        `│ 🔖  Slug : ${context.project.slug}`,
         `│ 🆔  ID   : #${context.project.id}`,
         `├─────────────────────────────`,
-        `│ 💡 Use \`*project exit\` to deselect`,
+        `│ 💡 Use *project exit to deselect`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -458,7 +445,7 @@ export class ProjectCommandHandler {
         `│ 👋 **Exited Project**`,
         `├─────────────────────────────`,
         `│ You have exited the current project.`,
-        `│ Use \`*project use <slug|id>\` to select a new one.`,
+        `│ Use *project use <slug|id> to select a new one.`,
         `└─────────────────────────────`,
       ].join('\n'),
     );

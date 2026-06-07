@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
@@ -47,6 +48,7 @@ export class TeamMemberCommandHandler {
     @AutoContext('message') message: ManagedMessage,
     @Context() ctx: NezonCommandContext,
   ): Promise<void> {
+    applyMarkdownSecurity(message);
     const action = args[0]?.toLowerCase();
     const senderId = message.senderId;
 
@@ -86,9 +88,9 @@ export class TeamMemberCommandHandler {
               `┌─────────────────────────────`,
               `│ 👥 **Member Commands**`,
               `├─────────────────────────────`,
-              `│ \`*member list <teamId|slug> [--page N]\`            – List members of a team`,
-              `│ \`*member add <teamId|slug> <userId|@username>\`     – Add user to team`,
-              `│ \`*member remove <teamId|slug> <userId|@username>\`  – Remove user from team`,
+              `│ *member list <teamId|slug> [--page N]            – List members of a team`,
+              `│ *member add <teamId|slug> <userId|@username>     – Add user to team`,
+              `│ *member remove <teamId|slug> <userId|@username>  – Remove user from team`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -123,9 +125,9 @@ export class TeamMemberCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*member list <teamId|slug> [--page N]\``,
-          `│ Example: \`*member list 4\``,
-          `│          \`*member list backend --page 2\``,
+          `│ Usage: *member list <teamId|slug> [--page N]`,
+          `│ Example: *member list 4`,
+          `│          *member list backend --page 2`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -161,11 +163,11 @@ export class TeamMemberCommandHandler {
           `┌─────────────────────────────`,
           `│ 👥 **Team Members**`,
           `├─────────────────────────────`,
-          `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+          `│ 🏷️  Team    : ${team.name} (${team.slug})`,
           `│ 📁  Project : ${context.project.name}`,
           `├─────────────────────────────`,
           `│ ℹ️  No active members found.`,
-          `│ Use \`*member add ${team.slug} @username\` to add one.`,
+          `│ Use *member add ${team.slug} @username to add one.`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -178,7 +180,7 @@ export class TeamMemberCommandHandler {
       `┌─────────────────────────────`,
       `│ 👥 **Team Members**`,
       `├─────────────────────────────`,
-      `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+      `│ 🏷️  Team    : ${team.name} (${team.slug})`,
       `│ 📁  Project : ${context.project.name}`,
       `├─────────────────────────────`,
     ];
@@ -200,7 +202,7 @@ export class TeamMemberCommandHandler {
 
       lines.push(`│ ${offset + i + 1}. ${nameTag}`);
       lines.push(`│     ${statusIcon} Status   : ${m.status}`);
-      lines.push(`│     🪪 Mezon ID : \`${m.user?.mezonId ?? 'N/A'}\``);
+      lines.push(`│     🪪 Mezon ID : ${m.user?.mezonId ?? 'N/A'}`);
       if (i < pageMembers.length - 1) lines.push(`│`);
     }
 
@@ -208,7 +210,7 @@ export class TeamMemberCommandHandler {
     lines.push(
       `│ ${buildPaginationFooter(meta, `*member list ${teamIdentifier}`)}`,
     );
-    lines.push(`│ 💡 \`*member add ${team.slug} @user\` to add a member`);
+    lines.push(`│ 💡 *member add ${team.slug} @user to add a member`);
     lines.push(`└─────────────────────────────`);
 
     await this.reply(message, lines.join('\n'));
@@ -238,8 +240,8 @@ export class TeamMemberCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*member add <teamId|slug> <userId|@username>\``,
-          `│ Example: \`*member add backend @alice\``,
+          `│ Usage: *member add <teamId|slug> <userId|@username>`,
+          `│ Example: *member add backend @alice`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -293,11 +295,11 @@ export class TeamMemberCommandHandler {
         `│ ✅ **Member Added**`,
         `├─────────────────────────────`,
         `│ 👤  User    : ${targetUser.name ?? targetUser.mezonId}`,
-        `│ 🪪  Mezon ID: \`${targetUser.mezonId}\``,
-        `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+        `│ 🪪  Mezon ID: ${targetUser.mezonId}`,
+        `│ 🏷️  Team    : ${team.name} (${team.slug})`,
         `│ 📁  Project : ${context.project.name}`,
         `├─────────────────────────────`,
-        `│ 💡 \`*member list ${team.slug}\` to view all members`,
+        `│ 💡 *member list ${team.slug} to view all members`,
         `└─────────────────────────────`,
       ].join('\n'),
     );
@@ -319,8 +321,8 @@ export class TeamMemberCommandHandler {
           `┌─────────────────────────────`,
           `│ ❌ **Missing required fields**`,
           `├─────────────────────────────`,
-          `│ Usage: \`*member remove <teamId|slug> <userId|@username>\``,
-          `│ Example: \`*member remove backend @alice\``,
+          `│ Usage: *member remove <teamId|slug> <userId|@username>`,
+          `│ Example: *member remove backend @alice`,
           `└─────────────────────────────`,
         ].join('\n'),
       );
@@ -381,8 +383,8 @@ export class TeamMemberCommandHandler {
         `│ 🗑️ **Member Removed**`,
         `├─────────────────────────────`,
         `│ 👤  User    : ${targetUser.name ?? targetUser.mezonId}`,
-        `│ 🪪  Mezon ID: \`${targetUser.mezonId}\``,
-        `│ 🏷️  Team    : ${team.name} (\`${team.slug}\`)`,
+        `│ 🪪  Mezon ID: ${targetUser.mezonId}`,
+        `│ 🏷️  Team    : ${team.name} (${team.slug})`,
         `│ 📁  Project : ${context.project.name}`,
         `└─────────────────────────────`,
       ].join('\n'),
