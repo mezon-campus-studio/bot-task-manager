@@ -136,36 +136,29 @@ export class ProjectCommandHandler {
     } else {
       page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
     }
-    const [accessibleProjects, ownedProjects, allProjects] = await Promise.all([
-      this.projectService.listAccessibleProjectsForUser(dbUser.id),
-      this.projectService.findByOwnerUserId(dbUser.id),
-      this.projectService.listProjects(),
-    ]);
 
-    const ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
-    const otherProjects = allProjects.filter(
-      (p) => !accessibleProjects.some((ap) => ap.id === p.id),
-    );
+    const isAdmin = Number(dbUser.role) === UserRole.ADMIN;
 
-    type ProjectRow = {
-      project: (typeof accessibleProjects)[0];
-      section: 'yours' | 'other';
-    };
+    let accessibleProjects: any[] = [];
+    let ownedProjectIds = new Set<number>();
 
-    const allRows: ProjectRow[] = [
-      ...accessibleProjects.map((p) => ({
-        project: p,
-        section: 'yours' as const,
-      })),
-      ...otherProjects.map((p) => ({ project: p, section: 'other' as const })),
-    ];
+    if (isAdmin) {
+      accessibleProjects = await this.projectService.listProjects();
+    } else {
+      const [projects, ownedProjects] = await Promise.all([
+        this.projectService.listAccessibleProjectsForUser(dbUser.id),
+        this.projectService.findByOwnerUserId(dbUser.id),
+      ]);
+      accessibleProjects = projects;
+      ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
+    }
 
-    if (allRows.length === 0) {
-      await this.reply(message, 'ℹ️ No projects found.');
+    if (accessibleProjects.length === 0) {
+      await this.reply(message, 'ℹ️ No accessible projects found.');
       return;
     }
 
-    const { items: pageRows, meta } = paginate(allRows, page);
+    const { items: pageProjects, meta } = paginate(accessibleProjects, page);
 
     const lines: string[] = [
       `┌─────────────────────────────`,
@@ -173,26 +166,18 @@ export class ProjectCommandHandler {
       `├─────────────────────────────`,
     ];
 
-    const yoursOnPage = pageRows.filter((r) => r.section === 'yours');
-    const otherOnPage = pageRows.filter((r) => r.section === 'other');
-
-    if (yoursOnPage.length > 0) {
-      lines.push(`│ 🔓 **Your Projects**`);
-      for (const { project: p } of yoursOnPage) {
-        const ownerTag = ownedProjectIds.has(p.id) ? ' ⭐' : '';
-        lines.push(`│   [#${p.id}]${ownerTag} **${p.name}**`);
-        lines.push(`│        Slug : \`${p.slug}\``);
-        if (p.description) lines.push(`│        Desc : ${p.description}`);
-      }
+    if (isAdmin) {
+      lines.push(`│ 🌐 **All System Projects (Admin View)**`);
+    } else {
+      lines.push(`│ 🔓 **Your Accessible Projects**`);
     }
 
-    if (otherOnPage.length > 0) {
-      if (yoursOnPage.length > 0) lines.push(`│`);
-      lines.push(`│ 🌐 **Other Projects**`);
-      for (const { project: p } of otherOnPage) {
-        lines.push(`│   [#${p.id}] **${p.name}**`);
-        lines.push(`│        Slug : \`${p.slug}\``);
-      }
+    for (const p of pageProjects) {
+      const isOwner = ownedProjectIds.has(p.id) || isAdmin;
+      const ownerTag = isOwner ? ' ⭐' : '';
+      lines.push(`│   [#${p.id}]${ownerTag} **${p.name}**`);
+      lines.push(`│        Slug : \`${p.slug}\``);
+      if (p.description) lines.push(`│        Desc : ${p.description}`);
     }
 
     lines.push(`├─────────────────────────────`);

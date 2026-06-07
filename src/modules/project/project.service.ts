@@ -370,4 +370,19 @@ export class ProjectService extends CRUDService<ProjectEntity> {
         },
       );
   }
+
+  async findAccessibleProjects(userId: string): Promise<ProjectEntity[]> {
+    return this.createAccessibleProjectsQuery(userId).getMany();
+  }
+
+  async checkProjectMembership(
+    projectId: number,
+    userId: string,
+  ): Promise<boolean> {
+    const count = await this.createAccessibleProjectsQuery(userId)
+      .andWhere('project.id = :projectId', { projectId })
+      .getCount();
+
+    return count > 0;
+  }
 }
