@@ -1,17 +1,16 @@
 import { ManagedMessage } from '@src/libs/nezon';
 
-function escapeString(text: string): string {
+/**
+ * Removes dangerous markdown characters and handles mass mentions directly
+ * by stripping or replacing them to ensure clean, non-executable text.
+ */
+function sanitizeString(text: string): string {
   if (!text) return '';
-
-  if (text.includes('http://') || text.includes('https://')) {
-    text = text
-      .replace(/https:\/\//gi, 'https\\://')
-      .replace(/http:\/\//gi, 'http\\://');
-  }
 
   let isPastHeader = false;
 
   const secureLines = text.split('\n').map((line) => {
+    // Nhận diện đường kẻ khung để bắt đầu xử lý phần dữ liệu động
     if (
       line.startsWith('├─────────────────────────────') ||
       line.startsWith('├───────')
@@ -24,6 +23,7 @@ function escapeString(text: string): string {
       return line;
     }
 
+    // Các trường chứa dữ liệu do người dùng nhập vào
     const dynamicLabels = [
       'Title',
       'Desc',
@@ -39,34 +39,36 @@ function escapeString(text: string): string {
     if (hasLabel) {
       const colonIndex = line.indexOf(':');
       if (colonIndex !== -1) {
-        const prefix = line.slice(0, colonIndex + 1);
-        const value = line.slice(colonIndex + 1);
+        const prefix = line.slice(0, colonIndex + 1); // Giữ nguyên phần "│ Name :"
+        const rawValue = line.slice(colonIndex + 1);
 
-        let safeValue = value;
-        if (safeValue.includes('@everyone') || safeValue.includes('@all')) {
-          safeValue = safeValue
-            .replace(/@everyone/g, '\\@everyone')
-            .replace(/@all/g, '\\@all');
+        // 1. Xử lý hạ bệ các lệnh mass mention nguy hiểm thành text thường
+        let cleanValue = rawValue;
+        if (cleanValue.includes('@everyone') || cleanValue.includes('@all')) {
+          cleanValue = cleanValue
+            .replace(/@everyone/g, 'everyone')
+            .replace(/@all/g, 'all');
         }
 
-        safeValue = safeValue.replace(/([\\`*_{}[\]()#@])/g, '\\$1');
-        return prefix + safeValue;
+        cleanValue = cleanValue.replace(/([\\`*{}[\]()#\\.@])/g, '');
+
+        return prefix + cleanValue;
       }
     }
 
+    // Xử lý các dòng danh sách hoặc lệnh cụ thể chứa text động
     if (
       line.includes('│   [#') ||
-      line.match(/│\s+(🟡|🔵|✅|⬛|❓)/) ||
+      line.match(/│\s+(🟢|🟡|🔴|🔵|✅|⬛|❓)/) ||
       line.includes('💡') ||
       line.includes('*ticket') ||
       line.includes('*project')
     ) {
       if (line.includes('@everyone') || line.includes('@all')) {
-        line = line
-          .replace(/@everyone/g, '\\@everyone')
-          .replace(/@all/g, '\\@all');
+        line = line.replace(/@everyone/g, 'everyone').replace(/@all/g, 'all');
       }
-      return line.replace(/([\\`_{}[\]()#@])/g, '\\$1');
+      // Xóa các ký tự markdown gây vỡ khung danh sách (trừ các icon và chữ gốc)
+      return line.replace(/([\\`*_{}[\]()#@])/g, '');
     }
 
     return line;
@@ -75,6 +77,9 @@ function escapeString(text: string): string {
   return secureLines.join('\n');
 }
 
+/**
+ * Intercepts outgoing bot responses to guarantee structural output security.
+ */
 export function applyMarkdownSecurity(message: ManagedMessage): void {
   if (!message || (message as any).__isSecure__) return;
 
@@ -84,12 +89,12 @@ export function applyMarkdownSecurity(message: ManagedMessage): void {
     if (!content) return originalReply(content, ...args);
 
     if (typeof content === 'string') {
-      content = escapeString(content);
+      content = sanitizeString(content);
     } else if (typeof content === 'object') {
       if (content.content && typeof content.content.t === 'string') {
-        content.content.t = escapeString(content.content.t);
+        content.content.t = sanitizeString(content.content.t);
       } else if (typeof content.text === 'string') {
-        content.text = escapeString(content.text);
+        content.text = sanitizeString(content.text);
       }
     }
 
