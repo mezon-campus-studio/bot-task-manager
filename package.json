@@ -150,7 +150,7 @@
     "lint-staged": "~15.2.0",
     "micromatch": "^4.0.8",
     "prettier": "^3.1.1",
-    "redis-memory-server": "^0.14.0",
+    "redis-memory-server": "^0.16.1",
     "supertest": "^6.3.3",
     "testcontainers": "^11.7.2",
     "ts-jest": "^29.1.1",
