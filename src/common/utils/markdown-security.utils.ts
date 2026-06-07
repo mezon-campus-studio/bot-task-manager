@@ -59,7 +59,7 @@ function sanitizeString(text: string): string {
       if (line.includes('@everyone') || line.includes('@all')) {
         line = line.replace(/@everyone/g, 'everyone').replace(/@all/g, 'all');
       }
-      return line.replace(/([\\`*_{}[\]()#@])/g, '');
+      return line.replace(/([\\`*_{}[\]()@])/g, '');
     }
 
     return line;
