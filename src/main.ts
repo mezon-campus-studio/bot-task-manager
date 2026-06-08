@@ -64,4 +64,5 @@ process.on('unhandledRejection', (reason) => {
 
 process.on('uncaughtException', (error) => {
   Logger.error(`Uncaught Exception: ${error.message}`, '', 'UncaughtException');
+  process.exit(1);
 });
