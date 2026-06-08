@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { AuthModule } from '@src/modules/auth/auth.module';
 import { ProjectMemberModule } from '@src/modules/project-member/project-member.module';
 import { TeamModule } from '@src/modules/team/team.module';
@@ -25,6 +26,7 @@ import { ProjectService } from './project.service';
     ProjectContextService,
     ProjectOnboardingService,
     ProjectService,
+    PendingDeletionService,
   ],
   exports: [ProjectContextService, ProjectService],
 })

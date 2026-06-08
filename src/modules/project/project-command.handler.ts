@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
@@ -28,6 +29,7 @@ export class ProjectCommandHandler {
     private readonly projectContextService: ProjectContextService,
     private readonly projectService: ProjectService,
     private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('project')
@@ -288,6 +290,11 @@ export class ProjectCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion(
+      'project',
+      String(project.id),
+    );
+
     await this.reply(
       message,
       [
@@ -299,7 +306,7 @@ export class ProjectCommandHandler {
         `│ 🆔  ID   : #${project.id}`,
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
-        `│ Run to confirm:`,
+        `│ Run to confirm within 5 minutes:`,
         `│ *project confirm delete ${project.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -336,6 +343,18 @@ export class ProjectCommandHandler {
       return;
     }
 
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'project',
+      String(project.id),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*project delete` first.',
+      );
+      return;
+    }
+
     const deleted = await this.projectService.deleteProject(project.id);
     if (!deleted) {
       await this.reply(
@@ -344,6 +363,11 @@ export class ProjectCommandHandler {
       );
       return;
     }
+
+    await this.pendingDeletionService.clearPendingDeletion(
+      'project',
+      String(project.id),
+    );
 
     await this.reply(
       message,

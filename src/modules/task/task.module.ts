@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { AuthModule } from '@src/modules/auth/auth.module';
 import { ProjectModule } from '@src/modules/project/project.module';
 import { ProjectMemberModule } from '@src/modules/project-member/project-member.module';
@@ -18,7 +19,7 @@ import { TaskService } from './task.service';
     TeamMemberModule,
     UserModule,
   ],
-  providers: [TaskCommandHandler, TaskService],
+  providers: [TaskCommandHandler, TaskService, PendingDeletionService],
   exports: [TaskService],
 })
 export class TaskModule {}

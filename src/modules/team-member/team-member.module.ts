@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { AuthModule } from '@src/modules/auth/auth.module';
 import { ProjectModule } from '@src/modules/project/project.module';
 import { TeamModule } from '@src/modules/team/team.module';
@@ -16,7 +17,11 @@ import { TeamMemberService } from './team-member.service';
     forwardRef(() => ProjectModule),
     AuthModule,
   ],
-  providers: [TeamMemberService, TeamMemberCommandHandler],
+  providers: [
+    TeamMemberService,
+    TeamMemberCommandHandler,
+    PendingDeletionService,
+  ],
   exports: [TeamMemberService],
 })
 export class TeamMemberModule {}

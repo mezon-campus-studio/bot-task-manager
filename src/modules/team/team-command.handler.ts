@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
@@ -38,6 +39,7 @@ export class TeamCommandHandler {
     private readonly teamService: TeamService,
     private readonly userService: UserService,
     private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('team')
@@ -378,6 +380,11 @@ export class TeamCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion(
+      'team',
+      String(team.id),
+    );
+
     await this.reply(
       message,
       [
@@ -390,7 +397,7 @@ export class TeamCommandHandler {
         `│ 📁  Project : ${context.project.name} (${context.project.slug})`,
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
-        `│ Run to confirm:`,
+        `│ Run to confirm within 5 minutes:`,
         `│ *team confirm delete ${team.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -438,7 +445,24 @@ export class TeamCommandHandler {
       return;
     }
 
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'team',
+      String(team.id),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*team delete` first.',
+      );
+      return;
+    }
+
     await this.teamService.deleteTeamFromProject(context.projectId, team.id);
+
+    await this.pendingDeletionService.clearPendingDeletion(
+      'team',
+      String(team.id),
+    );
 
     await this.reply(
       message,

@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
@@ -40,6 +41,7 @@ export class TeamMemberCommandHandler {
     private readonly projectContextService: ProjectContextService,
     private readonly userService: UserService,
     private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('member')
@@ -81,6 +83,16 @@ export class TeamMemberCommandHandler {
         case 'remove':
           await this.removeMember(args, senderId, message, ctx);
           return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'remove') {
+            await this.confirmRemoveMember(args, senderId, message, ctx);
+            return;
+          }
+          await this.reply(
+            message,
+            'Usage: `*member confirm remove <teamId|slug> <userId|@username>`',
+          );
+          return;
         default:
           await this.reply(
             message,
@@ -90,7 +102,8 @@ export class TeamMemberCommandHandler {
               `├─────────────────────────────`,
               `│ *member list <teamId|slug> [--page N]            – List members of a team`,
               `│ *member add <teamId|slug> <userId|@username>     – Add user to team`,
-              `│ *member remove <teamId|slug> <userId|@username>  – Remove user from team`,
+              `│ *member remove <teamId|slug> <userId|@username>  – Prepare removal`,
+              `│ *member confirm remove <teamId|slug> <userId|@username>  – Confirm removal`,
               `└─────────────────────────────`,
             ].join('\n'),
           );
@@ -370,10 +383,109 @@ export class TeamMemberCommandHandler {
       return;
     }
 
+    const pendingKey = `${team.id}:${targetUser.id}`;
+    await this.pendingDeletionService.setPendingDeletion('member', pendingKey);
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Confirm Remove Member**`,
+        `├─────────────────────────────`,
+        `│ 👤  User    : ${targetUser.name ?? targetUser.mezonId}`,
+        `│ 🪪  Mezon ID: ${targetUser.mezonId}`,
+        `│ 🏷️  Team    : ${team.name} (${team.slug})`,
+        `│ 📁  Project : ${context.project.name}`,
+        `├─────────────────────────────`,
+        `│ ⚠️  This action **cannot be undone**.`,
+        `│ Run to confirm within 5 minutes:`,
+        `│ *member confirm remove ${teamIdentifier} ${targetUserIdRaw}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmRemoveMember(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const teamIdentifier = args[2];
+    const targetUserIdRaw = args[3];
+
+    if (!teamIdentifier || !targetUserIdRaw) {
+      await this.reply(
+        message,
+        'Usage: `*member confirm remove <teamId|slug> <userId|@username>`',
+      );
+      return;
+    }
+
+    if (!this.isProjectManagerOrAdmin(ctx)) {
+      await this.reply(
+        message,
+        '❌ Only **Administrators** and **Project Managers** can remove team members.',
+      );
+      return;
+    }
+
+    const context =
+      await this.projectContextService.getRequiredCurrentProjectByMezonId(
+        senderId,
+      );
+
+    const team = await this.teamService.findByProjectIdentifier(
+      context.projectId,
+      teamIdentifier,
+    );
+
+    if (!team) {
+      await this.reply(
+        message,
+        `❌ Team **${teamIdentifier}** not found in project **${context.project.name}**.`,
+      );
+      return;
+    }
+
+    const resolvedTargetUserId =
+      this.getMentionedUserIdentifier(targetUserIdRaw, message) ??
+      targetUserIdRaw.replace(/^@/, '').trim();
+
+    const targetUser =
+      await this.userService.findByIdentifier(resolvedTargetUserId);
+
+    if (!targetUser) {
+      await this.reply(
+        message,
+        `❌ User **${targetUserIdRaw}** not found in the system.`,
+      );
+      return;
+    }
+
+    const pendingKey = `${team.id}:${targetUser.id}`;
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'member',
+      pendingKey,
+    );
+
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending removal request. Please run `*member remove` first.',
+      );
+      return;
+    }
+
     await this.teamMemberService.removeMember(
       context.projectId,
       team.id,
       targetUser.id,
+    );
+
+    await this.pendingDeletionService.clearPendingDeletion(
+      'member',
+      pendingKey,
     );
 
     await this.reply(

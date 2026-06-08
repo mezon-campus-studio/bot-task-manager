@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { AuthModule } from '@src/modules/auth/auth.module';
 import { ProjectModule } from '@src/modules/project/project.module';
 import { UserModule } from '@src/modules/user/user.module';
@@ -14,7 +15,7 @@ import { TicketService } from './ticket.service';
     ProjectModule,
     UserModule,
   ],
-  providers: [TicketService, TicketCommandHandler],
+  providers: [TicketService, TicketCommandHandler, PendingDeletionService],
   exports: [TicketService],
 })
 export class TicketModule {}
