@@ -226,10 +226,26 @@ export class UserCommandHandler {
     }
 
     const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
-    let user = await this.userService.findByIdentifier(identifier, true);
+
+    const senderUser = (ctx as any).dbUser;
+    const currentProjectId = senderUser?.currentProjectId;
+
+    if (!currentProjectId) {
+      await this.reply(message, '❌ You are not associated with any project.');
+      return;
+    }
+
+    let user = await this.userService.findByIdentifierInProject(
+      identifier,
+      currentProjectId,
+      true,
+    );
 
     if (!user) {
-      await this.reply(message, `❌ User **${identifier}** not found.`);
+      await this.reply(
+        message,
+        `❌ User **${rawIdentifier}** not found in the current project.`,
+      );
       return;
     }
 
