@@ -1,8 +1,8 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
-import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
   paginate,
@@ -622,7 +622,10 @@ export class TicketCommandHandler {
         return;
       }
 
-      await this.pendingDeletionService.setPendingDeletion('ticket', String(ticket.id));
+      await this.pendingDeletionService.setPendingDeletion(
+        'ticket',
+        String(ticket.id),
+      );
 
       await this.reply(
         message,
@@ -682,7 +685,10 @@ export class TicketCommandHandler {
         return;
       }
 
-      const hasPending = await this.pendingDeletionService.hasPendingDeletion('ticket', String(ticket.id));
+      const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+        'ticket',
+        String(ticket.id),
+      );
       if (!hasPending) {
         await this.reply(
           message,
@@ -693,7 +699,10 @@ export class TicketCommandHandler {
 
       await this.ticketService.deleteTicket(context.projectId, ticketId);
 
-      await this.pendingDeletionService.clearPendingDeletion('ticket', String(ticket.id));
+      await this.pendingDeletionService.clearPendingDeletion(
+        'ticket',
+        String(ticket.id),
+      );
 
       await this.reply(
         message,
