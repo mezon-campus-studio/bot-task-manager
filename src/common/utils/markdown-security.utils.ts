@@ -6,63 +6,17 @@ function sanitizeString(text: string): string {
   let isPastHeader = false;
 
   const secureLines = text.split('\n').map((line) => {
-    if (
-      line.startsWith('├─────────────────────────────') ||
-      line.startsWith('├───────')
-    ) {
-      isPastHeader = true;
+    if (line.startsWith('┌') || line.startsWith('├') || line.startsWith('└')) {
+      if (line.includes('─────────────')) isPastHeader = true;
       return line;
     }
 
-    if (!isPastHeader) {
-      return line;
-    }
+    if (!isPastHeader) return line;
 
-    const dynamicLabels = [
-      'Title',
-      'Desc',
-      'Slug',
-      'Content',
-      'Name',
-      'Project',
-    ];
+    let sanitized = line;
+    sanitized = sanitized.replace(/([\\`*{}[\]()#^$%&=;<>`~/@])/g, '');
 
-    const labelRegex = new RegExp(`│.*(${dynamicLabels.join('|')})\\s*:`);
-    const hasLabel = labelRegex.test(line);
-
-    if (hasLabel) {
-      const colonIndex = line.indexOf(':');
-      if (colonIndex !== -1) {
-        const prefix = line.slice(0, colonIndex + 1);
-        const rawValue = line.slice(colonIndex + 1);
-
-        let cleanValue = rawValue;
-        if (cleanValue.includes('@everyone') || cleanValue.includes('@all')) {
-          cleanValue = cleanValue
-            .replace(/@everyone/g, 'everyone')
-            .replace(/@all/g, 'all');
-        }
-
-        cleanValue = cleanValue.replace(/([\\`*{}[\]()#\\/.@])/g, '');
-
-        return prefix + cleanValue;
-      }
-    }
-
-    if (
-      line.includes('│   [#') ||
-      line.match(/│\s+(🟢|🟡|🔴|🔵|✅|⬛|❓)/) ||
-      line.includes('💡') ||
-      line.includes('*ticket') ||
-      line.includes('*project')
-    ) {
-      if (line.includes('@everyone') || line.includes('@all')) {
-        line = line.replace(/@everyone/g, 'everyone').replace(/@all/g, 'all');
-      }
-      return line.replace(/([\\`*_{}[\]()@])/g, '');
-    }
-
-    return line;
+    return sanitized;
   });
 
   return secureLines.join('\n');
