@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { UserRole } from '#src/common/enums/user.enum.js';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import { buildPaginationFooter } from '@src/common/utils/pagination.util';
 import {
@@ -27,6 +28,7 @@ export class TaskCommandHandler {
     private readonly projectContextService: ProjectContextService,
     private readonly userService: UserService,
     private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('task')
@@ -564,6 +566,11 @@ export class TaskCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion(
+      'task',
+      String(existingTask.id),
+    );
+
     await this.reply(
       message,
       [
@@ -576,7 +583,7 @@ export class TaskCommandHandler {
         `│ 📁  Project : ${context.project.name}`,
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
-        `│ Run to confirm:`,
+        `│ Run to confirm within 5 minutes:`,
         `│ *task confirm delete ${existingTask.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -621,7 +628,24 @@ export class TaskCommandHandler {
       return;
     }
 
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'task',
+      String(existingTask.id),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*task delete` first.',
+      );
+      return;
+    }
+
     const deleted = await this.taskService.deleteTask(taskId);
+
+    await this.pendingDeletionService.clearPendingDeletion(
+      'task',
+      String(existingTask.id),
+    );
 
     if (!deleted) {
       await this.reply(message, `❌ Failed to delete task **#${taskId}**.`);

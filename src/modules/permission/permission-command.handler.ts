@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   Args,
@@ -22,6 +23,7 @@ export class PermissionCommandHandler {
 
   constructor(
     private readonly permissionService: PermissionService,
+    private readonly pendingDeletionService: PendingDeletionService,
     private rateLimiter: RateLimiterService,
   ) {}
 
@@ -270,11 +272,16 @@ export class PermissionCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion(
+      'permission',
+      String(permission.id),
+    );
+
     await this.reply(
       message,
       [
         `🗑️ Are you sure you want to delete permission **#${permission.id}: ${permission.key}**?`,
-        `Run: *permission confirm delete ${permission.id} to complete the deletion.`,
+        `Run: *permission confirm delete ${permission.id} within 5 minutes to complete the deletion.`,
       ].join('\n'),
     );
   }
@@ -299,7 +306,23 @@ export class PermissionCommandHandler {
       return;
     }
 
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'permission',
+      String(permissionId),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*permission delete` first.',
+      );
+      return;
+    }
+
     await this.permissionService.deleteById(permissionId);
+    await this.pendingDeletionService.clearPendingDeletion(
+      'permission',
+      String(permissionId),
+    );
     await this.reply(message, `Deleted permission **#${permissionId}**.`);
   }
 

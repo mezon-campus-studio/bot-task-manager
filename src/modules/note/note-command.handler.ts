@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
@@ -28,6 +29,7 @@ export class NoteCommandHandler {
   constructor(
     private readonly noteService: NoteService,
     private readonly projectContextService: ProjectContextService,
+    private readonly pendingDeletionService: PendingDeletionService,
     private rateLimiter: RateLimiterService,
   ) {}
 
@@ -469,6 +471,11 @@ export class NoteCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion(
+      'note',
+      String(note.id),
+    );
+
     await this.reply(
       message,
       [
@@ -481,7 +488,7 @@ export class NoteCommandHandler {
         `│ 📄  Content  : ${this.truncate(note.content, 60)}`,
         `├─────────────────────────────`,
         `│ ⚠️  This action **cannot be undone**.`,
-        `│ Run to confirm:`,
+        `│ Run to confirm within 5 minutes:`,
         `│ *note confirm delete ${note.id}`,
         `└─────────────────────────────`,
       ].join('\n'),
@@ -493,13 +500,31 @@ export class NoteCommandHandler {
     senderId: string,
     message: ManagedMessage,
   ): Promise<void> {
+    const rawNoteId = args[2];
+    if (!rawNoteId) {
+      await this.reply(message, 'Usage: `*note confirm delete <id>`');
+      return;
+    }
+
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'note',
+      rawNoteId.trim(),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*note delete` first.',
+      );
+      return;
+    }
+
     const context =
       await this.projectContextService.getRequiredCurrentProjectByMezonId(
         senderId,
       );
 
     const note = await this.getRequiredNote(
-      args[2],
+      rawNoteId,
       context.projectId,
       message,
     );
@@ -514,6 +539,10 @@ export class NoteCommandHandler {
     }
 
     await this.noteService.deleteNote(note.id);
+    await this.pendingDeletionService.clearPendingDeletion(
+      'note',
+      rawNoteId.trim(),
+    );
 
     await this.reply(
       message,

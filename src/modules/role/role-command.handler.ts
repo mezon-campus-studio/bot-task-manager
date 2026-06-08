@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   Args,
@@ -24,6 +25,7 @@ export class RoleCommandHandler {
   constructor(
     private readonly roleService: RoleService,
     private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('role')
@@ -274,11 +276,16 @@ export class RoleCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion(
+      'role',
+      String(role.id),
+    );
+
     await this.reply(
       message,
       [
         `🗑️ Are you sure you want to delete role **#${role.id}: ${role.name}**?`,
-        `Run: *role confirm delete ${role.id} to complete the deletion.`,
+        `Run: *role confirm delete ${role.id} within 5 minutes to complete the deletion.`,
       ].join('\n'),
     );
   }
@@ -300,7 +307,23 @@ export class RoleCommandHandler {
       return;
     }
 
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'role',
+      String(roleId),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*role delete` first.',
+      );
+      return;
+    }
+
     await this.roleService.deleteRole(roleId);
+    await this.pendingDeletionService.clearPendingDeletion(
+      'role',
+      String(roleId),
+    );
     await this.reply(message, `Deleted role **#${roleId}**.`);
   }
 

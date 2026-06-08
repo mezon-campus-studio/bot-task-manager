@@ -314,6 +314,37 @@ export class UserService extends CRUDService<UserEntity> {
     });
   }
 
+  async findByIdentifierInProject(
+    identifier: string,
+    projectId: number,
+    includeDeleted = false,
+  ): Promise<UserEntity | null> {
+    const statusFilter = includeDeleted
+      ? {}
+      : { status: Not(UserStatus.DELETED) };
+
+    const whereConditions: Array<
+      import('typeorm').FindOptionsWhere<UserEntity>
+    > = [
+      { mezonId: identifier, currentProjectId: projectId, ...statusFilter },
+      { name: identifier, currentProjectId: projectId, ...statusFilter },
+      { email: identifier, currentProjectId: projectId, ...statusFilter },
+    ];
+
+    if (this.isUuid(identifier)) {
+      whereConditions.unshift({
+        id: identifier,
+        currentProjectId: projectId,
+        ...statusFilter,
+      });
+    }
+
+    return await this.userRepository.findOne({
+      where: whereConditions,
+      withDeleted: includeDeleted,
+    });
+  }
+
   private isUuid(value: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       value,

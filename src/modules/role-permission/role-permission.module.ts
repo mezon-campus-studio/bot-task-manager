@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { AuthModule } from '@src/modules/auth/auth.module';
 import { PermissionModule } from '@src/modules/permission/permission.module';
 import { RoleModule } from '@src/modules/role/role.module';
@@ -14,7 +15,11 @@ import { RolePermissionService } from './role-permission.service';
     RoleModule,
     PermissionModule,
   ],
-  providers: [RolePermissionService, RolePermissionCommandHandler],
+  providers: [
+    RolePermissionService,
+    RolePermissionCommandHandler,
+    PendingDeletionService,
+  ],
   exports: [RolePermissionService],
 })
 export class RolePermissionModule {}

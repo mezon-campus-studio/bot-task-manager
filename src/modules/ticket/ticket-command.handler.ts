@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
@@ -43,6 +44,7 @@ export class TicketCommandHandler {
     private readonly projectContextService: ProjectContextService,
     private readonly userService: UserService,
     private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('ticket')
@@ -620,6 +622,11 @@ export class TicketCommandHandler {
         return;
       }
 
+      await this.pendingDeletionService.setPendingDeletion(
+        'ticket',
+        String(ticket.id),
+      );
+
       await this.reply(
         message,
         [
@@ -631,7 +638,7 @@ export class TicketCommandHandler {
           `│ 📁  Project : ${context.project.name}`,
           `├─────────────────────────────`,
           `│ ⚠️  This action **cannot be undone**.`,
-          `│ Run to confirm:`,
+          `│ Run to confirm within 5 minutes:`,
           `│ *ticket confirm delete ${ticket.id}`,
           `└─────────────────────────────`,
         ].join('\n'),
@@ -678,7 +685,24 @@ export class TicketCommandHandler {
         return;
       }
 
+      const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+        'ticket',
+        String(ticket.id),
+      );
+      if (!hasPending) {
+        await this.reply(
+          message,
+          '⚠️ No pending deletion request. Please run `*ticket delete` first.',
+        );
+        return;
+      }
+
       await this.ticketService.deleteTicket(context.projectId, ticketId);
+
+      await this.pendingDeletionService.clearPendingDeletion(
+        'ticket',
+        String(ticket.id),
+      );
 
       await this.reply(
         message,

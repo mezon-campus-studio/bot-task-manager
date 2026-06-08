@@ -1,6 +1,7 @@
 import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
 import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
 import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
 import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
 import {
   buildPaginationFooter,
@@ -32,7 +33,8 @@ export class UserCommandHandler {
 
   constructor(
     private readonly userService: UserService,
-    private rateLimiter: RateLimiterService,
+    private readonly rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
   ) {}
 
   @Command('user')
@@ -224,10 +226,26 @@ export class UserCommandHandler {
     }
 
     const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
-    let user = await this.userService.findByIdentifier(identifier, true);
+
+    const senderUser = (ctx as any).dbUser;
+    const currentProjectId = senderUser?.currentProjectId;
+
+    if (!currentProjectId) {
+      await this.reply(message, '❌ You are not associated with any project.');
+      return;
+    }
+
+    let user = await this.userService.findByIdentifierInProject(
+      identifier,
+      currentProjectId,
+      true,
+    );
 
     if (!user) {
-      await this.reply(message, `❌ User **${identifier}** not found.`);
+      await this.reply(
+        message,
+        `❌ User **${rawIdentifier}** not found in the current project.`,
+      );
       return;
     }
 
@@ -502,11 +520,13 @@ export class UserCommandHandler {
       return;
     }
 
+    await this.pendingDeletionService.setPendingDeletion('user', identifier);
+
     await this.reply(
       message,
       [
         `🗑️ Are you sure you want to delete user **${user.name ?? user.mezonId}**?`,
-        `Run: *user confirm delete ${identifier} to complete the deletion.`,
+        `Run: \`*user confirm delete ${identifier}\` within 5 minutes to complete the deletion.`,
       ].join('\n'),
     );
   }
@@ -531,6 +551,19 @@ export class UserCommandHandler {
     }
 
     const identifier = this.normalizeUserIdentifier(rawIdentifier, message);
+
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'user',
+      identifier,
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*user delete` first.',
+      );
+      return;
+    }
+
     const user = await this.userService.findByIdentifier(identifier);
 
     if (!user) {
@@ -539,6 +572,8 @@ export class UserCommandHandler {
     }
 
     await this.userService.softDeleteUser(identifier);
+    await this.pendingDeletionService.clearPendingDeletion('user', identifier);
+
     await this.reply(
       message,
       `🗑️ User **${user.name ?? user.mezonId}** was deleted.`,
