@@ -477,11 +477,13 @@ export class UserCommandHandler {
 
     for (const roleKey of sortedKeys) {
       const group = grouped.get(roleKey)!;
-      lines.push(`│ ${ROLE_HEADER[roleKey]} (${group.length})`);
+      lines.push(`│ ${ROLE_HEADER[roleKey]} | Total: (${group.length})`);
       for (const u of group) {
         const statusIcon =
           u.status === 'active' ? '🟢' : u.status === 'inactive' ? '🟡' : '🔴';
-        lines.push(`│   ${statusIcon} ${u.name ?? '—'}  ${u.mezonId}`);
+        lines.push(
+          `│   ${statusIcon} Name: ${u.name ?? '—'} | Mezon ID: ${u.mezonId}`,
+        );
       }
       lines.push(`│`);
     }
