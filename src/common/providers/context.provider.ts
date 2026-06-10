@@ -6,13 +6,15 @@ export class ContextProvider {
 
   private static readonly authUserKey = 'user_key';
 
+  private static readonly currentProjectIdKey = 'current_project_id_key';
+
   private static readonly languageKey = 'language_key';
 
-  // private static get<T>(key: string) {
-  //   const store = ClsServiceManager.getClsService();
+  private static get<T>(key: string) {
+    const store = ClsServiceManager.getClsService();
 
-  //   return store.get<T>(ContextProvider.getKeyWithNamespace(key));
-  // }
+    return store.get<T>(ContextProvider.getKeyWithNamespace(key));
+  }
 
   private static set(key: string, value: any): void {
     const store = ClsServiceManager.getClsService();
@@ -26,6 +28,21 @@ export class ContextProvider {
 
   static setAuthUser(user: UserAuth): void {
     ContextProvider.set(ContextProvider.authUserKey, user);
+    ContextProvider.setCurrentProjectId(user?.currentProjectId ?? null);
+  }
+
+  static getAuthUser(): UserAuth | undefined {
+    return ContextProvider.get<UserAuth>(ContextProvider.authUserKey);
+  }
+
+  static setCurrentProjectId(currentProjectId: number | null): void {
+    ContextProvider.set(ContextProvider.currentProjectIdKey, currentProjectId);
+  }
+
+  static getCurrentProjectId(): number | null | undefined {
+    return ContextProvider.get<number | null>(
+      ContextProvider.currentProjectIdKey,
+    );
   }
 
   static setLanguage(language: string): void {

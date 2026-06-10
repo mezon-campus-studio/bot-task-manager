@@ -2,6 +2,7 @@ import {
   ArgumentsHost,
   BadRequestException,
   Catch,
+  ExceptionFilter,
   HttpException,
   HttpStatus,
   Logger,
@@ -9,8 +10,8 @@ import {
 import { IResponse, IValidationError } from 'src/common/types/response.type';
 
 @Catch()
-export class HttpExceptionFilter {
-  catch(exception, host: ArgumentsHost) {
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: any, host: ArgumentsHost) {
     //  const lang = i18n?.lang || I18N_FALLBACK_LANGUAGE;
     const request = host.switchToHttp().getRequest();
     const ctx = host.switchToHttp();
@@ -34,7 +35,7 @@ export class HttpExceptionFilter {
           responseMessage = validationErrors.map((error) => ({
             field: error.property,
 
-            errors: Object.values(error.constraints),
+            errors: Object.values(error.constraints || {}),
           })) as IValidationError[];
         } else {
           responseMessage = exceptionResponse;
@@ -51,6 +52,7 @@ export class HttpExceptionFilter {
     }
 
     const resBody: IResponse<null> = {
+      success: false,
       statusCode: status,
       data: null,
       errors: responseMessage,

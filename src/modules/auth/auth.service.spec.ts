@@ -80,10 +80,10 @@ describe(AuthService.name, () => {
     );
   });
 
-  it('returns the configured oauth url with the expected query params', () => {
+  it('returns the configured oauth url with the expected query params', async () => {
     const authService = testingModule!.get(AuthService);
 
-    const oauthUrl = authService.getOauthUrl();
+    const oauthUrl = await authService.getOauthUrl();
     const parsedUrl = new URL(oauthUrl);
 
     expect(`${parsedUrl.origin}${parsedUrl.pathname}`).toBe(
@@ -95,7 +95,7 @@ describe(AuthService.name, () => {
     );
     expect(parsedUrl.searchParams.get('response_type')).toBe('code');
     expect(parsedUrl.searchParams.get('scope')).toBe('openid offline');
-    expect(parsedUrl.searchParams.get('state')).toHaveLength(10);
+    expect(parsedUrl.searchParams.get('state')).toHaveLength(32);
   });
 
   it('fetches user info with the encoded access token payload', async () => {
@@ -127,7 +127,7 @@ describe(AuthService.name, () => {
 
     expect(body.toString()).toBe(
       new URLSearchParams({
-        access_token: encodeURIComponent('token with spaces/+'),
+        access_token: 'token with spaces/+',
         client_id: 'test-client-id',
         client_secret: 'test-client-secret',
         redirect_uri: 'http://localhost:3000/auth/callback',

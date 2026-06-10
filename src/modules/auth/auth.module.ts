@@ -1,10 +1,13 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { AppConfigService } from '@src/common/shared/services/app-config.service';
 import { UserModule } from '@src/modules/user/user.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { NezonAuthGuard } from './guards/nezon-auth.guard';
+import { NezonRolesGuard } from './guards/nezon-roles.guard';
+import { TokenBlacklistService } from './services/token-blacklist.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
@@ -13,14 +16,25 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     JwtModule.registerAsync({
       useFactory: (appConfigService: AppConfigService) => ({
         secret: appConfigService.jwtConfig.secret,
-        signOptions: { expiresIn: '15m' },
       }),
       inject: [AppConfigService],
     }),
-    UserModule,
+    forwardRef(() => UserModule),
   ],
-  providers: [AuthService, JwtStrategy],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    NezonAuthGuard,
+    NezonRolesGuard,
+    TokenBlacklistService,
+  ],
   controllers: [AuthController],
-  exports: [AuthService],
+  exports: [
+    AuthService,
+    NezonAuthGuard,
+    NezonRolesGuard,
+    TokenBlacklistService,
+    forwardRef(() => UserModule),
+  ],
 })
 export class AuthModule {}

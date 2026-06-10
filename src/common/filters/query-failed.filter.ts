@@ -28,6 +28,7 @@ export class QueryFailedFilter implements ExceptionFilter<QueryFailedError> {
       : HttpStatus.INTERNAL_SERVER_ERROR;
 
     response.status(status).json({
+      success: false,
       statusCode: status,
       error: STATUS_CODES[status],
       message: exception.constraint

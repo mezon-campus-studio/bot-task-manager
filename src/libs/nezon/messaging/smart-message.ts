@@ -646,8 +646,6 @@ export class SmartMessage {
         (p) => p.kind === 'user' && p.label !== undefined,
       );
 
-      console.log('[DEBUG toJSON] allHaveLabels:', allHaveLabels);
-
       if (allHaveLabels) {
         // Use sync helper to resolve mentions
         const resolved = resolveMentionPlaceholdersSync(

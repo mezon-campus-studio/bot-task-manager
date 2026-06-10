@@ -1,0 +1,533 @@
+import { HttpException, Injectable, Logger, UseGuards } from '@nestjs/common';
+import { applyMarkdownSecurity } from '#src/common/utils/markdown-security.utils.js';
+import { UserRole } from '@src/common/enums/user.enum';
+import { PendingDeletionService } from '@src/common/providers/pending-deletion.service';
+import { RateLimiterService } from '@src/common/providers/rate-limiter.service';
+import {
+  buildPaginationFooter,
+  paginate,
+} from '@src/common/utils/pagination.util';
+import {
+  Args,
+  AutoContext,
+  Command,
+  Context,
+  ManagedMessage,
+  NezonCommandContext,
+  SmartMessage,
+} from '@src/libs/nezon';
+import { NezonAuthGuard } from '@src/modules/auth/guards/nezon-auth.guard';
+import { ProjectContextService } from './project-context.service';
+import { ProjectService } from './project.service';
+
+@Injectable()
+@UseGuards(NezonAuthGuard)
+export class ProjectCommandHandler {
+  private readonly logger = new Logger(ProjectCommandHandler.name);
+
+  constructor(
+    private readonly projectContextService: ProjectContextService,
+    private readonly projectService: ProjectService,
+    private rateLimiter: RateLimiterService,
+    private readonly pendingDeletionService: PendingDeletionService,
+  ) {}
+
+  @Command('project')
+  async handleProjectCommand(
+    @Args() args: string[],
+    @AutoContext('message') message: ManagedMessage,
+    @Context() ctx: NezonCommandContext,
+  ): Promise<void> {
+    applyMarkdownSecurity(message);
+    const action = args[0]?.toLowerCase();
+    const senderId = message.senderId;
+
+    if (!senderId) {
+      await this.reply(message, 'Cannot resolve command sender.');
+      return;
+    }
+
+    if (!this.rateLimiter.isAllowed(senderId)) {
+      if (this.rateLimiter.shouldNotifyLimitExceeded(senderId)) {
+        this.logger.warn(
+          `Rate limit exceeded for user ${senderId} on *project command`,
+        );
+        await this.reply(
+          message,
+          '⚠️ Too many commands. Please wait before sending another command.',
+        );
+      }
+      return;
+    }
+
+    try {
+      switch (action) {
+        case 'create':
+          await this.createProject(args, message, ctx);
+          return;
+        case 'list':
+          await this.listProjects(senderId, message, ctx, args);
+          return;
+        case 'delete':
+          await this.prepareDeleteProject(args, message, ctx);
+          return;
+        case 'confirm':
+          if (args[1]?.toLowerCase() === 'delete') {
+            await this.confirmDeleteProject(args, message, ctx);
+            return;
+          }
+          await this.reply(
+            message,
+            'Usage: `*project confirm delete <projectId|projectSlug>`',
+          );
+          return;
+        case 'use':
+          await this.useProject(args, senderId, message);
+          return;
+        case 'current':
+          await this.getCurrentProject(senderId, message);
+          return;
+        case 'exit':
+          await this.exitProject(senderId, message);
+          return;
+        default:
+          await this.reply(
+            message,
+            [
+              `┌─────────────────────────────`,
+              `│ 📁 **Project Commands**`,
+              `├─────────────────────────────`,
+              `│ *project list [--page N]                              – List all accessible projects`,
+              `│ *project create <slug> <name...>                  – Create a new project`,
+              `│ *project use <projectId|slug>                     – Select a project to work with`,
+              `│ *project current                                  – Show current selected project`,
+              `│ *project exit                                     – Exit current project`,
+              `│ *project delete <projectId|slug>                  – Prepare delete confirmation`,
+              `│ *project confirm delete <projectId|slug>          – Confirm project deletion`,
+              `└─────────────────────────────`,
+            ].join('\n'),
+          );
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Project command failed',
+        (error as Error | undefined)?.stack,
+      );
+
+      await this.reply(message, this.getErrorMessage(error));
+    }
+  }
+
+  private async listProjects(
+    _senderId: string,
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+    args: string[] = [],
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser) {
+      await this.reply(message, '❌ User not found in database.');
+      return;
+    }
+
+    let page = 1;
+    const pageFlagIndex = args.findIndex(
+      (arg) => arg.toLowerCase() === '--page',
+    );
+
+    if (pageFlagIndex !== -1 && args[pageFlagIndex + 1]) {
+      page = Math.max(1, parseInt(args[pageFlagIndex + 1], 10) || 1);
+    } else {
+      page = Math.max(1, parseInt(args[1] ?? '1', 10) || 1);
+    }
+
+    const isAdmin = Number(dbUser.role) === UserRole.ADMIN;
+
+    let accessibleProjects: any[] = [];
+    let ownedProjectIds = new Set<number>();
+
+    if (isAdmin) {
+      accessibleProjects = await this.projectService.listProjects();
+    } else {
+      const [projects, ownedProjects] = await Promise.all([
+        this.projectService.listAccessibleProjectsForUser(dbUser.id),
+        this.projectService.findByOwnerUserId(dbUser.id),
+      ]);
+      accessibleProjects = projects;
+      ownedProjectIds = new Set(ownedProjects.map(({ id }) => id));
+    }
+
+    if (accessibleProjects.length === 0) {
+      await this.reply(message, 'ℹ️ No accessible projects found.');
+      return;
+    }
+
+    const { items: pageProjects, meta } = paginate(accessibleProjects, page);
+
+    const lines: string[] = [
+      `┌─────────────────────────────`,
+      `│ 📁 **Project List**`,
+      `├─────────────────────────────`,
+    ];
+
+    if (isAdmin) {
+      lines.push(`│ 🌐 **All System Projects (Admin View)**`);
+    } else {
+      lines.push(`│ 🔓 **Your Accessible Projects**`);
+    }
+
+    for (const p of pageProjects) {
+      const isOwner = ownedProjectIds.has(p.id) || isAdmin;
+      const ownerTag = isOwner ? ' ⭐' : '';
+      lines.push(`│   [#${p.id}]${ownerTag} **${p.name}**`);
+      lines.push(`│        Slug : ${p.slug}`);
+      if (p.description) lines.push(`│        Desc : ${p.description}`);
+    }
+
+    lines.push(`├─────────────────────────────`);
+    lines.push(`│ ${buildPaginationFooter(meta, '*project list')}`);
+    lines.push(`│ 💡 *project use <slug|id> to select`);
+    lines.push(`└─────────────────────────────`);
+
+    await this.reply(message, lines.join('\n'));
+  }
+
+  private async createProject(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+    if (!dbUser) {
+      await this.reply(
+        message,
+        '❌ User not found in database. Please log in once via portal.',
+      );
+      return;
+    }
+
+    if (!this.isProjectManagerOrAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only **Project Managers** and **Administrators** can create projects.',
+      );
+      return;
+    }
+
+    const slug = args[1];
+    const rawNameParts = args.slice(2);
+    if (!slug || rawNameParts.length === 0) {
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ ❌ **Missing required fields**`,
+          `├─────────────────────────────`,
+          `│ Usage: *project create <slug> <name...>`,
+          `│ Example: *project create my-app My Application`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    const name = rawNameParts.join(' ').trim();
+    if (!name) {
+      await this.reply(message, '❌ Project name is required.');
+      return;
+    }
+
+    const project = await this.projectService.createProject({
+      name,
+      slug,
+      ownerUserId: dbUser.id,
+    });
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Project Created**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name  : ${project.name}`,
+        `│ 🔖  Slug  : ${project.slug}`,
+        `│ 🆔  ID    : #${project.id}`,
+        `│ 👤  Owner : ${dbUser.name ?? dbUser.mezonId}`,
+        `├─────────────────────────────`,
+        `│ 💡 Use *project use ${project.slug} to select it`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private async prepareDeleteProject(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+
+    if (!this.isAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only **Administrators** can delete projects.',
+      );
+      return;
+    }
+
+    const projectKey = args[1];
+    if (!projectKey) {
+      await this.reply(
+        message,
+        'Usage: `*project delete <projectId|projectSlug>`',
+      );
+      return;
+    }
+
+    const project = await this.findProjectByIdentifier(projectKey);
+    if (!project) {
+      await this.reply(message, `❌ Project **${projectKey}** not found.`);
+      return;
+    }
+
+    await this.pendingDeletionService.setPendingDeletion(
+      'project',
+      String(project.id),
+    );
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Confirm Delete Project**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${project.name}`,
+        `│ 🔖  Slug : ${project.slug}`,
+        `│ 🆔  ID   : #${project.id}`,
+        `├─────────────────────────────`,
+        `│ ⚠️  This action **cannot be undone**.`,
+        `│ Run to confirm within 5 minutes:`,
+        `│ *project confirm delete ${project.id}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private async confirmDeleteProject(
+    args: string[],
+    message: ManagedMessage,
+    ctx: NezonCommandContext,
+  ): Promise<void> {
+    const dbUser = (ctx as any).dbUser;
+
+    if (!this.isAdmin(dbUser)) {
+      await this.reply(
+        message,
+        '❌ Only **Administrators** can delete projects.',
+      );
+      return;
+    }
+
+    const projectKey = args[2];
+    if (!projectKey) {
+      await this.reply(
+        message,
+        'Usage: `*project confirm delete <projectId|projectSlug>`',
+      );
+      return;
+    }
+
+    const project = await this.findProjectByIdentifier(projectKey);
+    if (!project) {
+      await this.reply(message, `❌ Project **${projectKey}** not found.`);
+      return;
+    }
+
+    const hasPending = await this.pendingDeletionService.hasPendingDeletion(
+      'project',
+      String(project.id),
+    );
+    if (!hasPending) {
+      await this.reply(
+        message,
+        '⚠️ No pending deletion request. Please run `*project delete` first.',
+      );
+      return;
+    }
+
+    const deleted = await this.projectService.deleteProject(project.id);
+    if (!deleted) {
+      await this.reply(
+        message,
+        `❌ Failed to delete project **${projectKey}**. It may have already been removed.`,
+      );
+      return;
+    }
+
+    await this.pendingDeletionService.clearPendingDeletion(
+      'project',
+      String(project.id),
+    );
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 🗑️ **Project Deleted**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${project.name}`,
+        `│ 🔖  Slug : ${project.slug}`,
+        `│ 🆔  ID   : #${project.id}`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private async useProject(
+    args: string[],
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    const projectKey = args[1];
+
+    if (!projectKey) {
+      await this.reply(
+        message,
+        'Usage: `*project use <projectId|projectSlug>`',
+      );
+      return;
+    }
+
+    const context = await this.projectContextService.useProjectByMezonId(
+      senderId,
+      projectKey,
+    );
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ ✅ **Project Selected**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${context.project.name}`,
+        `│ 🔖  Slug : ${context.project.slug}`,
+        `│ 🆔  ID   : #${context.project.id}`,
+        `├─────────────────────────────`,
+        `│ 💡 Use *project exit to deselect`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private async getCurrentProject(
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    const context =
+      await this.projectContextService.getCurrentProjectByMezonId(senderId);
+
+    if (context.project == null) {
+      await this.reply(
+        message,
+        [
+          `┌─────────────────────────────`,
+          `│ 📁 **Current Project**`,
+          `├─────────────────────────────`,
+          `│ ℹ️  No project selected.`,
+          `│ Use *project use <slug|id> to select one.`,
+          `└─────────────────────────────`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 📁 **Current Project**`,
+        `├─────────────────────────────`,
+        `│ 📛  Name : ${context.project.name}`,
+        `│ 🔖  Slug : ${context.project.slug}`,
+        `│ 🆔  ID   : #${context.project.id}`,
+        `├─────────────────────────────`,
+        `│ 💡 Use *project exit to deselect`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private async exitProject(
+    senderId: string,
+    message: ManagedMessage,
+  ): Promise<void> {
+    await this.projectContextService.exitProjectByMezonId(senderId);
+    await this.reply(
+      message,
+      [
+        `┌─────────────────────────────`,
+        `│ 👋 **Exited Project**`,
+        `├─────────────────────────────`,
+        `│ You have exited the current project.`,
+        `│ Use *project use <slug|id> to select a new one.`,
+        `└─────────────────────────────`,
+      ].join('\n'),
+    );
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof HttpException) {
+      const response = error.getResponse();
+
+      if (typeof response === 'string') {
+        return response;
+      }
+
+      if (
+        response != null &&
+        typeof response === 'object' &&
+        'message' in response
+      ) {
+        const message = response.message;
+
+        if (Array.isArray(message)) {
+          return message.join(', ');
+        }
+
+        if (typeof message === 'string') {
+          return message;
+        }
+      }
+    }
+
+    return 'Project command failed.';
+  }
+
+  private async findProjectByIdentifier(projectKey: string) {
+    const normalizedProjectKey = projectKey.trim();
+
+    if (!normalizedProjectKey) {
+      return null;
+    }
+
+    if (/^\d+$/.test(normalizedProjectKey)) {
+      return this.projectService.findById(Number(normalizedProjectKey));
+    }
+
+    return this.projectService.findBySlug(normalizedProjectKey);
+  }
+
+  private isAdmin(dbUser: any): boolean {
+    const role = Number(dbUser?.role);
+    return role === UserRole.ADMIN;
+  }
+
+  private isProjectManagerOrAdmin(dbUser: any): boolean {
+    const role = Number(dbUser?.role);
+    return role === UserRole.PM || role === UserRole.ADMIN;
+  }
+
+  private async reply(message: ManagedMessage, content: string): Promise<void> {
+    await message.reply(SmartMessage.text(content));
+  }
+}

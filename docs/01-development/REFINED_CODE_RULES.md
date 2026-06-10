@@ -1,4 +1,5 @@
 # Refined Code Rules
+
 ## Universal Best Practices for Professional Backend Development
 
 ### Core Philosophy
@@ -6,6 +7,7 @@
 **Build complete domain modules, not isolated endpoints.**
 
 Every significant feature must be delivered as a vertical slice:
+
 1. Schema / migration
 2. Entity + constants + types + DTOs
 3. Service (business rules + orchestration)
@@ -18,6 +20,7 @@ Never ship “just an API”. Ship a cohesive, production-ready business capabil
 ### 1. Layer Responsibilities (Strict Boundaries)
 
 #### Controllers — The Thin Boundary Layer
+
 Controllers must remain extremely thin. They are allowed to do only four things:
 
 - Define routes and versioning
@@ -26,6 +29,7 @@ Controllers must remain extremely thin. They are allowed to do only four things:
 - Delegate to service and return result
 
 **Forbidden in controllers:**
+
 - Business branching
 - Complex queries
 - Side-effect decisions
@@ -34,7 +38,9 @@ Controllers must remain extremely thin. They are allowed to do only four things:
 If a controller method exceeds ~15–20 lines of actual logic, the logic is in the wrong place.
 
 #### Services — The True Orchestration Layer
+
 Services own:
+
 - All business rules and invariants
 - Coordination across multiple services
 - Transaction management
@@ -63,6 +69,7 @@ feature/
 ```
 
 **Mandatory conventions:**
+
 - Use `feature.v1.controller.ts` (never mix `user.controller.ts` / `users.controller.ts` / `user.controller.v1.ts`)
 - Every module exports a clean public API via `index.ts`
 - Import order (enforced):
@@ -77,6 +84,7 @@ feature/
 When performance or complexity appears:
 
 **Do this first:**
+
 - Add database indexes
 - Create or improve database Views
 - Use `QueryBuilder` + `Brackets` + proper operators (`In`, `Not`, `MoreThanOrEqual`…)
@@ -84,6 +92,7 @@ When performance or complexity appears:
 - Optimize foreign-key strategy and query shape
 
 **Never do this:**
+
 - Force a complex query into a repository method “to keep it clean”
 - Micro-optimize TypeScript code while the query plan is terrible
 
@@ -110,6 +119,7 @@ Logging exists for operations, not for casual reading.
 When behavior diverges, split the surface — do not add branching inside one controller.
 
 Preferred pattern:
+
 - `feature.v1.controller.ts`
 - `feature.v1.admin.controller.ts`
 - `feature.v1.internal.controller.ts`
@@ -120,6 +130,7 @@ Complexity is managed by surface area, not by comments.
 ### 7. Testing — Behavior-First, Edge-Case-Heavy
 
 **Test structure (repeatable pattern):**
+
 ```ts
 describe('FeatureService', () => {
   describe('create', () => {
@@ -131,6 +142,7 @@ describe('FeatureService', () => {
 ```
 
 **Key principles:**
+
 - Test names describe behavior, not method names
 - Shared factories are mandatory (produce valid default graphs; override only what matters)
 - Service tests are semi-integration: real DB/repositories where possible, mock only external collaborators
@@ -143,6 +155,7 @@ Refactor follows a strict rhythm:
 **ship vertical slice → fix → refactor → perf/schema optimization**
 
 Refactors are always:
+
 - Incremental
 - Targeted at real duplication or coupling
 - Never “big rewrite for cleanliness”
@@ -152,6 +165,7 @@ Extract abstractions (decorators, helpers, base classes) **only after** real rep
 ### 9. What to Abstract (Only After Pain)
 
 High-value, battle-tested abstractions worth extracting:
+
 - Repeated validation rules → decorators (`ValidateBody`, `Field`, `CheckDBColumn`…)
 - Repeated query patterns → `QueryBuilder` helpers or Views
 - Common CRUD scaffolding → lightweight base service (only when 3+ modules need it)

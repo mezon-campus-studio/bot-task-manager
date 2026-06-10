@@ -27,6 +27,9 @@ jobs:
 
       - name: Setup project
         uses: ./.github/actions/setup-sample-campus
+        env:
+          DISABLE_REDIS_MEMORY_SERVER: 'true'
+          REDISMS_DISABLE_POSTINSTALL: '1'
 
       - name: Verify
         uses: ./.github/actions/verify-sample-campus
@@ -53,6 +56,9 @@ jobs:
 
       - name: Setup project
         uses: ./.github/actions/setup-sample-campus
+        env:
+          DISABLE_REDIS_MEMORY_SERVER: 'true'
+          REDISMS_DISABLE_POSTINSTALL: '1'
 
       - name: Run test suite
         uses: ./.github/actions/test-sample-campus

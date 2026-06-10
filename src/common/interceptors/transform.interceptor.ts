@@ -21,6 +21,7 @@ export class TransformInterceptor<T> implements NestInterceptor<
     const request = context.switchToHttp().getRequest();
     return next.handle().pipe(
       map((response) => ({
+        success: true,
         statusCode: HttpStatus.OK,
         data: response?.data ? response.data : response,
         message: request.message,

@@ -29,7 +29,7 @@ export class InitialSchema1777266421961 implements MigrationInterface {
       `CREATE UNIQUE INDEX "team_members_team_id_user_id_key" ON "team_members" ("team_id", "user_id") `,
     );
     await queryRunner.query(
-      `CREATE TYPE "public"."users_role_enum" AS ENUM('0', '1', '2', '3')`,
+      `CREATE TYPE "public"."users_role_enum" AS ENUM('0', '1', '2', '3', '4')`,
     );
     await queryRunner.query(
       `CREATE TYPE "public"."users_status_enum" AS ENUM('active', 'inactive', 'deleted')`,

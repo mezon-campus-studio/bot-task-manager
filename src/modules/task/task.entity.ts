@@ -1,6 +1,14 @@
-import { Column, DeleteDateColumn, Entity, Index } from 'typeorm';
+import {
+  Column,
+  DeleteDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+} from 'typeorm';
 import { AbstractEntity } from '@src/common/database/abstract.entity';
 import { TaskPriority, TaskStatus } from './enums';
+import UserEntity from '../user/user.entity';
 
 @Entity('tasks')
 @Index('IDX_tasks_project_status', ['projectId', 'status'])
@@ -22,13 +30,22 @@ export default class TaskEntity extends AbstractEntity {
   @Column({
     type: 'uuid',
     nullable: true,
+    name: 'assignee_user_id',
   })
   assigneeUserId!: string | null;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'assignee_user_id' })
+  assigneeUser!: UserEntity | null;
 
   @Column({
     type: 'uuid',
   })
   reporterUserId!: string;
+
+  @ManyToOne(() => UserEntity, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'reporter_user_id' })
+  reporterUser!: UserEntity;
 
   @Column({
     type: 'varchar',

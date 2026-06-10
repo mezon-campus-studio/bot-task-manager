@@ -1,10 +1,11 @@
 import { HttpStatus } from '@nestjs/common';
 
 export type IResponse<T> = {
+  success: boolean;
   statusCode: HttpStatus;
   data: T;
   message?: string;
-  errors?: string;
+  errors?: any;
   timestamp?: string;
   path?: string;
 };

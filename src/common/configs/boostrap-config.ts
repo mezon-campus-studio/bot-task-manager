@@ -8,7 +8,6 @@ import { Reflector } from '@nestjs/core';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import * as httpContext from 'express-http-context';
-import helmet from 'helmet';
 import morgan from 'morgan';
 import { HttpExceptionFilter } from '@src/common/filters/http-exception.filter';
 import { TransformInterceptor } from '@src/common/interceptors/transform.interceptor';
@@ -31,7 +30,6 @@ export default async function bootstrapConfig(app: INestApplication) {
 
   app.use(httpContext.middleware);
   app.use(loggingMiddleware);
-  app.use(helmet());
   app.use(compression());
   app.use(morgan('combined'));
   app.enableVersioning();
@@ -41,8 +39,8 @@ export default async function bootstrapConfig(app: INestApplication) {
     new ValidationPipe({
       transform: true,
       whitelist: true,
-      forbidNonWhitelisted: false,
-      skipMissingProperties: true,
+      forbidNonWhitelisted: true,
+      skipMissingProperties: false,
       exceptionFactory: (validationErrors = []) => {
         const errors = validationErrors.map((error) => ({
           field: error.property,
