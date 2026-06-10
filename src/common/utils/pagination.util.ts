@@ -43,7 +43,7 @@ export function buildPaginationFooter(
 
   if (meta.hasPrev) parts.push(`\`${pageArg(meta.page - 1)}\` ◀ Prev`);
   parts.push(
-    `Page **${meta.page}** / ${meta.totalPages} (${meta.total} total)`,
+    `Page <${meta.page} of ${meta.totalPages}> | Total: ${meta.total}`,
   );
   if (meta.hasNext) parts.push(`Next ▶ \`${pageArg(meta.page + 1)}\``);
 

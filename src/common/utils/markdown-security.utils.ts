@@ -14,7 +14,7 @@ function sanitizeString(text: string): string {
     if (!isPastHeader) return line;
 
     let sanitized = line;
-    sanitized = sanitized.replace(/([\\`*{}[\]()#^$%&=;<>`~/@])/g, '');
+    sanitized = sanitized.replace(/([\\`{}[\]()#^$%&=;`~@])/g, '');
 
     return sanitized;
   });
